@@ -398,7 +398,7 @@ class Ps5cc final : public app::Concept
         // steered.
         nav_.style.theme = theme_;
         nav_.style.collapsed_width = kRailW;
-        nav_.style.expanded_width = 330.0f;
+        nav_.style.expanded_width = 390.0f; // 330 cut "Файловый менеджер" and "Gestor de archivos"
         nav_.style.row_height = 76.0f;
         nav_.style.gap = 10.0f;
         nav_.style.icon_size = 34.0f;
@@ -511,6 +511,8 @@ class Ps5cc final : public app::Concept
         details_.style.max_lines = 1;
         sheet_.style.theme = ps5cc::solid_theme(theme_);
         sheet_.style.size = 720.0f;
+        // the rows ended at x 1860: inside the 96 px safe area now (1920 - 36 padding - 60 = 1824)
+        sheet_.style.edge_inset = 60.0f;
         sheet_.style.footer = 120.0f;
         sheet_.content = [this](ui::Canvas &canvas, const Rect &area, float opacity)
         {
@@ -1343,6 +1345,8 @@ class Ps5cc final : public app::Concept
             {0.2f, 0, Direction::down},
             {0.3f, action_bit(Action::confirm)},
             {0.9f, 0, Direction::none, "spielstaende-zip-abgelehnt"},
+            // its menu offers only "ZIP-Datei löschen": closed here, else the next tab press goes to the menu
+            {0.3f, action_bit(Action::back)},
             // Spiele → Pakete: the list, an install started with ✕, one more into the queue with □,
             // the △ menu.
             {0.5f, action_bit(Action::jump_next)},
@@ -1761,6 +1765,8 @@ class Ps5cc final : public app::Concept
         // must (29.10.2026)
         ps5cc::style_subtabs(games_tabs_, theme_, static_cast<int>(tabs.size()));
         games_tabs_.style.width = ui::TabWidth::fit;
+        // in a longer language the row is cut: a tab cut in half ("Copies de s") is left out, R2 says there is more
+        games_tabs_.style.whole_only = true;
         games_tabs_.set_bounds(
             {kLeftX + 56.0f, ps5cc::kTabY, 1824.0f - kLeftX - 112.0f, ps5cc::kTabH});
         games_tabs_.set_tabs(tabs);
@@ -2924,6 +2930,12 @@ class Ps5cc final : public app::Concept
         layout.size = 36.0f;
         layout.text_size = 22.0f;
         layout.cy = card.y + card.h - 44.0f;
+        // longer words (fr, ru) would leave the card: the same row, smaller
+        if (ui::measure_hints(fonts, hints, 3, layout) > card.w - 72.0f)
+        {
+            layout.size = 30.0f;
+            layout.text_size = 18.0f;
+        }
         ui::draw_hints(list, fonts, ui::GlyphStyle::dark(), hints, 3, card.x + 36.0f, false,
                        layout);
     }

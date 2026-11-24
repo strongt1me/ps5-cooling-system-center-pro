@@ -22,6 +22,6 @@ for f in $ZSRC $DSRC; do
   LIBS="$LIBS $o"
 done
 gcc -O1 -w -Isrc -c -o "$OUT/obj/lz4cfg.o" src/lz4cfg.c      # the profile reader: not what is tested here
-gcc -std=gnu11 -D_DEFAULT_SOURCE -DPS5TM_HOST_TEST -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror -Wno-format-truncation -Isrc -Isrc/third_party \
+gcc -std=gnu11 -D_DEFAULT_SOURCE -DPS5TM_HOST_TEST -DPS5TM_NO_THREAD_WRAP -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror -Wno-format-truncation -Isrc -Isrc/third_party \
   -o "$OUT/test" test/zstdpack/test.c src/zstdpack.c $OUT/obj/lz4cfg.o $LIBS -lpthread
 "$OUT/test" "$OUT/work" "$@"

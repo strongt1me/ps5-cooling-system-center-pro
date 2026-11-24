@@ -84,6 +84,21 @@ in the code; the full list:
 - `bdev.c` `bdev_flush_cache`, `ntfs_write.c` `ntfs_flush_cache` (new): `DIOCGFLUSH`, so that the stick empties its own write cache;
   the app calls it once when a drive is ejected, after `ntfs_sync` (not at every sync: some USB bridges are slow on the command; an
   error is ignored, not every stick knows it).
+- Audit of 24.11.2026 (second round):
+  - `bdev.c` `cache_get`: a cache block that could not be written out (`bad`: a bad sector, a stick that went read-only) is not taken as
+    the victim for another block while a different one is free. Before, the oldest block was always taken, its write failed, and from then
+    on every read of a block that was not cached failed too, until the stick was plugged in again (found with an injected write error).
+  - `ntfs.c` `find_node`: a miss in a leaf of the index counts only if the entries of that leaf are in order (`leaf_sorted`); otherwise
+    `-EIO`, and the caller walks every entry as before. A damaged index, or one a foreign tool wrote unsorted, hid a name from lookup and
+    unlink, and a create could make a second entry of the same name.
+  - The app (`fm_ntfs.inc`, `fmn_run_copy`) syncs the target before it deletes the original of a move: with the cache the new record, index
+    entry and bitmap bits of a copied file stay in memory until a sync, and the original was gone before they were on the stick.
+  - `ntfs_write.c` `free_inode`: a `bdev_writeout` between releasing the MFT records and freeing their clusters. The cache writes by block
+    number, so the bitmap (often below the MFT) could reach the stick before the records were free, the order the comment there rules
+    out (a record still in use owning clusters the bitmap calls free). One more write pass per deleted file.
+  - `ntfs_write.c` `mark_volume`: when the flush after clearing the dirty flag fails, the flag is set again in the cached record. The
+    "clean" record would otherwise wait in the cache for a later flush while `vol_marked` still said set, so the next changes would not
+    set it again.
 
 Not changed: three leaks in `ntfs_write.c` that happen only when memory runs out; calloc sizes from the disk in the index and MFT growth
 (a refused allocation is handled).

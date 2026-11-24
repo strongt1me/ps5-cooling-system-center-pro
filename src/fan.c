@@ -102,6 +102,10 @@ static atomic_int       g_started = 0;
 /* Threshold the user pinned by hand; 0 = never pinned, so observe mode
    leaves the fan alone. */
 static atomic_int g_manual_threshold_c = 0;
+/* 1 once this run has written the threshold at all (the seed of ps5tm_fan_init() included). At SIGTERM the loop's own bookkeeping
+   (last_applied) is not enough: it is 0 while the guard holds, before the first pass and while no temperature was ever valid, and
+   the fan was then left at whatever was written last (audit 24.11.2026, test/sim A_stop_guard_hot, A_stop_nowrite). */
+static atomic_int g_wrote_any = 0;
 
 static int g_cpu_warning_logged = 0;
 static int g_soc_warning_logged = 0;
@@ -236,6 +240,13 @@ ring_resize(temp_ring_t *r, unsigned cap) {
   r->count = n;
   r->head  = n % cap;   /* leaves ring_at()'s start at 0, matching the copy */
 }
+
+/* A single reading far from the one before it is a glitch, not heat: platform.c accepts anything from 1 to 130 °C ("sensors
+   briefly report nonsense"), and one +40 K sample moved the 3-4 s average by 10 K, which made the fan swell and ease off for
+   minutes (audit 24.11.2026, test/sim A_spike). The die cannot move 12 K in a second. Such a reading is held back once, the
+   previous one stands in for it; if the next reading agrees with it, it was real and is taken. Normal readings are untouched
+   (no delay, unlike a median), so the tuned behaviour of the controller stays what it was. */
+#define GLITCH_STEP_C 12
 
 static int
 ring_avg_c100(const temp_ring_t *r) {
@@ -725,6 +736,7 @@ ps5tm_fan_apply_manual(int temp_c, int *errno_out) {
 
   int rc = ps5tm_platform_set_fan_threshold(temp_c, errno_out);
   if(rc == 0) {
+    atomic_store(&g_wrote_any, 1);
     atomic_store(&g_manual_threshold_c, temp_c);
     pthread_mutex_lock(&g_snapshot_lock);
     g_snapshot.applied_threshold_c = temp_c;
@@ -807,6 +819,7 @@ check_warnings(const ps5tm_sensors_t *s, int *warn_cpu, int *warn_soc) {
   int safety_limit = (int)g_config.safety_temp_c;
   ps5tm_config_unlock();
   if(soc_limit < cpu_limit + 5) soc_limit = cpu_limit + 5;
+  if(target > 0 && safety_limit < target + 4) safety_limit = target + 4;      /* the limit in force, not the stored one (see the loop) */
 
   *warn_cpu = (s->cpu_valid && s->cpu_c >= cpu_limit);
   *warn_soc = (s->soc_valid && s->soc_c >= soc_limit);
@@ -1106,6 +1119,8 @@ fan_worker(void *arg) {
   int      last_cpu_c        = -1, last_soc_c = -1;     /* last valid reading of each sensor */
   int      cpu_miss          = 0,  soc_miss   = 0;      /* passes in a row without one       */
   int      single_logged     = 0;
+  int      last_good_c       = -1;  /* the last hottest reading taken (-1 = none: after a gap the first one is always taken) */
+  int      glitch_held       = 0;   /* the previous pass held a far-off reading back */
   int      duty_dead_passes  = 0;   /* passes in a row without a duty reading */
   int      duty_lost_logged  = 0;
 
@@ -1151,7 +1166,7 @@ fan_worker(void *arg) {
     if(atomic_load(&g_stop_req)) {
       /* SIGTERM/SIGINT (main.c): hand the fan back to the console the way switching the automatic off does, then end. */
       int eno = 0;
-      if(last_applied > 0 || atomic_load(&g_manual_threshold_c) > 0)
+      if(last_applied > 0 || atomic_load(&g_manual_threshold_c) > 0 || atomic_load(&g_wrote_any))
         ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
       PS5TM_INFO("fan_stop", "Beenden angefordert – die Lüftereinstellung geht an die Konsole zurück.");
       ps5tm_log_file_end("vom System beendet (SIGTERM/SIGINT)");
@@ -1170,6 +1185,8 @@ fan_worker(void *arg) {
       duty_ema_x10  = -1;
       fan_error_logged = 0;
       avg_hist_n    = 0;                         /* the slope across a pause means nothing */
+      last_good_c   = -1;                        /* nor the reading from before it: the first one after the pause is taken as it is */
+      glitch_held   = 0;
     }
     /* The identity is set again only under the Sony lock, and never waited for: a tile install holds the lock and
        ShellCore's identity for up to ~40 s, and switching back in the middle of it made the install fail (19.10.2026).
@@ -1195,6 +1212,8 @@ fan_worker(void *arg) {
       observed_c    = -1;
       last_apply_ms = 0;
       last_servo_ms = 0;
+      last_good_c   = -1;                        /* the glitch gate starts afresh once the loop has the fan again */
+      glitch_held   = 0;
       /* The status must not freeze while the guard holds: the readings go on, the threshold shown is the guard's
          (full cooling, or the console's own after a dead-man release, both report what the sensors say). */
       ps5tm_sensors_t hs;
@@ -1284,6 +1303,10 @@ fan_worker(void *arg) {
         if(cfg.safety_temp_c < cfg.target_temp_c + 4)
           cfg.safety_temp_c = cfg.target_temp_c + 4;
       }
+      /* The limit in force is never less than 4 K above the target in force, whatever the stored limit says (the settings no
+         longer raise the stored value for good, see ps5tm_config_clamp). */
+      if(cfg.safety_temp_c < cfg.target_temp_c + 4)
+        cfg.safety_temp_c = cfg.target_temp_c + 4;
       if(night_now != night_logged) {
         night_logged = night_now;
         if(night_now) {
@@ -1340,6 +1363,19 @@ fan_worker(void *arg) {
       }
     } else if(s.cpu_valid) {
       single_logged = 0;                                     /* both answer again */
+    }
+    if(hottest >= 0) {
+      int jump = hottest > last_good_c ? hottest - last_good_c : last_good_c - hottest;
+      if(last_good_c >= 0 && jump > GLITCH_STEP_C && !glitch_held) {
+        glitch_held = 1;
+        hottest = last_good_c;
+      } else {
+        glitch_held = 0;
+        last_good_c = hottest;
+      }
+    } else {
+      last_good_c = -1;                                      /* a gap: whatever comes back first is taken */
+      glitch_held = 0;
     }
     if(hottest >= 0) {
       if(blind) {
@@ -1447,7 +1483,15 @@ fan_worker(void *arg) {
     if(was_automatic == 1 && !automatic &&
        atomic_load(&g_manual_threshold_c) <= 0) {
       int eno = 0;
-      if(ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C,
+      if(cfg.fan_threshold_pinned) {
+        /* The person's own fixed threshold (set in observe mode, kept in the settings) holds again, as at a start in observe
+           mode: the observe branch below writes it and keeps it there. */
+        int pin = (int)cfg.fan_threshold_c;
+        if(pin < PS5TM_THRESHOLD_MIN_C) pin = PS5TM_THRESHOLD_MIN_C;
+        if(pin > PS5TM_THRESHOLD_MAX_C) pin = PS5TM_THRESHOLD_MAX_C;
+        atomic_store(&g_manual_threshold_c, pin);
+        PS5TM_INFO("fan_pinned_again", "Automatik aus – die feste Schwelle von %d °C gilt wieder.", pin);
+      } else if(ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C,
                                           &eno) == 0) {
         PS5TM_INFO("fan_released",
                    "Automatik aus – die Konsole hat ihre eigene "
@@ -1819,6 +1863,7 @@ fan_worker(void *arg) {
           }
 
           last_applied     = desired_threshold;
+          atomic_store(&g_wrote_any, 1);
           last_apply_ms    = now;
           fan_error_logged = 0;
 
@@ -1904,6 +1949,7 @@ ps5tm_fan_init(void) {
   ps5tm_config_lock();
   int seed      = (int)g_config.fan_threshold_c;
   int automatic = (g_config.mode == PS5TM_MODE_AUTOMATIC);
+  int pin_own   = g_config.fan_threshold_pinned != 0;
   unsigned target   = g_config.target_temp_c;
   unsigned dead     = g_config.deadband_c;
   unsigned interval = g_config.control_interval_s;
@@ -1967,8 +2013,12 @@ ps5tm_fan_init(void) {
   /* Probe the controller once so the UI can report the adapter state before
      the first regulation cycle is due. */
   int eno = 0;
+  /* Observe mode without a threshold of the person's own: the console keeps its own setting, as when the automatic is switched off
+     at run time. Before 24.11.2026 the start pinned the stored value (65 from the factory) even so: one setting, two fan states. */
+  if(!automatic && !pin_own) seed = PS5TM_NEUTRAL_THRESHOLD_C;
   if(ps5tm_platform_set_fan_threshold(seed, &eno) == 0) {
-    if(!automatic) atomic_store(&g_manual_threshold_c, seed);
+    atomic_store(&g_wrote_any, 1);
+    if(!automatic && pin_own) atomic_store(&g_manual_threshold_c, seed);
     PS5TM_INFO("fan_adapter_ready", "Lüftersteuerung bereit.");
   } else {
     PS5TM_ERROR("icc_fan_ioctl_failed", "%s", ps5tm_platform_fan_message());

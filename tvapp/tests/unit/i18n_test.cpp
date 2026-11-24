@@ -97,6 +97,20 @@ TEST(I18n, SegmentsEdgesAndMarks)
     EXPECT_EQ(t.translate("Satz mit Punkt Ende."), "Sentence with stop Ende.");
 }
 
+TEST(I18n, ChainsAreLookedUpLinkByLink)
+{
+    Translator t;
+    t.load("en", std::vector<Entry>{{"Pause {0} s", "Wait {0} s"}, {"Kopiere {0} nach {1}", "Copying {0} to {1}"}});
+    EXPECT_EQ(t.translate("a.elf \xE2\x86\x92 Pause 2 s \xE2\x86\x92 b.elf"), "a.elf \xE2\x86\x92 Wait 2 s \xE2\x86\x92 b.elf");
+    // a wrapped line keeps its arrow at the end or the start
+    EXPECT_EQ(t.translate("a.elf \xE2\x86\x92 Pause 2 s \xE2\x86\x92"), "a.elf \xE2\x86\x92 Wait 2 s \xE2\x86\x92");
+    EXPECT_EQ(t.translate("\xE2\x86\x92 Pause 1.5 s"), "\xE2\x86\x92 Wait 1.5 s");
+    // a pattern with the arrow inside its value still wins over the chain
+    EXPECT_EQ(t.translate("Kopiere x \xE2\x86\x92 y nach z"), "Copying x \xE2\x86\x92 y to z");
+    // names alone stay as they are
+    EXPECT_EQ(t.translate("a.elf \xE2\x86\x92 b.elf"), "a.elf \xE2\x86\x92 b.elf");
+}
+
 TEST(I18n, ApplyKeepsItsViewAndOffWithoutDictionary)
 {
     Translator t = english();

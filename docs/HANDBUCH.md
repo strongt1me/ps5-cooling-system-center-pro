@@ -744,7 +744,7 @@ Danach **Mitschnitt beenden**: Das entfernt `fakelib2` wieder. Ein Mitschnitt ze
   hast.
 - Solange ein Spiel gepackt ist, sind AMPR-Index und APR-EMU-Version gesperrt.
 - Vorbilder und Regeln: [drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (`docs/ASSET_PACK_WORKFLOW_EN.md`, GPL-3.0),
-  [theghostonline/PS5-LZ4-Compression](https://github.com/theghostonline/PS5-LZ4-Compression) und
+  theghostonline/PS5-LZ4-Compression und
   [danthespal/MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp). Von LZ4 Compression 1.4.3 bis 1.5.0 (Husam Osman,
   GPL-3.0) stammen die Liste der Dateien, die lose bleiben müssen, die Rechte 0777, die Reparatur beim Prüfen und die Auswahl
   der getesteten Profile; nachgebaut, nicht kopiert.
@@ -1551,7 +1551,7 @@ Den gezeichneten Tacho (Komponente `<ps5-cooling-fan>` in `web/ps5-fan.js`) zeig
 | Modus | Verhalten |
 | --- | --- |
 | `automatic` | Komfortregelung: hält die Zieltemperatur, sanft und träge. |
-| `observe` | Nur Beobachtung. Der Lüfter wird nur angefasst, wenn zuvor per Schnellwahl oder „Direkt setzen“ eine feste Schwelle gesetzt wurde. |
+| `observe` | Nur Beobachtung. Der Lüfter wird nur angefasst, wenn zuvor per Schnellwahl oder „Direkt setzen“ eine feste Schwelle gesetzt wurde. Diese Schwelle bleibt gespeichert (`fan_threshold_pinned`) und gilt auch nach einem Neustart der App und nach dem Ausschalten der Automatik; ohne sie bekommt die Konsole ihre eigene Einstellung (91 °C) zurück, auch beim Start (bis 24.11.2026 schrieb der Start den gespeicherten Wert, ab Werk 65 °C). |
 
 ## Komfortregelung
 
@@ -1594,8 +1594,9 @@ Wie es arbeitet:
 - Ab `safety_temp_c` werden Kurve, Trend und Komfortgrenze ignoriert.
 - **Ziele über 72 °C** (seit dem 03.10.2026 bis 78 °C, seit dem 07.10.2026 bis 91 °C einstellbar): Die Konsole läuft
   dann deutlich wärmer, der Lüfter bleibt länger auf seiner leisen Grundkurve. Die
-  Notfallgrenze rückt dabei von selbst auf Ziel + 4 °C (bei 78 °C auf 82 °C, bei 91 °C auf 95 °C), sonst
-  würde die Regelung mitten in ihrer Arbeit in den Notfallmodus kippen. Die
+  Notfallgrenze liegt dabei mindestens bei Ziel + 4 °C (bei 78 °C bei 82 °C, bei 91 °C bei 95 °C), sonst
+  würde die Regelung mitten in ihrer Arbeit in den Notfallmodus kippen. Die eingestellte Grenze selbst bleibt
+  unverändert gespeichert und gilt wieder, sobald das Ziel sinkt. Die
   Warnschwelle der App (`warning_cpu_c`) geht seit dem 07.10.2026 mit: Die wirksame Schwelle ist nie niedriger als
   Ziel + 2 °C (beim Spielprofil: das Ziel des laufenden Spiels), die Hauptchip-Schwelle liegt weiter 5 °C darüber. Der
   eingestellte Wert bleibt gespeichert und gilt, solange das Ziel niedrig genug ist. Die Firmware der
@@ -1618,8 +1619,9 @@ rechnet intern in Prozent, ein nachgelagerter Servo überträgt das auf die
 Schwelle und greift erst ab 7 Prozentpunkten Abweichung ein (im Notfall ab 4). Er liest die **tatsächliche**
 Drehzahl zurück und kalibriert sich damit selbst.
 
-Die Schwelle wird mindestens alle 15 Sekunden neu gesetzt, weil die Firmware
-den ICC-Zustand bei jedem Spiel-/App-Start zurücksetzt.
+Die App liest die Schwelle alle 2 Sekunden zurück und setzt sie sofort neu, wenn die Konsole sie verändert hat –
+die Firmware setzt den ICC-Zustand bei jedem Spiel-/App-Start zurück. Nur wenn sich die Schwelle nicht auslesen lässt,
+sendet die App sie alle `fan_reapply_sec` Sekunden (Standard 15) neu.
 
 ### Ruhelage der Schwelle (seit 07.10.2026)
 
@@ -1689,7 +1691,8 @@ Lüfter auf mindestens 70 %.
 ### Beenden der App
 
 Beendet jemand die App mit SIGTERM oder SIGINT, gibt sie die Lüftersteuerung zuerst an die Konsole zurück (Protokoll
-`fan_stop`) und endet innerhalb einer Sekunde; klemmt der Lüfterfaden, beendet ein Alarm sie nach 5 Sekunden. **SIGKILL**
+`fan_stop`) und endet innerhalb weniger Sekunden (laufende Aufträge werden vorher abgebrochen); klemmt der Lüfterfaden, beendet ein Alarm sie nach 5 Sekunden. Das gilt
+auch dann, wenn der Lüfterwächter gerade volle Kühlung hält. **SIGKILL**
 lässt sich nicht abfangen: So beenden Werkzeuge wie
 der Prozess-Manager Programme (die App selbst beendet eine ältere Ausführung beim Neustart zuerst mit SIGTERM, damit die Lüftersteuerung zurückgegeben wird, und erst nach etwa sechs Sekunden mit SIGKILL, wenn der Port dann noch belegt ist). Dann bleibt, wie bisher, die letzte Schwelle stehen, bis die Konsole sie beim nächsten
 Zustandswechsel (Spielstart oder -ende, Ruhemodus) selbst auf 91 °C setzt. Das ist nie mehr als das, was die Konsole ohne
@@ -1704,14 +1707,14 @@ Beide Programme stellen am Ende **dieselbe Größe** ein: die Schwelle, die die 
 | | SMP | diese App |
 | --- | --- | --- |
 | Was | schreibt einen **festen Wert** (50–91 °C) als Schwelle | hält eine **Temperatur** (50–91 °C) und stellt die Schwelle dafür laufend nach |
-| Wann | einmal, wenn ein Spiel den Fokus bekommt; ab Werk `system` = schreibt nichts | Sekundentakt; mindestens alle 15 s neu gesetzt, sofort zurückgeholt, wenn die Firmware sie zurücksetzt |
+| Wann | einmal, wenn ein Spiel den Fokus bekommt; ab Werk `system` = schreibt nichts | Sekundentakt; alle 2 s zurückgelesen und sofort zurückgeholt, wenn die Firmware sie zurücksetzt |
 | Rückmeldung | keine: der Wert gilt, ganz gleich, wie warm es wird | liest Temperatur und Drehzahl zurück, Mittelwert, Trend, Totzone, Notfallgrenze |
 | Schutz nach oben | nur die Firmware der Konsole | zusätzlich die Notfallgrenze (Ziel + 4 °C, höchstens 95 °C) |
 | Pro Spiel | ein Wert für alle Spiele | Spielprofile mit eigenem Ziel |
 
 Ein hoher Wert in SMP und ein hohes Ziel in dieser App führen zum selben Ruhezustand des Lüfters; die App hält die
 Konsole darüber hinaus nahe am Ziel, statt sie ungebremst steigen zu lassen. **Nicht beides gleichzeitig:** Steht in SMP eine Zahl und
-läuft hier die Automatik, setzt die App ihre Schwelle innerhalb von höchstens 15 Sekunden wieder durch (das Protokoll
+läuft hier die Automatik, setzt die App ihre Schwelle innerhalb von etwa 2 Sekunden wieder durch (das Protokoll
 vermerkt es als Überschreibung); SMPs Wert hält dann nur kurz. Wer SMPs Wert will, lässt die Automatik aus (Betriebsart
 „Beobachten“, dort gilt eine feste Schwelle bis 91 °C) oder lässt SMP auf `system`.
 
@@ -1722,7 +1725,9 @@ vermerkt es als Überschreibung); SMPs Wert hält dann nur kurz. Wer SMPs Wert w
 - **Totmann:** Meldet sich die Regelung 20 Sekunden nicht, gibt er den Lüfter an die Konsole zurück – ist es heiß, stellt
   er volle Kühlung.
 - **Übertemperatur:** Bleibt die Temperatur 10 Sekunden über der Sicherheitsgrenze + 6 °C, obwohl der Lüfter nicht nahe
-  am Maximum läuft, hält er volle Kühlung, bis es 8 °C kühler ist.
+  am Maximum läuft, hält er volle Kühlung, bis es 8 °C kühler ist. Meldet der Lüfter Höchstdrehzahl, bleibt die Temperatur aber
+  60 Sekunden darüber, greift er trotzdem ein (die Drehzahlanzeige kann falsch sein). Sekunden ohne gültigen Temperaturwert
+  setzen die 10 Sekunden nicht zurück.
 - **Absturz:** Signal-Behandlung auf eigenem Stapel (jeder Faden bekommt 32 KiB `sigaltstack`); die Konsole bekommt den
   Lüfter zurück.
 - Solange er hält, zeigt der Status „Wächter“, eine feste Schwelle von Hand wird mit `409 fanguard_holding` abgelehnt; die

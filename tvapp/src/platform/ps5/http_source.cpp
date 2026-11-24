@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cctype>
+#include <csignal>
 #include <cstring>
 #include <netinet/in.h>
 #include "ps5cc/app_update.hpp"
@@ -71,6 +72,11 @@ int open_local(int port, int timeout_s, Net *why)
     tv.tv_sec = timeout_s;
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#ifdef SO_NOSIGPIPE
+    // a peer that hangs up mid-request must not kill this title (SIGPIPE ends a process by default)
+    const int one = 1;
+    setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
     sockaddr_in sa{};
     sa.sin_len = sizeof(sa);
     sa.sin_family = AF_INET;
@@ -130,18 +136,29 @@ bool send_all(int s, const void *data, std::size_t size)
 Net exchange(const char *method, const char *path, const std::string &payload, int *status,
              std::string *body, int timeout_s = 4)
 {
+    // The caller's variables hold the answer of THIS request only: a failed exchange must not leave
+    // the previous answer behind (message_of(body, …) read an old "message" after a failure).
+    *status = 0;
+    body->clear();
     Net why = Net::failed;
     const int s = open_local(kPortApp, timeout_s, &why);
     if (s < 0)
         return why;
-    char head[1536];
-    const int n = std::snprintf(head, sizeof(head),
-                                "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\n"
-                                "Content-Type: application/json\r\nContent-Length: %zu\r\n\r\n",
-                                method, path, kPortApp, payload.size());
-    // a request line that does not fit is not sent cut off (snprintf says how long it would be)
-    if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(head) ||
-        !send_all(s, head, static_cast<std::size_t>(n)) ||
+    static constexpr char kHeadFormat[] =
+        "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: close\r\n"
+        "Content-Type: application/json\r\nContent-Length: %zu\r\n\r\n";
+    // sized by the path: a deep folder name with umlauts (3 bytes each once encoded) outgrew the
+    // fixed 1536 bytes and was never sent; only an absurd length is still refused
+    constexpr std::size_t kMaxHead = 16384;
+    const int n = std::snprintf(nullptr, 0, kHeadFormat, method, path, kPortApp, payload.size());
+    if (n <= 0 || static_cast<std::size_t>(n) >= kMaxHead)
+    {
+        close(s);
+        return Net::failed;
+    }
+    std::string head(static_cast<std::size_t>(n) + 1, '\0');
+    std::snprintf(head.data(), head.size(), kHeadFormat, method, path, kPortApp, payload.size());
+    if (!send_all(s, head.data(), static_cast<std::size_t>(n)) ||
         (!payload.empty() && !send_all(s, payload.data(), payload.size())))
     {
         close(s);
@@ -165,6 +182,27 @@ Net exchange(const char *method, const char *path, const std::string &payload, i
     const std::size_t space = reply.find(' ');
     *status = space == std::string::npos ? 0 : std::atoi(reply.c_str() + space + 1);
     *body = reply.substr(end + 4);
+    // An answer cut off inside the body (the app restarted or hung up mid-way) is a failure, not a
+    // short success: the app always names the length. Not asked when the read stopped at the cap.
+    if (reply.size() <= kMaxBody)
+    {
+        static constexpr char kLength[] = "\r\ncontent-length:";
+        std::string lower(reply, 0, end + 2);
+        for (char &c : lower)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const std::size_t at = lower.find(kLength);
+        if (at != std::string::npos)
+        {
+            const unsigned long long want =
+                std::strtoull(lower.c_str() + at + sizeof(kLength) - 1, nullptr, 10);
+            if (body->size() < want)
+            {
+                *status = 0;
+                body->clear();
+                return Net::failed;
+            }
+        }
+    }
     return Net::ok;
 }
 
@@ -261,6 +299,7 @@ std::string path_encoded(const std::string &text)
 
 void HttpSource::start()
 {
+    std::signal(SIGPIPE, SIG_IGN); // as the console app's main() does
     data_.link = Link::starting;
     data_.link_detail = "Verbindung zur App …";
     pthread_attr_t attr;
@@ -1218,6 +1257,7 @@ void HttpSource::run()
     std::int64_t last_config = 0, last_selftest = 0, last_payloads = 0, last_profile_status = 0,
                  last_store = 0, last_log = 0, last_klog = 0;
     std::int64_t last_backdrops = 0, last_packages = 0, last_pkg_install = 0, last_pkg_queue = 0;
+    std::int64_t last_scan_try = 0;
     bool packages_open = false;
     std::int64_t last_ps4mount = 0;
     std::int64_t last_kraken = 0;
@@ -1462,8 +1502,14 @@ void HttpSource::run()
                 std::lock_guard<std::mutex> lock(mutex_);
                 scan = data_.package_scan;
             }
-            if (scan.loaded && !scan.ever && !scan.scanning)
+            // A refused scan (drive being ejected, scan failed) leaves "ever" and "scanning" false:
+            // it is tried again every few seconds, not in every round of this loop.
+            if (scan.loaded && !scan.ever && !scan.scanning &&
+                (last_scan_try == 0 || now - last_scan_try >= 5000000))
+            {
+                last_scan_try = now;
                 poll_packages(true);
+            }
             bool splitting = false;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -4514,6 +4560,8 @@ void HttpSource::poll_system_extra(bool first)
     std::lock_guard<std::mutex> lock(mutex_);
     SystemData &d = data_.system_data;
     d.status = status_raw_;
+    // asked before the moves below: a moved-from string is empty, which hid the drives for good
+    const bool have_config = !config.empty();
     if (!health.empty())
         d.health = std::move(health);
     if (!config.empty())
@@ -4522,7 +4570,7 @@ void HttpSource::poll_system_extra(bool first)
         d.channels = std::move(channels);
     if (!diag.empty())
         d.diag = std::move(diag);
-    if (!config.empty() &&
+    if (have_config &&
         !keep_drives) // without this round's config the probe's state is not known
         d.drives = std::move(drives);
     if (!qr.empty())

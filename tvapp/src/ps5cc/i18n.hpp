@@ -83,7 +83,8 @@ class Translator final : public gfx::TextFilter
     bool try_list(const std::vector<std::size_t> &list, std::string_view core, int depth,
                   std::string *out);
     std::string inner(std::string_view value, int depth);
-    bool via_segments(std::string_view core, int depth, std::string *out);
+    bool via_segments(std::string_view core, int depth, std::string *out, std::string_view sep);
+    bool via_chain(std::string_view core, int depth, std::string *out);
     bool via_marks(std::string_view core, int depth, std::string *out);
     std::string translate_text(std::string_view text, bool *changed);
 

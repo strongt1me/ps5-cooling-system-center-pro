@@ -356,6 +356,16 @@ ps5tm_http_send_error(int fd, int status, const char *code,
 }
 
 
+/* The first CRLFCRLF at or after `from` in the first `n` bytes of p (raw bytes: a NUL does not hide it, unlike strstr); NULL when
+   it is not there (yet). */
+static char *
+find_head_end(char *p, size_t from, size_t n) {
+  for(size_t i = from; i + 4 <= n; i++)
+    if(p[i] == '\r' && p[i + 1] == '\n' && p[i + 2] == '\r' && p[i + 3] == '\n') return p + i;
+  return NULL;
+}
+
+
 /* Case-insensitive header lookup within the raw header block. */
 static const char *
 find_header(const char *headers, const char *name) {
@@ -580,10 +590,14 @@ serve_connection(void *arg) {
     rcv_timeout_until(fd, started + HEADER_BUDGET_MS);
     ssize_t n = read(fd, raw + got, MAX_HEADER_BYTES - got);
     if(n <= 0) break;
+    size_t from = got >= 3 ? got - 3 : 0;
     got += (size_t)n;
     raw[got] = 0;
-    if((header_end = strstr(raw, "\r\n\r\n")) != NULL) break;
+    if((header_end = find_head_end(raw, from, got)) != NULL) break;
   }
+  /* A NUL inside the head: strstr() used to stop at it, so such a head never "ended" and held its thread for the whole
+     header budget (15 s) before the 400. Refused at once now. */
+  if(header_end && memchr(raw, 0, (size_t)(header_end - raw))) header_end = NULL;
 
   if(!header_end) {
     ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Anfrage.");
@@ -687,7 +701,8 @@ serve_connection(void *arg) {
     char *ce = NULL;
     errno = 0;
     unsigned long long v = (*cl >= '0' && *cl <= '9') ? strtoull(cl, &ce, 10) : 0;
-    if(!(*cl >= '0' && *cl <= '9') || errno || (ce && *ce && *ce != '\r' && *ce != '\n' && *ce != ' ')) {
+    while(ce && (*ce == ' ' || *ce == '\t')) ce++;                  /* trailing blanks only: "Content-Length: 1 2" is no 1 */
+    if(!(*cl >= '0' && *cl <= '9') || errno || (ce && *ce && *ce != '\r' && *ce != '\n')) {
       ps5tm_http_send_error(fd, 400, "bad_request", "Ungültige Content-Length.");
       free(raw);
       close_after_answer(fd);

@@ -290,7 +290,7 @@ int
 ps5tm_convqueue_action(const cJSON *body, char *err, size_t err_len) {
   const char *act = str_of(body, "action");
   const cJSON *jq = body ? cJSON_GetObjectItem(body, "qid") : NULL;
-  int qid = cJSON_IsNumber(jq) ? (int)jq->valuedouble : 0;
+  int qid = cJSON_IsNumber(jq) ? ps5tm_num_i32(jq->valuedouble) : 0;
 
   if(!strcmp(act, "add")) {
     const char *id = str_of(body, "id"), *op = str_of(body, "op"), *mount = str_of(body, "target"), *mode = str_of(body, "mode");

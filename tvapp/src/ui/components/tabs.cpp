@@ -367,7 +367,10 @@ void TabBar::draw(Canvas &canvas) const
         Rect &tab = cells[static_cast<std::size_t>(i)];
         const float weight = tween::clamp01(1.0f - std::fabs(value_.value - static_cast<float>(i)));
         float alpha = item.disabled ? 0.4f : 1.0f;
-        if (at.overflow && style.edge_fade > 0.0f)
+        if (at.overflow && style.whole_only && weight <= 0.0f &&
+            (tab.x < bounds_.x - 0.5f || tab.x + tab.w > bounds_.x + bounds_.w + 0.5f))
+            alpha = 0.0f;
+        else if (at.overflow && style.edge_fade > 0.0f)
         {
             const float shown = std::min(tab.x + tab.w - bounds_.x, bounds_.x + bounds_.w - tab.x);
             alpha *= tween::clamp01(shown / (tab.w * style.edge_fade));

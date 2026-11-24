@@ -322,10 +322,10 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): the model for the UFS2/ffpkg writer.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4 asset packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) and [dlc_emu](https://github.com/drakmor/dlc_emu) (embedded builds, GPL-3.0).
 - **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, a further development of ampr_emu that also reads zstd packs (the two newest releases, 0.5.1 and 0.5.0, embedded, newer ones fetched by the app on request). Also [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): the program behind the “FPKGMount” tab (embedded unchanged as an ELF).
-- **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): how the starter tile is built as a native title.
+- **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): how the starter tile is built as a native title.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): package layout and the install flow (own code after this model).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profile function and profile picture format.
-- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR encoder.
+- **slopmaster33, webhb** (GPL-3.0): QR encoder.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): the four tested LZ4 profiles (ASTRO BOT, EA Sports UFC 6, Insomniac engine, Unity engine), embedded unchanged.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): the app's own name resolution and HTTPS fetch (for the payload store).
 - **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): the NTFS driver (reading and writing) behind NTFS drives in the file manager, built in unchanged (v1.4.0).
@@ -338,7 +338,7 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 
 - **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (mounting, moving, unpacking games) and [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (power rails, clocks).
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: the list for "Automatic", recording for profile creation, upkeep of the game plugins.
-- **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: files that must stay loose when packing, permissions 0777, repair while checking the packs, choice of the tested profiles.
+- **theghostonline (Husam Osman), PS5 LZ4 Compression**: files that must stay loose when packing, permissions 0777, repair while checking the packs, choice of the tested profiles.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parameters for `.ffpkg` images.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) and [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (model and list for “Download payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): detecting the running game.

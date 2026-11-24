@@ -839,6 +839,33 @@ cv_cancelled(void) {
   return __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE);
 }
 
+/* What Dump Forge reports as done is checked before the job counts as done, since "Original danach" may delete the source on that word
+   (audit 24.11.2026): the result is there, a regular file that is not empty, and it has the head of its format (a package: CNT or FIH; an
+   image: one the app's own reader opens without mounting it). Its byte count is not compared: what Dump Forge counts there is not
+   documented, and a wrong guess would fail every good job. 1 = fine; else *why says what is wrong. */
+static int
+df_result_ok(const cv_args_t *a, char *why, size_t why_len) {
+  struct stat st;
+  if(lstat(a->target, &st) != 0) { snprintf(why, why_len, "Das Ergebnis fehlt: %s", a->target); return 0; }
+  if(!S_ISREG(st.st_mode) || st.st_size <= 0) { snprintf(why, why_len, "Das Ergebnis ist leer oder keine Datei: %s", a->target); return 0; }
+  if(!a->pack.kind) {
+    unsigned char h[4] = { 0 };
+    const int fd = open(a->target, O_RDONLY);
+    const ssize_t got = fd >= 0 ? pread(fd, h, sizeof(h), 0) : -1;
+    if(fd >= 0) close(fd);
+    if(got != (ssize_t)sizeof(h) || (memcmp(h, "\x7f" "CNT", 4) && memcmp(h, "\x7f" "FIH", 4))) {
+      snprintf(why, why_len, "Das Ergebnis hat keinen gültigen Paketkopf: %s", a->target);
+      return 0;
+    }
+    return 1;
+  }
+  char e2[200] = "";
+  imgr_t *r = imgr_open(a->target, e2, sizeof(e2));
+  if(!r) { snprintf(why, why_len, "Das Ergebnis lässt sich nicht als Abbild öffnen (%.150s): %s", e2[0] ? e2 : "ohne Angabe", a->target); return 0; }
+  imgr_close(r);
+  return 1;
+}
+
 static void *
 cv_run_dumpforge(const cv_args_t *a) {
   const int packing = a->pack.kind != 0;
@@ -970,6 +997,8 @@ cv_run_dumpforge(const cv_args_t *a) {
   /* Dump Forge went silent and the job was not asked to stop yet: ask once, so that it does not write on without anyone watching. */
   if((lost_out || list_big) && !cancel_sent) ps5tm_dumpforge_job_cancel(job);
   const int cancelled = cancel_sent || __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE);
+  char result_bad[360] = "";
+  if(final == CV_DONE && !df_result_ok(a, result_bad, sizeof(result_bad))) final = CV_FAILED;     /* the original stays (origafter.c needs CV_DONE) */
   if(final == CV_DONE) {
     pthread_mutex_lock(&g_lock);
     g_job.output_bytes = jb.bytes;
@@ -993,11 +1022,13 @@ cv_run_dumpforge(const cv_args_t *a) {
     cv_state(CV_CANCELLED);
     PS5TM_INFO("game_convert_cancelled", "%s von %s abgebrochen.", what, a->title_id);
   } else if(final == CV_FAILED) {
-    if(list_big) cv_fail("Die Auftragsliste von Dump Forge ist zu groß zum Lesen; der Auftrag wurde abgebrochen.");
+    if(result_bad[0]) cv_fail("Dump Forge meldete „fertig“, aber: %s · Das Original bleibt unberührt.", result_bad);
+    else if(list_big) cv_fail("Die Auftragsliste von Dump Forge ist zu groß zum Lesen; der Auftrag wurde abgebrochen.");
     else if(lost_out) cv_fail("Dump Forge antwortet nicht mehr.");
     else if(jb.error[0]) cv_fail("Dump Forge: %s", jb.error);
     else cv_fail("Dump Forge hat den Auftrag ohne Angabe eines Grundes beendet.");          /* an empty text must not leave the job "running" for ever (audit 18.11.2026) */
-    PS5TM_WARN("game_convert_failed", "%s von %s gescheitert: %s", what, a->title_id, lost_out ? "Dump Forge antwortet nicht mehr." : jb.error[0] ? jb.error : "ohne Angabe");
+    PS5TM_WARN("game_convert_failed", "%s von %s gescheitert: %s", what, a->title_id,
+               result_bad[0] ? result_bad : lost_out ? "Dump Forge antwortet nicht mehr." : jb.error[0] ? jb.error : "ohne Angabe");
   }
   return NULL;
 }

@@ -28,6 +28,7 @@
 #endif
 
 #include "iopolicy.h"
+#include "threadwrap.h"
 
 
 /* ------------------------------------------------------------- which drive */

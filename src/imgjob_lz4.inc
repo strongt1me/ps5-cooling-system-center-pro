@@ -215,14 +215,16 @@ typedef struct {
   unsigned            files, links, signed_files;
   char                why[400];
   int                 rc;
+  unsigned            nheld;                    /* sce_sys/param.json and param.sfo: written as <name>.ps5cc-teil, put in place at the very end (as gamecopy.c does, audit F-256) */
+  char                held[2][PATH_MAX];
 } cp_t;
 
 static int
 cp_file(cp_t *c, const char *src, const char *dst, const struct stat *st) {
   int in = open(src, O_RDONLY);
-  if(in < 0) { snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht lesen: %s", src + c->srclen + 1); return -1; }
+  if(in < 0) { snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht lesen: %s", src + c->srclen + 1); c->rc = -1; return -1; }   /* c->rc: the caller must not take a copy that lacks this file for whole */
   int out = open(dst, O_WRONLY | O_CREAT | O_EXCL, LZP_FILE_MODE);
-  if(out < 0) { close(in); snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht anlegen (%s): %s", ps5tm_io_strerror(errno), dst + c->dstlen + 1); return -1; }
+  if(out < 0) { close(in); snprintf(c->why, sizeof(c->why), "Eine Datei ließ sich nicht anlegen (%s): %s", ps5tm_io_strerror(errno), dst + c->dstlen + 1); c->rc = -1; return -1; }
   (void)fchmod(out, LZP_FILE_MODE);
   uint32_t crc = 0;
   uint64_t total = 0;
@@ -317,6 +319,8 @@ cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
       break;
     }
     if(!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+    /* the original's own backups of its AMPR index (ps5tm_ampr_build_dir, orig_index_keep below): not part of the game, not for the copy */
+    if(depth == 0 && (!strcmp(e->d_name, "ampr_emu.index.bak") || !strcmp(e->d_name, "ampr_emu.index.bak" IJ_PART_SUFFIX))) continue;
     size_t n = strlen(e->d_name);
     if(sl + 1 + n >= PATH_MAX - 8 || dl + 1 + n >= PATH_MAX - 8) { snprintf(c->why, sizeof(c->why), "Ein Pfad ist zu lang: %s", e->d_name); c->rc = -1; rc = -1; break; }
     src[sl] = '/'; memcpy(src + sl + 1, e->d_name, n + 1);
@@ -339,7 +343,12 @@ cp_walk(cp_t *c, char *src, size_t sl, char *dst, size_t dl, int depth) {
       const char *rel = src + c->srclen + 1;
       if(!lzp_list_has(c->packed, rel)) {
         const fsign_item_t *si = c->sign ? ps5tm_fsign_find(c->sign, rel) : NULL;
-        rc = si ? cp_sign(c, src, dst, &st, si) : cp_file(c, src, dst, &st);
+        const int hold = c->nheld < 2 && (!strcmp(rel, "sce_sys/param.json") || !strcmp(rel, "sce_sys/param.sfo"));
+        char dpart[PATH_MAX + 16];
+        const char *to = dst;
+        if(hold) { snprintf(dpart, sizeof(dpart), "%s" IJ_PART_SUFFIX, dst); to = dpart; }
+        rc = si ? cp_sign(c, src, to, &st, si) : cp_file(c, src, to, &st);
+        if(hold && rc == 0) snprintf(c->held[c->nheld++], PATH_MAX, "%s", dst);
       }
     } else c->links++;
     src[sl] = 0;
@@ -656,6 +665,8 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
   const char *fmt_name = zs ? "zstd" : "LZ4";
   uint64_t loose_bytes = 0;
   char sign_note[300] = "";                                    /* said at the end, beside whatever else the job has to say */
+  unsigned held_n = 0;                                         /* copy: the files a scanner knows a game by, still under their temporary names (cp_t.held) */
+  char held_at[2][PATH_MAX];
 
   char place[16] = "", pwhy[200] = "";
   if(ps5tm_amprlib_place("ampr", id, "", place, sizeof(place), pwhy, sizeof(pwhy)) != 0) { lz4_fail("Das Spiel ist nicht mehr in der Liste.", -1); return; }
@@ -781,11 +792,13 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     snprintf(d2, PATH_MAX, "%s", tmp);
     lz4_ui_total(NULL, loose_bytes * 2 + 1);
     set_phase("Die Dateien, die lose bleiben, werden kopiert");
-    cp_walk(c, s2, strlen(s2), d2, strlen(d2), 0);
-    int crc_rc = c->rc;
+    const int walk_rc = cp_walk(c, s2, strlen(s2), d2, strlen(d2), 0);
+    int crc_rc = c->rc ? c->rc : walk_rc;                      /* a walk that stopped on an error is never a finished copy, whatever c->rc says */
     char why[400];
     snprintf(why, sizeof(why), "%s", c->why);
     signed_n = c->signed_files;
+    held_n = c->nheld;
+    memcpy(held_at, c->held, sizeof(held_at));
     free(s2); free(d2); free(c); free(buf);
     lzp_list_free(&pk);
     if(!crc_rc && signed_n) {                                  /* the index the copy carries lists the executables at their ELF sizes */
@@ -834,6 +847,11 @@ lz4_run_pack(const char *id, const char *root, const lz4arg_t *a, int copy) {
     goto out;
   }
   if(copy) {
+    for(unsigned h = 0; h < held_n; h++) {                      /* only now is the folder one that a scanner takes for a game */
+      char from[PATH_MAX + 16];
+      snprintf(from, sizeof(from), "%s" IJ_PART_SUFFIX, held_at[h]);
+      if(rename(from, held_at[h]) != 0) { int e = errno; rm_tree(tmp, 0); char m[300]; snprintf(m, sizeof(m), "Der fertige Ordner ließ sich nicht umbenennen: %s", ps5tm_io_strerror(e)); lz4_fail(m, -1); goto out; }
+    }
     if(rename(tmp, fin) != 0) { int e = errno; rm_tree(tmp, 0); char m[300]; snprintf(m, sizeof(m), "Der fertige Ordner ließ sich nicht umbenennen: %s", ps5tm_io_strerror(e)); lz4_fail(m, -1); goto out; }
     made_tmp = 0;
   } else if(ps5tm_procmgr_title_running(id) == 1) {
@@ -924,6 +942,14 @@ lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
   if((zs ? zsp_verify(root, NULL, &st, &ui, err, sizeof(err)) : lzp_verify(root, NULL, &st, &ui, err, sizeof(err))) != 0) { lz4_fail(err, cancelled() ? ECANCELED : -1); return; }
   lz4_job_stats(&st, 0);
   lz4_last_set(id, 0, st.files_packed, st.logical_bytes);
+  if(!zs) {                                                    /* without ampr_assets.index.crc a damaged RAW block cannot be told from a good one */
+    lzp_info_t ci;
+    if(lzp_info(root, &ci) && !ci.has_crc) {
+      pthread_mutex_lock(&g_lock);
+      snprintf(g_job.note, sizeof(g_job.note), "Die Prüfsummen-Datei (ampr_assets.index.crc) fehlt: unkomprimierte Blöcke ließen sich nicht auf Schäden prüfen.");
+      pthread_mutex_unlock(&g_lock);
+    }
+  }
 
   set_phase("Die APR-EMU-Datei wird geprüft");
   char warn[640] = "", why[300] = "";
@@ -952,7 +978,7 @@ lz4_run_verify(const char *id, const char *root, const lz4arg_t *a) {
   g_job.lz4_apr_fixed = apr == 1;
   g_job.lz4_restored = restored;
   g_job.lz4_modes = fixed;
-  snprintf(g_job.note, sizeof(g_job.note), "%s", warn);
+  if(warn[0]) snprintf(g_job.note, sizeof(g_job.note), "%s", warn);          /* not over the note about a missing sidecar */
   if(failed) {
     size_t nl = strlen(g_job.note);
     snprintf(g_job.note + nl, sizeof(g_job.note) - nl, "%sRechte an %u Dateien oder Ordnern ließen sich nicht auf 0777 setzen.", nl ? " " : "", failed);
@@ -1004,6 +1030,45 @@ lz4_run_unpack(const char *id, const char *root, const lz4arg_t *a) {
   finish(IJ_DONE, NULL);
 }
 
+/* "Als neuer Ordner daneben" promises the original untouched, but the packer reads the AMPR index from the game folder (plan_build) and
+   ps5tm_ampr_build_dir writes it there: the old index becomes ampr_emu.index.bak, an older .bak is deleted. So the original's state is
+   kept before the job and put back after it, whatever its end: the old index from its .bak, the older .bak from aside, and the index made
+   for the copy taken away where there was none (audit 24.11.2026). By then the copy carries that index itself (cp_walk). */
+typedef struct {
+  int  active, had_idx, had_bak;
+  char idx[PATH_MAX], bak[PATH_MAX + 8], aside[PATH_MAX + 24];
+} orig_idx_t;
+
+static int
+orig_index_keep(const char *root, orig_idx_t *k, char *err, size_t en) {
+  memset(k, 0, sizeof(*k));
+  if(snprintf(k->idx, sizeof(k->idx), "%s/ampr_emu.index", root) >= (int)sizeof(k->idx)) { snprintf(err, en, "Ein Pfad ist zu lang."); return -1; }
+  snprintf(k->bak, sizeof(k->bak), "%s.bak", k->idx);
+  snprintf(k->aside, sizeof(k->aside), "%s.bak" IJ_PART_SUFFIX, k->idx);
+  struct stat st;
+  k->had_idx = lstat(k->idx, &st) == 0 && S_ISREG(st.st_mode);
+  k->had_bak = lstat(k->bak, &st) == 0 && S_ISREG(st.st_mode);
+  if(k->had_bak && rename(k->bak, k->aside) != 0) {
+    snprintf(err, en, "Die alte Sicherung des AMPR-Index im Original ließ sich nicht beiseitelegen (%s); das Original bleibt unberührt.",
+             ps5tm_io_strerror(errno));
+    return -1;
+  }
+  k->active = 1;
+  return 0;
+}
+
+static void
+orig_index_restore(const orig_idx_t *k) {
+  if(!k->active) return;
+  int bad = 0;
+  if(k->had_idx) { if(rename(k->bak, k->idx) != 0 && errno != ENOENT) bad = 1; }      /* ENOENT: the build stopped before it touched the old one */
+  else if(unlink(k->idx) != 0 && errno != ENOENT) bad = 1;
+  if(k->had_bak && rename(k->aside, k->bak) != 0) bad = 1;
+  if(bad)
+    PS5TM_WARN("lz4_copy_index_restore", "Kopie daneben: Der AMPR-Index im Original (%.160s) ließ sich nicht ganz in seinen alten Stand "
+               "zurücksetzen (%s).", k->idx, ps5tm_io_strerror(errno));
+}
+
 static void *
 lz4_run(void *arg) {
   lz4arg_t *a = arg;
@@ -1014,7 +1079,15 @@ lz4_run(void *arg) {
   snprintf(root, sizeof(root), "%s", g_job.image);
   pthread_mutex_unlock(&g_lock);
   if(!strcmp(a->kind, "lz4pack")) lz4_run_pack(id, root, a, 0);
-  else if(!strcmp(a->kind, "lz4copy")) lz4_run_pack(id, root, a, 1);
+  else if(!strcmp(a->kind, "lz4copy")) {
+    orig_idx_t k;
+    char e2[300] = "";
+    if(orig_index_keep(root, &k, e2, sizeof(e2)) != 0) lz4_fail(e2, -1);
+    else {
+      lz4_run_pack(id, root, a, 1);
+      orig_index_restore(&k);
+    }
+  }
   else if(!strcmp(a->kind, "lz4verify")) lz4_run_verify(id, root, a);
   else lz4_run_unpack(id, root, a);
   free(a);

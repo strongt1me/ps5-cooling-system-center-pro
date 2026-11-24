@@ -24,6 +24,7 @@ typedef struct cblock {
   uint64_t stamp;
   int      valid;
   int      dirty;           /* (app) written in the cache, not yet on the device */
+  int      bad;             /* (audit) the last try to write it out failed: it is not taken for another block while there is another */
   uint8_t  dsec[(CACHE_BLOCK / 512 + 7) / 8];   /* (app) which sectors of it (bit per device sector) */
   uint8_t *data;
 } cblock_t;
@@ -159,11 +160,12 @@ static int block_out(bdev_t *b, cblock_t *c) {
     uint32_t e = s;
     while (e < ns && (c->dsec[e / 8] & (1u << (e % 8)))) e++;
     size_t a = (size_t)s * ss, z = (size_t)e * ss < len ? (size_t)e * ss : len;
-    if (write_full(b->fd, off + a, c->data + a, z - a)) return -1;
+    if (write_full(b->fd, off + a, c->data + a, z - a)) { c->bad = 1; return -1; }
     for (uint32_t i = s; i < e; i++) c->dsec[i / 8] &= (uint8_t)~(1u << (i % 8));
     s = e;
   }
   c->dirty = 0;
+  c->bad = 0;
   return 0;
 }
 
@@ -180,17 +182,26 @@ static int range_out(bdev_t *b, uint64_t off, uint64_t len) {
 
 /* Fetch one cache block; caller holds the lock. */
 static cblock_t *cache_get(bdev_t *b, uint64_t blkno) {
-  cblock_t *victim = &b->cache[0];
-  for (int i = 0; i < CACHE_BLOCKS; i++) {
-    cblock_t *c = &b->cache[i];
-    if (c->valid && c->blkno == blkno) {
-      c->stamp = ++b->clock;
-      return c;
+  cblock_t *victim = NULL;
+  for (int round = 0; round < 2; round++) {       /* 2nd round: the 1st victim could not be written out and is marked bad now */
+    victim = NULL;
+    for (int i = 0; i < CACHE_BLOCKS; i++) {
+      cblock_t *c = &b->cache[i];
+      if (c->valid && c->blkno == blkno) {
+        c->stamp = ++b->clock;
+        return c;
+      }
+      /* (audit 24.11.2026) a block that could not be written out stays where it is: if it were taken as the oldest, every read of a block
+       * that is not cached would fail for as long as the device refuses that write (a bad sector, a stick gone read-only) */
+      if (c->valid && c->bad) continue;
+      if (!victim || !c->valid || (victim->valid && c->stamp < victim->stamp)) victim = c;
     }
-    if (!c->valid || c->stamp < victim->stamp) victim = c;
+    if (!victim) return NULL;
+    if (!victim->data && !(victim->data = malloc(CACHE_BLOCK))) return NULL;
+    if (!block_out(b, victim)) break;             /* (app) what was written in it goes to the device first */
+    victim = NULL;
   }
-  if (!victim->data && !(victim->data = malloc(CACHE_BLOCK))) return NULL;
-  if (block_out(b, victim)) return NULL;          /* (app) what was written in it goes to the device first */
+  if (!victim) return NULL;
 
   uint64_t off = blkno * CACHE_BLOCK;
   size_t len = CACHE_BLOCK;

@@ -20,6 +20,7 @@
 #endif
 
 #include "zstdpack.h"
+#include "threadwrap.h"
 #include "third_party/libdeflate/libdeflate.h"
 #define ZSTD_STATIC_LINKING_ONLY                         /* ZSTD_getFrameHeader: the check reads the frame parameters */
 #include "third_party/zstd/lib/zstd.h"
@@ -1290,16 +1291,24 @@ zsp_remove_set(const char *dir, char *err, size_t en) {
   DIR *d = opendir(dir);
   if(!d) { say(err, en, "Der Spielordner ließ sich nicht lesen (%s).", strerror(errno)); return -1; }
   int rc = 0;
-  struct dirent *e;
-  while((e = readdir(d))) {
-    char base[NAME_MAX + 1];
-    snprintf(base, sizeof(base), "%s", e->d_name);
-    size_t l = strlen(base), pl = strlen(LZP_PART_SUFFIX);
-    if(l > pl && !strcmp(base + l - pl, LZP_PART_SUFFIX)) base[l - pl] = 0;      /* what a failed run left under temporary names */
-    if(strcasecmp(base, ZSP_INDEX_NAME) && !volume_name(base)) continue;
-    char p[PATH_MAX + NAME_MAX + 2];
-    snprintf(p, sizeof(p), "%s/%s", dir, e->d_name);
-    if(unlink(p) != 0 && errno != ENOENT) { say(err, en, "Eine Paketdatei ließ sich nicht entfernen (%s): %s", strerror(errno), e->d_name); rc = -1; }
+  /* Two rounds: the index (and its temporary name) first, the volumes after it. Whatever stops the removal in between leaves volumes without an index
+     (no set, nothing that reads as one), never an index whose volumes are gone (a set that cannot be checked, unpacked or packed again). */
+  for(int round = 0; round < 2; round++) {
+    rewinddir(d);
+    struct dirent *e;
+    while((e = readdir(d))) {
+      char base[NAME_MAX + 1];
+      snprintf(base, sizeof(base), "%s", e->d_name);
+      size_t l = strlen(base), pl = strlen(LZP_PART_SUFFIX);
+      if(l > pl && !strcmp(base + l - pl, LZP_PART_SUFFIX)) base[l - pl] = 0;      /* what a failed run left under temporary names */
+      const int is_index = !strcasecmp(base, ZSP_INDEX_NAME);
+      if(!is_index && !volume_name(base)) continue;
+      if((round == 0) != is_index) continue;
+      char p[PATH_MAX + NAME_MAX + 2];
+      snprintf(p, sizeof(p), "%s/%s", dir, e->d_name);
+      if(unlink(p) != 0 && errno != ENOENT) { say(err, en, "Eine Paketdatei ließ sich nicht entfernen (%s): %s", strerror(errno), e->d_name); rc = -1; }
+    }
+    if(rc != 0 && round == 0) break;                      /* the index is still there: the volumes stay with it */
   }
   closedir(d);
   return rc;

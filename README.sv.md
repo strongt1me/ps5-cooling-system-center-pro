@@ -322,10 +322,10 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): förebilden för UFS2-/ffpkg-skrivaren.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-asset-paket, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) och [dlc_emu](https://github.com/drakmor/dlc_emu) (inbyggda versioner, GPL-3.0).
 - **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, en vidareutveckling av ampr_emu som också läser zstd-paket (de två senaste utgåvorna, 0.5.1 och 0.5.0, inbyggda, nyare hämtar appen på begäran). Dessutom [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): programmet bakom fliken ”FPKGMount” (inbyggt oförändrat som ELF).
-- **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): hur startrutan byggs som en inbyggd titel.
+- **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): hur startrutan byggs som en inbyggd titel.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): paketens uppbyggnad och installationsförloppet (egen kod efter denna förebild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profilfunktionen och profilbildens format.
-- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-kodare.
+- **slopmaster33, webhb** (GPL-3.0): QR-kodare.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): de fyra testade LZ4-profilerna (ASTRO BOT, EA Sports UFC 6, Insomniac-motorn, Unity-motorn), inbyggda oförändrade.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): appens egen namnuppslagning och HTTPS-hämtning (för payload-butiken).
 - **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): NTFS-drivrutinen (läsa och skriva) bakom NTFS-enheterna i filhanteraren, inbyggd oförändrad (v1.4.0).
@@ -338,7 +338,7 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 
 - **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (montera, flytta, packa upp spel) och [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (strömskenor, klockfrekvenser).
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: listan för ”Automatiskt”, inspelning för att skapa profiler, skötsel av spelens insticksmoduler.
-- **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: filer som måste ligga löst vid packning, rättigheter 0777, reparation vid kontroll av paketen, urval av de testade profilerna.
+- **theghostonline (Husam Osman), PS5 LZ4 Compression**: filer som måste ligga löst vid packning, rättigheter 0777, reparation vid kontroll av paketen, urval av de testade profilerna.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parametrar för `.ffpkg`-avbilder.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) och [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (förebild och lista för ”Hämta payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): igenkänning av pågående spel.

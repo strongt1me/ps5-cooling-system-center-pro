@@ -214,7 +214,14 @@ TEST_F(ComponentsOverlays, SheetSlidesFromItsEdgeAndOnlyWantsBack)
     const Rect right = sheet.panel_rect();
     EXPECT_FLOAT_EQ(right.x + right.w, 1920.0f);
     EXPECT_FLOAT_EQ(right.w, sheet.style.size);
+    // edge_inset: the text keeps the safe area on the side at the screen's edge, the panel does not move
+    sheet.style.edge_inset = 60.0f;
+    EXPECT_FLOAT_EQ(sheet.panel_rect().x + sheet.panel_rect().w, 1920.0f);
+    EXPECT_FLOAT_EQ(sheet.content_rect().x, area.x);
+    EXPECT_FLOAT_EQ(sheet.content_rect().x + sheet.content_rect().w, area.x + area.w - 60.0f);
     sheet.style.edge = SheetEdge::left;
+    EXPECT_FLOAT_EQ(sheet.content_rect().x, sheet.panel_rect().x + sheet.style.padding + 60.0f);
+    sheet.style.edge_inset = 0.0f;
     EXPECT_FLOAT_EQ(sheet.panel_rect().x, 0.0f);
     sheet.style.edge = SheetEdge::bottom;
     sheet.style.footer = 100.0f;

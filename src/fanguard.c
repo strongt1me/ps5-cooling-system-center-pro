@@ -96,6 +96,8 @@ ps5tm_thread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start
 #define HOT_DEFAULT_LIMIT_C 90     /* before the loop has published its limit */
 #define HOT_SUSTAIN_S      10
 #define HOT_FAN_FULL_PCT   90      /* above this there is nothing left to add */
+#define HOT_FULL_FAN_S     60      /* ... but only for this long: a console that stays over the limit for a minute with the fan "at full speed"
+                                      is not cooled by it, and the single register that says so can be wrong (audit 24.11.2026, test/sim A_duty_stuck_hi) */
 #define HOT_RELEASE_C       8      /* this far below the limit ... */
 #define HOT_HOLD_MIN_S     30      /* ... and held at least this long */
 #define REWRITE_S           5      /* the firmware resets the threshold at game start */
@@ -167,8 +169,8 @@ guard_worker(void *arg) {
     int lim = hot_limit();
     int fan_full = s.fan_duty_valid && s.fan_duty_pct >= HOT_FAN_FULL_PCT;
 
-    if(hottest >= lim) hot_s++;
-    else               hot_s = 0;
+    if(hottest >= lim)     hot_s++;
+    else if(hottest >= 0)  hot_s = 0;       /* a pass without a valid reading says nothing: a sensor that answers every other second must not re-arm the 10 s */
 
     int state = atomic_load(&g_state);
 
@@ -204,7 +206,7 @@ guard_worker(void *arg) {
     }
 
     /* 2. Over-temperature while the loop runs. */
-    if(state == PS5TM_GUARD_IDLE && hot_s >= HOT_SUSTAIN_S && !fan_full) {
+    if(state == PS5TM_GUARD_IDLE && hot_s >= HOT_SUSTAIN_S && (!fan_full || hot_s >= HOT_FULL_FAN_S)) {
       held_c = PS5TM_THRESHOLD_MIN_C;
       write_threshold(held_c);
       last_write = now;

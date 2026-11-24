@@ -107,12 +107,16 @@ struct ps5tm_sums {
   char   tmp[PATH_MAX];
   char   buf[SUMS_BUF];
   size_t len;
+  uint32_t crc;                  /* of everything written, for the read-back at the close */
+  uint64_t total;
 };
 
 static int
 sums_flush(ps5tm_sums_t *s) {
   const char *p = s->buf;
   size_t left = s->len;
+  s->crc = libdeflate_crc32(s->crc, s->buf, s->len);
+  s->total += s->len;
   while(left && !s->failed) {
     ssize_t w = write(s->fd, p, left);
     if(w < 0 && errno == EINTR) continue;
@@ -144,7 +148,7 @@ ps5tm_sums_open(const char *path, char *err, size_t err_len) {
     return NULL;
   }
   unlink(s->tmp);                      /* this app's own leftover of a failed try */
-  s->fd = open(s->tmp, O_WRONLY | O_CREAT | O_EXCL, 0666);
+  s->fd = open(s->tmp, O_RDWR | O_CREAT | O_EXCL, 0666);      /* read too: the close reads it back */
   if(s->fd < 0) {
     snprintf(err, err_len, "Die Prüfsummen-Datei ließ sich nicht anlegen: %s", ps5tm_io_strerror(errno));
     free(s);
@@ -178,11 +182,31 @@ ps5tm_sums_close(ps5tm_sums_t *s, char *err, size_t err_len) {
   int rc = sums_flush(s);
   int e  = s->err;
   if(!rc && fsync(s->fd) != 0) { rc = -1; e = errno; }
+  /* read back from the disk (the cache dropped first), as the results themselves are: a file that differs from what was meant
+     would make a later "sha256sum -c" fail on a good result (audit 24.11.2026) */
+  int differs = 0;
+  if(!rc) {
+    ps5tm_drop_cache(s->fd);
+    uint32_t c = 0;
+    uint64_t got = 0;
+    char rb[4096];
+    for(off_t at = 0;;) {
+      ssize_t r = pread(s->fd, rb, sizeof(rb), at);
+      if(r < 0 && errno == EINTR) continue;
+      if(r < 0) { rc = -1; e = errno; break; }
+      if(r == 0) break;
+      c = libdeflate_crc32(c, rb, (size_t)r);
+      got += (uint64_t)r;
+      at += r;
+    }
+    if(!rc && (got != s->total || c != s->crc)) { rc = -1; differs = 1; }
+  }
   if(close(s->fd) != 0 && !rc) { rc = -1; e = errno; }
   if(!rc && rename(s->tmp, s->path) != 0) { rc = -1; e = errno; }
   if(rc) {
     unlink(s->tmp);
-    snprintf(err, err_len, "Die Prüfsummen-Datei ließ sich nicht schreiben: %s", ps5tm_io_strerror(e));
+    if(differs) snprintf(err, err_len, "Die Prüfsummen-Datei kam beim Zurücklesen anders zurück, als sie geschrieben wurde.");
+    else snprintf(err, err_len, "Die Prüfsummen-Datei ließ sich nicht schreiben: %s", ps5tm_io_strerror(e));
   }
   free(s);
   return rc ? -1 : 0;

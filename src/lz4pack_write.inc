@@ -470,6 +470,18 @@ layout_new_volume(layout_t *l, unsigned g, unsigned lane, uint32_t flags, char *
   }
   snprintf(v->fin, sizeof(v->fin), "%s/%s", l->outdir, v->name);
   snprintf(v->tmp, sizeof(v->tmp), "%s%s", v->fin, LZP_PART_SUFFIX);
+  /* The volumes are renamed onto their names at the end: a game file of that name (a profile's pack_pattern can name any path) would be replaced by
+     the volume, and the rollback after a failed check would delete the volume with it. Only what is an AMPRDAT3 volume (a leftover of an earlier try) may be replaced. */
+  {
+    struct stat ex;
+    if(lstat(v->fin, &ex) == 0) {
+      uint8_t mg[8] = { 0 };
+      int xfd = S_ISREG(ex.st_mode) ? open(v->fin, O_RDONLY) : -1;
+      int ours = xfd >= 0 && read_all(xfd, mg, sizeof(mg), 0) == 0 && !memcmp(mg, k_data_magic, sizeof(mg));
+      if(xfd >= 0) close(xfd);
+      if(!ours) { free(v); say(err, en, "Im Spielordner gibt es schon eine Datei, die so heißt wie eine Paketdatei (%s). Das Profil muss einen anderen pack_pattern haben.", l->outdir); return NULL; }
+    }
+  }
   v->io_page = (uint32_t)(grp->io_page_size ? grp->io_page_size : c->io_page_size);
   uint64_t palign = c->payload_alignment > v->io_page ? c->payload_alignment : v->io_page;
   v->payload_off = align_up(DATA_HEADER_SIZE, palign);

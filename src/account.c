@@ -27,6 +27,7 @@
  * Y2JB). Restoring is meant to undo only what fake-signin itself wrote.
  */
 
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -262,8 +263,12 @@ ps5tm_account_activate_slot(int slot, uint64_t id, const char **why)
   if(rc == 0) rc = sceRegMgrSetStr(KEY_ACCOUNT_TYPE(slot), type, sizeof(type));
   if(rc == 0) rc = sceRegMgrSetInt(KEY_ACCOUNT_FLAGS(slot), ACCOUNT_FLAGS_ACTIVE);
   if(rc != 0) {
-    static char msg[128];
-    snprintf(msg, sizeof(msg), "Registrierungszugriff fehlgeschlagen (0x%08X). Jailbreak aktiv?", (unsigned)rc);
+    /* one of a few buffers in turn: the text is read after the return, and two requests that fail at the same time each keep their own
+       (audit 24.11.2026; a single static buffer could be written over while the first answer was still being sent) */
+    static char ring[8][128];
+    static atomic_uint turn;
+    char *msg = ring[atomic_fetch_add(&turn, 1u) % 8u];
+    snprintf(msg, sizeof(ring[0]), "Registrierungszugriff fehlgeschlagen (0x%08X). Jailbreak aktiv?", (unsigned)rc);
     if(why) *why = msg;
     PS5TM_WARN("account_activate_failed", "Offline-Konto Platz %d (\"%s\") konnte nicht aktiviert werden (0x%08X).",
                slot, e.name, (unsigned)rc);

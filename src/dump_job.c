@@ -427,8 +427,8 @@ cfg_load_locked(void) {
   if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "decrypt"))) g_cfg.decrypt = cJSON_IsTrue(v);
   if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "fself"))) g_cfg.fself = cJSON_IsTrue(v);
   if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "backport"))) g_cfg.backport = cJSON_IsTrue(v);
-  if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "bp_ps4"))) g_cfg.bp_ps4 = clamp_level((int)v->valuedouble, DJ_BP_PS4_LEVELS);
-  if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "bp_ps5"))) g_cfg.bp_ps5 = clamp_level((int)v->valuedouble, DJ_BP_PS5_LEVELS);
+  if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "bp_ps4"))) g_cfg.bp_ps4 = clamp_level(ps5tm_num_i32(v->valuedouble), DJ_BP_PS4_LEVELS);
+  if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "bp_ps5"))) g_cfg.bp_ps5 = clamp_level(ps5tm_num_i32(v->valuedouble), DJ_BP_PS5_LEVELS);
   if(!g_cfg.decrypt) g_cfg.fself = g_cfg.backport = 0;
   cJSON_Delete(j);
 }
@@ -2484,13 +2484,13 @@ ps5tm_dump_action(const cJSON *b, char *msg, size_t n) {
         snprintf(msg, n, "Die PS4-Aufteilung ist ungültig.");
         return 400;
       }
-      c.ps4_split = (int)v->valuedouble;
+      c.ps4_split = ps5tm_num_i32(v->valuedouble);
     }
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "decrypt"))) c.decrypt = cJSON_IsTrue(v);
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "fself"))) c.fself = cJSON_IsTrue(v);
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "backport"))) c.backport = cJSON_IsTrue(v);
-    if(cJSON_IsNumber(v = cJSON_GetObjectItem(b, "ps4_backport_level"))) c.bp_ps4 = clamp_level((int)v->valuedouble, DJ_BP_PS4_LEVELS);
-    if(cJSON_IsNumber(v = cJSON_GetObjectItem(b, "ps5_backport_level"))) c.bp_ps5 = clamp_level((int)v->valuedouble, DJ_BP_PS5_LEVELS);
+    if(cJSON_IsNumber(v = cJSON_GetObjectItem(b, "ps4_backport_level"))) c.bp_ps4 = clamp_level(ps5tm_num_i32(v->valuedouble), DJ_BP_PS4_LEVELS);
+    if(cJSON_IsNumber(v = cJSON_GetObjectItem(b, "ps5_backport_level"))) c.bp_ps5 = clamp_level(ps5tm_num_i32(v->valuedouble), DJ_BP_PS5_LEVELS);
     if(!c.decrypt) c.fself = c.backport = 0;
     pthread_mutex_lock(&g_lock);
     cfg_load_locked();

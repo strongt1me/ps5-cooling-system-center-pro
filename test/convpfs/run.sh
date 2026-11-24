@@ -15,7 +15,7 @@ for f in $DL/adler32.c $DL/crc32.c $DL/deflate_compress.c $DL/deflate_decompress
   fi
   LIBS="$LIBS $o"
 done
-gcc -std=gnu11 -D_DEFAULT_SOURCE -DPS5TM_HOST_TEST -DQUICK_BLOCKS=64 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror \
+gcc -std=gnu11 -D_DEFAULT_SOURCE -DPS5TM_HOST_TEST -DPS5TM_NO_THREAD_WRAP -DQUICK_BLOCKS=64 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror \
   -Isrc -Isrc/third_party -Isrc/third_party/libdeflate -o "$OUT/test" test/convpfs/test.c src/conv_pfs.c src/checkfile.c src/sha256.c $LIBS -lpthread
 rm -rf "$OUT/work"
 "$OUT/test" "$OUT/work"

@@ -2004,11 +2004,13 @@ float GameTools::draw_checks(ui::Canvas &canvas, float x, float y, float width) 
     constexpr float kHintSize = 17.0f;
     if (check_key_.empty() || check_pending_ || (!check_.ok && check_.error.empty()))
     {
-        ui::text(list, fonts.regular,
-                 check_key_.empty() ? "Wähle Format, Art und Ziel, dann erscheint die Prüfung."
-                                    : "Die Prüfung läuft …",
-                 x, y, 20.0f, kMuted);
-        return y + 40.0f;
+        // wrapped: unwrapped, a longer language ran out of the dialog (fr, ru)
+        const float next = draw_paragraph(canvas,
+                                          check_key_.empty()
+                                              ? "Wähle Format, Art und Ziel, dann erscheint die Prüfung."
+                                              : "Die Prüfung läuft …",
+                                          x, y, width, 20.0f, kMuted, 2);
+        return std::max(y + 40.0f, next);
     }
     if (!check_.ok)
         return draw_paragraph(canvas, check_.error, x, y, width, 20.0f, kCritical, 3);

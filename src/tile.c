@@ -45,6 +45,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -826,12 +827,12 @@ ps5tm_tile_ensure(char *msg, size_t msg_len) {
 }
 
 
-/* Set by the web request, acted on by the background thread. */
-static volatile int g_install_requested = 0;
+/* Set by the web request, acted on by the background thread (atomic: two threads write it, audit 24.11.2026). */
+static atomic_int g_install_requested = 0;
 
 void
 ps5tm_tile_request_install(void) {
-  g_install_requested = 1;
+  atomic_store(&g_install_requested, 1);
   PS5TM_INFO("tile_install_requested",
              "Installation der Startmenü-Kachel angefordert.");
 }
@@ -896,8 +897,7 @@ tile_auto_consider(void) {
 void
 ps5tm_tile_service(void) {
   tile_auto_consider();
-  if(!g_install_requested) return;
-  g_install_requested = 0;
+  if(!atomic_exchange(&g_install_requested, 0)) return;     /* taken and cleared in one step: a request in between is not lost */
 
   if(tile_installed()) {
     g_auto_pending = 0;

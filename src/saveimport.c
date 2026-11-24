@@ -510,7 +510,7 @@ own_apply(fill_t *f, const char *rel) {
     if(strcmp(o->path, rel)) continue;
     char p[PATH_MAX];
     if(snprintf(p, sizeof(p), "%s/%s", f->mnt, rel) >= (int)sizeof(p)) return;
-    if(chmod(p, o->mode) != 0) f->chmod_failed++;
+    if(chmod(p, o->mode & 01777) != 0) f->chmod_failed++;    /* a ZIP from outside never brings set-user-id / set-group-id bits into the image (the sticky bit grants nothing) */
     if(chown(p, (uid_t)o->uid, (gid_t)o->gid) != 0) { /* the owner of the source is 0:0 as a rule; where the console refuses, the file keeps the one it got */ }
     return;
   }
@@ -554,7 +554,7 @@ fill(fill_t *f, uint64_t *done_files) {
     if(rc == SZ_E_TOO_BIG) { fail(r, "Eine Datei in der ZIP-Datei ist zu groß (%s).", rel); return -1; }
     if(rc != SZ_OK) { fail(r, "Eine Datei ließ sich nicht in das neue Abbild schreiben (%s): %s", rel, ps5tm_io_strerror(wrote_errno ? wrote_errno : EIO)); return -1; }
     if(f->ps4) {
-      const unsigned mode = (e->attr >> 16) & 07777;
+      const unsigned mode = (e->attr >> 16) & 01777;
       if(mode && chmod(p, mode) != 0) f->chmod_failed++;
     }
     (*done_files)++;
@@ -1006,6 +1006,10 @@ saveimport_recover(const char *path, char *report, size_t report_len) {
   return 1;
 }
 
+/* Said when a step of the way back itself failed (a second error right after the first): the old image sits beside the place as "<image>.ps5cc-alt" and the record of the
+   exchange is kept, so that the next start of the app puts everything back (saveimport_recover). */
+static const char k_way_back_open[] = " Der bisherige Spielstand konnte nicht ganz zurückgelegt werden: Er liegt als Datei mit der Endung .ps5cc-alt neben dem Spielstand, und die App legt ihn beim nächsten Start zurück.";
+
 int
 saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimport_result_t *res, char *err, size_t err_len) {
   run_t R = { &h->base, err, err_len };
@@ -1019,6 +1023,7 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   uint8_t *sfo = NULL;
   size_t sfo_len = 0;
   int rc = -1, mounted = 0, stuck = 0, have_img = 0, committed = 0, ps4 = 0, jw = 0;
+  int rb_bad = 0;                                                   /* a step of the way back failed: the record stays, the next start finishes the way back */
   jr_t *jrec = NULL;                                                /* the record of the exchange (heap: it is large), when one is kept */
   char recover_note[420];
   recover_note[0] = 0;
@@ -1383,29 +1388,29 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
     if(replaced && rename(fin, alt) != 0) { const int re = errno ? errno : EIO; unlink(neu); if(ps4) unlink(bneu); fail(r, "Der bisherige Spielstand ließ sich nicht beiseite legen: %s", ps5tm_io_strerror(re)); goto done; }
     if(ps4 && bin_replaced && rename(bfin, balt) != 0) {
       const int re = errno ? errno : EIO;
-      if(replaced) (void)rename(alt, fin);
+      if(replaced && rename(alt, fin) != 0) rb_bad = 1;
       unlink(neu);
       unlink(bneu);
-      fail(r, "Die bisherige Schlüsseldatei ließ sich nicht beiseite legen: %s", ps5tm_io_strerror(re));
+      fail(r, "Die bisherige Schlüsseldatei ließ sich nicht beiseite legen: %s%s", ps5tm_io_strerror(re), rb_bad ? k_way_back_open : "");
       goto done;
     }
     if(rename(neu, fin) != 0) {
       const int re = errno ? errno : EIO;
-      if(replaced) (void)rename(alt, fin);
-      if(ps4 && bin_replaced) (void)rename(balt, bfin);
-      unlink(neu);
-      if(ps4) unlink(bneu);
-      fail(r, "Der neue Spielstand ließ sich nicht an seinen Platz legen: %s", ps5tm_io_strerror(re));
+      if(replaced && rename(alt, fin) != 0) rb_bad = 1;                /* the old image is the save: where it cannot be put back, the record stays and the next start does it */
+      if(ps4 && bin_replaced && rename(balt, bfin) != 0) rb_bad = 1;
+      if(!rb_bad) unlink(neu);                                          /* (with the record kept, the next start takes the new file away itself) */
+      if(ps4 && !rb_bad) unlink(bneu);
+      fail(r, "Der neue Spielstand ließ sich nicht an seinen Platz legen: %s%s", ps5tm_io_strerror(re), rb_bad ? k_way_back_open : "");
       goto done;
     }
     image_in = 1;
     if(ps4) {
       if(rename(bneu, bfin) != 0) {
         const int re = errno ? errno : EIO;
-        if(replaced) (void)rename(alt, fin); else unlink(fin);
-        if(bin_replaced) (void)rename(balt, bfin);
-        unlink(bneu);
-        fail(r, "Die Schlüsseldatei ließ sich nicht an ihren Platz legen: %s", ps5tm_io_strerror(re));
+        if(replaced) { if(rename(alt, fin) != 0) rb_bad = 1; } else if(unlink(fin) != 0 && errno != ENOENT) rb_bad = 1;
+        if(bin_replaced && rename(balt, bfin) != 0) rb_bad = 1;
+        if(!rb_bad) unlink(bneu);
+        fail(r, "Die Schlüsseldatei ließ sich nicht an ihren Platz legen: %s%s", ps5tm_io_strerror(re), rb_bad ? k_way_back_open : "");
         goto done;
       }
       bin_in = 1;
@@ -1468,10 +1473,11 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
       } else if(!db_existed) {
         unlink(dbp);
       }
-      if(icon_in) { if(icon_replaced) (void)rename(ialt, ifin); else unlink(ifin); }
-      if(bin_in) { if(bin_replaced) (void)rename(balt, bfin); else unlink(bfin); }
-      if(image_in) { if(replaced) (void)rename(alt, fin); else unlink(fin); }
-      if(db_back) fail(r, "%s Der Spielstand wurde nicht eingespielt; alles ist wieder so wie vorher.", e2);
+      if(icon_in) { if(icon_replaced) { if(rename(ialt, ifin) != 0) rb_bad = 1; } else if(unlink(ifin) != 0 && errno != ENOENT) rb_bad = 1; }
+      if(bin_in) { if(bin_replaced) { if(rename(balt, bfin) != 0) rb_bad = 1; } else if(unlink(bfin) != 0 && errno != ENOENT) rb_bad = 1; }
+      if(image_in) { if(replaced) { if(rename(alt, fin) != 0) rb_bad = 1; } else if(unlink(fin) != 0 && errno != ENOENT) rb_bad = 1; }
+      if(rb_bad) fail(r, "%s Der Spielstand wurde nicht eingespielt.%s", e2, k_way_back_open);
+      else if(db_back) fail(r, "%s Der Spielstand wurde nicht eingespielt; alles ist wieder so wie vorher.", e2);
       else fail(r, "%s Der Spielstand wurde nicht eingespielt, und die Spielstand-Datenbank ließ sich nicht aus ihrer Sicherung zurücksetzen. Die Sicherung liegt unter %.200s.", e2, dbb);
       goto done;
     }
@@ -1500,7 +1506,7 @@ saveimport_run(const saveimport_args_t *a, const saveimport_hooks_t *h, saveimpo
   rc = 0;
 
 done:
-  if(jw && a->journal_path) unlink(a->journal_path);                /* finished or taken back: nothing is left for the next start to do */
+  if(jw && a->journal_path && !rb_bad) unlink(a->journal_path);     /* finished or taken back: nothing is left for the next start to do (a way back that failed keeps its record) */
   free(jrec);
   if(mounted) {
     char e2[300];

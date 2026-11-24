@@ -364,6 +364,7 @@ handle_status(int fd) {
     unsigned target  = g_config.target_temp_c;
     unsigned dead    = g_config.deadband_c;
     unsigned safety  = g_config.safety_temp_c;
+    if(safety < target + 4) safety = target + 4;         /* the limit in force (fan.c): the stored one is the person's own */
     const char *prof = g_config.profile == PS5TM_PROFILE_COOL     ? "cool"
                      : g_config.profile == PS5TM_PROFILE_BALANCED ? "balanced"
                                                                   : "comfort";
@@ -2982,7 +2983,7 @@ handle_account_activate(int fd, const ps5tm_request_t *req)
   int rc, slot = 0;
   char name[PS5TM_ACCOUNT_NAME_BUF] = "";
   if(cJSON_IsNumber(js)) {
-    slot = (int)js->valuedouble;
+    slot = ps5tm_num_i32(js->valuedouble);
     rc = ps5tm_account_activate_slot(slot, id, &why);
   } else if(cJSON_IsString(jn) && jn->valuestring && jn->valuestring[0]) {
     snprintf(name, sizeof(name), "%s", jn->valuestring);
@@ -3425,6 +3426,7 @@ handle_config_export(int fd) {
   cJSON_AddStringToObject(cfg, "mode",
       g_config.mode == PS5TM_MODE_AUTOMATIC ? "automatic" : "observe");
   cJSON_AddNumberToObject(cfg, "fan_threshold_c", g_config.fan_threshold_c);
+  cJSON_AddBoolToObject(cfg, "fan_threshold_pinned", g_config.fan_threshold_pinned != 0);
   cJSON_AddNumberToObject(cfg, "fan_reapply_sec", g_config.fan_reapply_sec);
   cJSON_AddNumberToObject(cfg, "warning_cpu_c", g_config.warning_cpu_c);
   cJSON_AddNumberToObject(cfg, "warning_soc_c", g_config.warning_soc_c);
@@ -3521,6 +3523,8 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
                   ? PS5TM_MODE_AUTOMATIC : PS5TM_MODE_OBSERVE;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "fan_threshold_c")))
     next.fan_threshold_c = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsBool(it = cJSON_GetObjectItem(cfg, "fan_threshold_pinned")))
+    next.fan_threshold_pinned = cJSON_IsTrue(it) ? 1u : 0u;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "fan_reapply_sec")))
     next.fan_reapply_sec = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(cfg, "warning_cpu_c")))
@@ -3738,6 +3742,7 @@ handle_fan_threshold(int fd, const ps5tm_request_t *req) {
 
   ps5tm_config_lock();
   g_config.fan_threshold_c = (unsigned)clamped;
+  g_config.fan_threshold_pinned = 1;        /* the person's own: observe mode keeps it, also after a restart (fan.c) */
   ps5tm_config_unlock();
   int saved = (ps5tm_config_save() == 0);
 
@@ -5554,7 +5559,9 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
         }
         dst[k][o] = 0;
       }
-      PS5TM_WARN("ui_error", "Fehler in der Weboberfläche (%s, %s): %s", req->peer, wh, msg);
+      /* the scroll test of the expert mode reports its frame statistics the same way: a measurement, not an error */
+      if(!strcmp(wh, "perf")) PS5TM_INFO("ui_perf", "Messung in der Weboberfläche (%s): %s", req->peer, msg);
+      else PS5TM_WARN("ui_error", "Fehler in der Weboberfläche (%s, %s): %s", req->peer, wh, msg);
     }
     cJSON_Delete(b);
     ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
@@ -6198,6 +6205,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "profile", profile_name(c.profile));
     cJSON_AddNumberToObject(o, "target_c", c.target_temp_c);
+    if(c.safety_temp_c < c.target_temp_c + 4) c.safety_temp_c = c.target_temp_c + 4;      /* the limit in force, as in fan.c */
     cJSON_AddNumberToObject(o, "safety_c", c.safety_temp_c);
     cJSON_AddNumberToObject(o, "cap_pct", c.fan_cap_pct);
     cJSON_AddBoolToObject(o, "automatic", c.mode == PS5TM_MODE_AUTOMATIC);

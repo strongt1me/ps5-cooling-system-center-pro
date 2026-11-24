@@ -2247,9 +2247,10 @@
 
     const n = h.count || 0;
     txt("#hist-count", n ? `${num(n)} Messwerte` : "noch keine");
-    txt("#peak-cpu", h.peaks.cpu_c   >= 0 ? `${h.peaks.cpu_c} °C`   : "--");
-    txt("#peak-soc", h.peaks.soc_c   >= 0 ? `${h.peaks.soc_c} °C`   : "--");
-    txt("#peak-fan", h.peaks.fan_pct >= 0 ? `${h.peaks.fan_pct} %`  : "--");
+    const pk = h.peaks || {};          /* an answer without it shows "--", it does not stop the page */
+    txt("#peak-cpu", pk.cpu_c   >= 0 ? `${pk.cpu_c} °C`   : "--");
+    txt("#peak-soc", pk.soc_c   >= 0 ? `${pk.soc_c} °C`   : "--");
+    txt("#peak-fan", pk.fan_pct >= 0 ? `${pk.fan_pct} %`  : "--");
 
     if (!n) {
       txt("#hist-range", "noch keine Aufzeichnung");
@@ -4396,7 +4397,7 @@
         abgestürzt; damit sich das nicht wiederholt, wirft die App keine Laufwerke aus, bis du es erlaubst. Sicherer: die Konsole ganz ausschalten und das Laufwerk
         erst danach abziehen. <button type="button" class="btn ghost" data-eject-rearm>Auswerfen wieder erlauben</button></div>` : "";
     $("#storage-list").innerHTML = ejectNote + (vols.length ? vols.map((v) => {
-      const pct = Math.round((v.used_bytes / v.total_bytes) * 100);
+      const pct = v.total_bytes > 0 ? Math.round((v.used_bytes / v.total_bytes) * 100) : 0;
       const cls = pct >= 92 ? "hot" : pct >= 80 ? "warn" : "s1";
       /* 29.10.2026: USB-Laufwerke lassen sich über ShadowMountPlus auswerfen, aber nur, solange kein Auftrag der App
          läuft (usbeject.c prüft das und sagt sonst, welcher) */
@@ -4721,7 +4722,7 @@
         const mine = /ps5tm/.test(p.name);
         return `<div class="vol">
           <div class="vol-head"><b>${esc(p.name)}${mine ? " · diese App" : ""}</b>
-            <span>${p.used_mb.toFixed(1)} / ${p.total_mb.toFixed(1)} MB</span></div>
+            <span>${(Number(p.used_mb) || 0).toFixed(1)} / ${(Number(p.total_mb) || 0).toFixed(1)} MB</span></div>
           <div class="bar"><span class="${mine ? "s3" : "s1"}" style="width:${pct}%"></span></div>
         </div>`;
       }).join("") : "";
@@ -5463,7 +5464,7 @@
 
     /* Ohne \p{L}: Ein Browser, der das nicht kennt, verwirft das ganze
        Skript, nicht nur diese Zeile. */
-    const initials = x.name.split(/\s+/)
+    const initials = String(x.name || "").split(/\s+/)                 /* a game without a name must not empty the whole list */
       .map((w) => w.replace(/[^0-9A-Za-zÀ-ÿ]/g, "")).filter(Boolean)
       .slice(0, 2).map((w) => w[0]).join("").toUpperCase();
     const tags = gmTags(x);
@@ -7536,7 +7537,7 @@
 
   const gmSorted = (list) => {
     const cmp = {
-      name:      (a, b) => a.name.localeCompare(b.name, "de"),
+      name:      (a, b) => String(a.name || "").localeCompare(String(b.name || ""), "de"),
       last:      (a, b) => (b.last_played || "").localeCompare(a.last_played || ""),
       played:    (a, b) => (b.played_s || 0) - (a.played_s || 0),
       size:      (a, b) => (b.size_bytes || 0) - (a.size_bytes || 0),
@@ -10295,7 +10296,7 @@
       const s = fm.sizes.get(fmJoin(fm.path, e.name));
       return s ? s.bytes : 0;
     };
-    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true })
+    const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base", numeric: true })
       || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     return list.slice().sort((a, b) => {
       const g = (fmIsDir(a) ? 0 : 1) - (fmIsDir(b) ? 0 : 1);
@@ -10444,7 +10445,7 @@
 
   const fmRender = () => {
     const d = fm.list;
-    if (!d) return;
+    if (!d || typeof d.path !== "string" || !Array.isArray(d.entries)) return;       /* an answer without them is no folder to show */
     fmRenderPlaces();
     /* der Pfad zum Anklicken */
     const parts = d.path === "/" ? [] : d.path.slice(1).split("/");
@@ -10484,7 +10485,7 @@
         : `<span class="fm-name">${esc(e.name)}</span>`;
       const kind = e.type === "dirlink" ? "Verknüpfung zu einem Ordner" : e.type === "link" ? "Verknüpfung" : e.type === "other" ? "Gerät oder Sonderdatei" : "";
       const sz = e.type === "dir" ? fm.sizes.get(fmJoin(d.path, e.name)) : null;
-      const sizeText = e.type === "file" ? bytes(e.size)
+      const sizeText = e.type === "file" ? (e.size === 0 ? "0 B" : bytes(e.size))
         : sz ? `${bytes(sz.bytes) === "--" ? "0 B" : bytes(sz.bytes)}${sz.partial ? "+" : ""} · ${num(sz.files)} ${sz.files === 1 ? "Datei" : "Dateien"}${sz.partial ? " (mindestens)" : ""}` : "";
       return `<div class="fm-row${fm.sel.has(e.name) ? " sel" : ""}" role="listitem">
           <input type="checkbox" class="fm-check" data-fm-sel="${i}" aria-label="${esc(e.name)} auswählen"${fm.sel.has(e.name) ? " checked" : ""}${canSel ? "" : " disabled"}>
@@ -11516,7 +11517,7 @@
     return names.slice(0, 3).join(", ") + (names.length > 3 ? ` +${names.length - 3}` : "");
   };
   const svRenderBackups = () => {
-    const list = sv.data.backups;
+    const list = Array.isArray(sv.data.backups) ? sv.data.backups : [];
     txt("#sv-bk-sub", list.length ? `${list.length} ${list.length === 1 ? "Sicherung" : "Sicherungen"}, die neueste zuerst` : "");
     const un = sv.data.unfinished > 0 ? sv.data.unfinished : 0;
     const note = $("#sv-unfinished");

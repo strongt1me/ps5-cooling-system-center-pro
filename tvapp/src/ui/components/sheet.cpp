@@ -94,7 +94,10 @@ Rect Sheet::content_rect() const
 {
     const Rect panel = panel_rect();
     const float top = panel.y + style.padding + header_height();
-    return {panel.x + style.padding, top, std::max(panel.w - 2.0f * style.padding, 0.0f),
+    // the side on the screen's edge keeps the safe area: the panel may run to the edge, the text not
+    const float inset = style.margin <= 0.0f && style.edge != SheetEdge::bottom ? std::max(style.edge_inset, 0.0f) : 0.0f;
+    const float left = style.edge == SheetEdge::left ? inset : 0.0f;
+    return {panel.x + style.padding + left, top, std::max(panel.w - 2.0f * style.padding - inset, 0.0f),
             std::max(panel.y + panel.h - style.padding - top, 0.0f)};
 }
 

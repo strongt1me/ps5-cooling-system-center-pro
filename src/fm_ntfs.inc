@@ -515,12 +515,14 @@ fmn_handle_list(int fd, const char *p) {
   for(size_t i = 0; i < d.n; i++) {
     const fmn_st_t *e = &d.e[i].st;
     cJSON *x = cJSON_CreateObject();
-    cJSON_AddStringToObject(x, "name", d.e[i].name);
+    char shown[FM_NAME + 8];
+    const int bad_name = name_for_json(shown, sizeof(shown), d.e[i].name);     /* the walks keep the real name; only the answer is cleaned */
+    cJSON_AddStringToObject(x, "name", shown);
     cJSON_AddStringToObject(x, "type", e->type == 'd' ? "dir" : e->type == 'f' ? "file" : "link");
     cJSON_AddNumberToObject(x, "size", (double)e->size);
     cJSON_AddNumberToObject(x, "mtime", (double)e->mtime);
     /* system entries of Windows ("System Volume Information", "$RECYCLE.BIN") are shown but not offered for deleting */
-    cJSON_AddBoolToObject(x, "writable", here && e->type != 'o' && !(e->attrs & NTFS_FA_SYSTEM));
+    cJSON_AddBoolToObject(x, "writable", here && e->type != 'o' && !bad_name && !(e->attrs & NTFS_FA_SYSTEM));
     cJSON_AddItemToArray(arr, x);
   }
   fmn_dir_free(&d);
@@ -778,9 +780,9 @@ fmn_receive_upload(int fd, const char *dir, const char *name_in, const char *con
     return;
   }
   ps5tm_powerguard_hold();
-  /* The driver writes straight to the device, without a cache: the pieces the network hands over (a few KB, of any length) became one
-     read and rewrite of the same edge sectors each, and a cheap stick fell to 17 KB/s (console test 23.11.2026, a 60 GB stick; copying
-     onto it ran at 3 MB/s). So the body is gathered into whole blocks of FM_BUF first, as a copy writes them. */
+  /* File data goes straight to the device (the driver's cache holds only the small metadata writes): the pieces the network hands over
+     (a few KB, of any length) became one read and rewrite of the same edge sectors each, and a cheap stick fell to 17 KB/s (console test
+     23.11.2026, a 60 GB stick; copying onto it ran at 3 MB/s). So the body is gathered into whole blocks of FM_BUF first, as a copy writes them. */
   char *buf = malloc(FM_BUF);
   size_t got = 0, fill = 0;
   int werr = buf ? 0 : ENOMEM, too_slow = 0;
@@ -1091,6 +1093,15 @@ fmn_run_copy(fm_args_t *a, int move) {
       break;
     } else if(move) {
       job_current(a->src[i]);
+      /* (audit 24.11.2026) The driver keeps the new names, records and bitmap bits in its cache until a sync; the original goes only once
+         the copy is on the stick. (ntfs_flush_cache would also empty the stick's own cache, at the price of a slow command on some bridges.) */
+      if(t.ntfs && ntfs_sync(nh(&t)) != 0) {
+        snprintf(err, sizeof(err), "%.250s wurde kopiert, ließ sich aber nicht sicher auf das NTFS-Laufwerk schreiben. Das Original bleibt liegen.",
+                 a->src[i]);
+        fmn_pop(&t, tw);
+        fmn_unmake(&s);
+        break;
+      }
       int drc = fmn_delete_copied(&s, &t, 0, &move_kept, &read_kept);
       if(drc) {
         snprintf(err, sizeof(err), "%.250s wurde kopiert, aber das Original ließ sich nicht ganz löschen: %s. Es liegt jetzt an beiden "

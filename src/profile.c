@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -220,8 +221,12 @@ ps5tm_user_set_name(uint32_t uid, const char *name, const char **why) {
   if(rc != 0) {
     /* The code is worth keeping: it is the only thing that distinguishes
        "not allowed" from "name rejected" when a rename fails. */
-    static char msg[128];
-    snprintf(msg, sizeof(msg),
+    /* one of a few buffers in turn: the text is read after the return, and two requests that fail at the same time each keep their own
+       (audit 24.11.2026; a single static buffer could be written over while the first answer was still being sent) */
+    static char ring[8][128];
+    static atomic_uint turn;
+    char *msg = ring[atomic_fetch_add(&turn, 1u) % 8u];
+    snprintf(msg, sizeof(ring[0]),
              "Die Konsole hat den Namen abgelehnt (0x%08X). Ist der Jailbreak "
              "vollständig geladen?", (unsigned)rc);
     if(why) *why = msg;

@@ -322,10 +322,10 @@ make
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): образец для записи UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-ассет-паки, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) и [dlc_emu](https://github.com/drakmor/dlc_emu) (встроенные сборки, GPL-3.0).
 - **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.5.1 и 0.5.0, более новые приложение загружает по запросу). А также [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): программа за вкладкой «FPKGMount» (встроена без изменений как ELF).
-- **[BlackBearReloaded](https://github.com/BlackBearReloaded), ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
+- **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.
-- **[slopmaster33](https://github.com/slopmaster33), [webhb](https://github.com/slopmaster33/webhb)** (GPL-3.0): QR-кодировщик.
+- **slopmaster33, webhb** (GPL-3.0): QR-кодировщик.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): четыре проверенных профиля LZ4 (ASTRO BOT, EA Sports UFC 6, движок Insomniac, движок Unity), встроены без изменений.
 - **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): собственное разрешение имён и HTTPS-загрузка приложения (для магазина пейлоадов).
 - **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): драйвер NTFS (чтение и запись) для накопителей NTFS в файловом менеджере, встроен без изменений (v1.4.0).
@@ -338,7 +338,7 @@ make
 
 - **[drakmor](https://github.com/drakmor)**: [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) (подключение, перенос, распаковка игр) и [ps5-hwinfo](https://github.com/drakmor/ps5-hwinfo) (линии питания, частоты).
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: список для «Автоматически», запись для создания профилей, поддержка плагинов игр.
-- **theghostonline (Husam Osman), [PS5 LZ4 Compression](https://github.com/theghostonline/PS5-LZ4-Compression)**: файлы, которые при упаковке должны оставаться отдельно, права 0777, исправление при проверке пакетов, выбор проверенных профилей.
+- **theghostonline (Husam Osman), PS5 LZ4 Compression**: файлы, которые при упаковке должны оставаться отдельно, права 0777, исправление при проверке пакетов, выбор проверенных профилей.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: параметры для образов `.ffpkg`.
 - **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) и [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (образец и список для «Скачать пейлоады», [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): определение запущенной игры.

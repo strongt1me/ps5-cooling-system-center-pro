@@ -18,6 +18,11 @@ namespace
 {
 
 constexpr std::string_view kSeparator = " \xC2\xB7 "; // " · "
+// The links of a chain the person put together (a payload profile: "a.elf → Pause 2 s → b.elf"); a wrapped line keeps an arrow at
+// its end or its start.
+constexpr std::string_view kArrow = " \xE2\x86\x92 ";      // " → "
+constexpr std::string_view kArrowEnd = " \xE2\x86\x92";    // " →"
+constexpr std::string_view kArrowStart = "\xE2\x86\x92 ";  // "→ "
 constexpr std::size_t kLookupCap = 8000;              // as the browser's cache
 constexpr std::size_t kShownCap = 6000;
 
@@ -504,14 +509,14 @@ std::string Translator::inner(std::string_view value, int depth)
     return std::string(value.substr(0, a)) + t + std::string(value.substr(b));
 }
 
-bool Translator::via_segments(std::string_view core, int depth, std::string *out)
+bool Translator::via_segments(std::string_view core, int depth, std::string *out, std::string_view sep)
 {
     std::string result;
     bool changed = false;
     std::size_t from = 0;
     for (;;)
     {
-        const std::size_t at = core.find(kSeparator, from);
+        const std::size_t at = core.find(sep, from);
         const std::string_view part =
             core.substr(from, at == std::string_view::npos ? std::string_view::npos : at - from);
         std::string t;
@@ -526,12 +531,38 @@ bool Translator::via_segments(std::string_view core, int depth, std::string *out
         }
         if (at == std::string_view::npos)
             break;
-        result.append(kSeparator);
-        from = at + kSeparator.size();
+        result.append(sep);
+        from = at + sep.size();
     }
     if (changed)
         *out = std::move(result);
     return changed;
+}
+
+// A chain ("a.elf → Pause 2 s → b.elf"): whatever is a text in it is looked up on its own, the names stay. Only after the
+// whole and its " · " segments found nothing, so a pattern with an arrow ("Kopie fertig: „{0}“ → {1}") still wins.
+bool Translator::via_chain(std::string_view core, int depth, std::string *out)
+{
+    std::string_view body = core, head, tail;
+    if (body.size() > kArrowEnd.size() && body.substr(body.size() - kArrowEnd.size()) == kArrowEnd)
+    {
+        tail = kArrowEnd;
+        body.remove_suffix(kArrowEnd.size());
+    }
+    if (body.size() > kArrowStart.size() && body.substr(0, kArrowStart.size()) == kArrowStart)
+    {
+        head = kArrowStart;
+        body.remove_prefix(kArrowStart.size());
+    }
+    if (body.empty() || (head.empty() && tail.empty() && body.find(kArrow) == std::string_view::npos))
+        return false;
+    std::string t;
+    const bool hit = body.find(kArrow) != std::string_view::npos ? via_segments(body, depth, &t, kArrow)
+                                                                 : lookup(collapse(body), depth + 1, &t);
+    if (!hit)
+        return false;
+    *out = std::string(head) + t + std::string(tail);
+    return true;
 }
 
 bool Translator::via_marks(std::string_view core, int depth, std::string *out)
@@ -591,8 +622,10 @@ bool Translator::lookup(std::string_view core, int depth, std::string *out)
     {
         const std::size_t sep = core.find(kSeparator);
         if (sep != std::string_view::npos && sep > 0)
-            result.hit = via_segments(core, depth, &result.out);
+            result.hit = via_segments(core, depth, &result.out, kSeparator);
     }
+    if (!result.hit && depth < 3 && core.find("\xE2\x86\x92") != std::string_view::npos)
+        result.hit = via_chain(core, depth, &result.out);
     if (!result.hit && depth < 3)
         result.hit = via_marks(core, depth, &result.out);
     if (lookups_.size() > kLookupCap)

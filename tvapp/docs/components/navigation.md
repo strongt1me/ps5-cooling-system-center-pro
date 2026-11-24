@@ -74,6 +74,7 @@ to it.
 | `focus_ring` | true | The theme's focus ring while the bar is focused |
 | `on_page` | false | Labels that have no surface under them (`underline`, `pill` without a track) use the page's text colours |
 | `edge_fade` | 0.6 | When the row scrolls, a tab fades over this share of its width at a cut edge. 0 turns it off |
+| `whole_only` | false | When the row scrolls, only tabs wholly inside it are drawn (the active one always): no label cut in half at the edge |
 | `wrap` | false | Past the last tab comes the first |
 | `pitch_by_position` | true | The cue rises in pitch from the first tab to the last |
 

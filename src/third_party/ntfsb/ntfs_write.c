@@ -2204,7 +2204,10 @@ static int free_inode(ntfs_vol_t *v, const uint64_t *recs, int n) {
   }
   if (!rc) {
     for (int i = 0; i < n; i++) release_record(v, recs[i]);
-    for (size_t i = 0; i < nheld; i++) free_clusters(v, &held[i]);
+    /* (audit 24.11.2026) The cache of bdev.c writes its blocks in the order of the disk, not of the program: without this point the
+     * bitmap (often below the MFT) can reach the device before the records are free, which is the order the comment above rules out. */
+    if (bdev_writeout(v->dev)) rc = -EIO;
+    for (size_t i = 0; i < nheld && !rc; i++) free_clusters(v, &held[i]);
   }
   for (size_t i = 0; i < nheld; i++) free(held[i].runs);
   free(held);
@@ -2779,7 +2782,16 @@ static int mark_volume(ntfs_vol_t *v, int on) {
     put_le16(val + 10, (uint16_t)(on ? fl | 0x0001 : fl & ~0x0001));
     rc = write_record(v, INODE_VOLUME, rec);
   }
-  if (!rc && bdev_flush(v->dev)) rc = -EIO;
+  if (!rc && bdev_flush(v->dev)) {
+    rc = -EIO;
+    /* (audit 24.11.2026) The "clean" record did not reach the disk and stays in the cache: a later flush would write it while vol_marked
+     * still says the flag is set, so nothing would set it again before the next changes. The flag goes back into the cached record. */
+    if (!on && read_record(v, INODE_VOLUME, rec) == 0 && (at = rec_attr(rec, v->rec_size, AT_VOLUME_INFORMATION, NULL, 0)) != NULL &&
+        (val = res_val(at, &vl)) != NULL && vl >= 12) {
+      put_le16(val + 10, (uint16_t)(le16(val + 10) | 0x0001));
+      (void)write_record(v, INODE_VOLUME, rec);
+    }
+  }
   free(rec);
   if (!rc) v->vol_marked = on;
   return rc;

@@ -432,8 +432,17 @@ class Ps4MountPage final : public Page
         list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f,
                   Color::rgb(0x3880ff, 0.18f));
         const bool waits = mount_.enabled && !mount_.running && !mount_.standalone.empty();
-        ui::text(list, fonts.semibold, status_line(), card.x + 30.0f, line_y + 40.0f, 21.0f,
-                 !mount_.enabled || waits ? kWarning : kMuted);
+        // wrapped to two lines: the Russian sentence ran 75 px out of the card
+        float status_y = line_y + 34.0f;
+        int status_lines = 0;
+        for (const std::string &part : fonts.semibold.font->wrap(status_line(), 21.0f, card.w - 60.0f))
+        {
+            if (++status_lines > 2)
+                break;
+            ui::text(list, fonts.semibold, part, card.x + 30.0f, status_y, 21.0f,
+                     !mount_.enabled || waits ? kWarning : kMuted);
+            status_y += 28.0f;
+        }
     }
 
     void draw_overlay(ui::Canvas &canvas) const override

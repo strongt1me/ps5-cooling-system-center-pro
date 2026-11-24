@@ -78,6 +78,7 @@
 #include "conv_pfs.h"
 #include "ioerr.h"
 #include "sha256.h"
+#include "threadwrap.h"
 #include "third_party/libdeflate/libdeflate.h"
 
 #define BS                 0x10000u      /* PFS block size                */

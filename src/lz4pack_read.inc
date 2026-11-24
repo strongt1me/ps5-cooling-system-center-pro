@@ -415,14 +415,35 @@ lzp_remove_set(const char *dir, char *err, size_t en) {
   join_path(idx, sizeof(idx), dir, LZP_INDEX_NAME);
   man_t m;
   char e2[200] = "";
-  if(man_load(idx, &m, 0, e2, sizeof(e2)) == 0) {
-    for(size_t i = 0; i < m.np; i++) {
+  /* The manifest goes FIRST, the volumes after it: a power cut or a failed unlink in between leaves volumes without a manifest (waste, but no set),
+     never a manifest whose volumes are gone (a set that reads as there and cannot be checked, unpacked or packed again). */
+  char **names = NULL;
+  size_t nnames = 0;
+  int have_man = man_load(idx, &m, 0, e2, sizeof(e2)) == 0;
+  if(have_man) {
+    names = calloc(m.np ? m.np : 1, sizeof(char *));
+    for(size_t i = 0; names && i < m.np; i++) {
       const char *name = man_string(&m, m.p[i].name_off, m.p[i].name_len);
-      if(!name) continue;
-      join_path(p, sizeof(p), dir, name);
-      if(unlink(p) != 0 && errno != ENOENT) { say(err, en, "Eine Paketdatei ließ sich nicht löschen (%s): %s", strerror(errno), name); man_free(&m); return -1; }
+      if(name && (names[nnames] = strdup(name)) != NULL) nnames++;
     }
     man_free(&m);
+  }
+  {
+    const char *tails[] = { "", ".crc", ".runtime", ".ps5cc-teil", ".crc.ps5cc-teil", ".runtime.ps5cc-teil" };
+    for(unsigned i = 0; i < sizeof(tails) / sizeof(tails[0]); i++) {
+      snprintf(p, sizeof(p), "%s%s", idx, tails[i]);
+      if(unlink(p) != 0 && errno != ENOENT) { say(err, en, "Eine Datei ließ sich nicht löschen (%s): %s", strerror(errno), p); for(size_t k = 0; k < nnames; k++) free(names[k]); free(names); return -1; }
+    }
+  }
+  if(have_man) {
+    int bad = 0;
+    for(size_t i = 0; i < nnames; i++) {
+      join_path(p, sizeof(p), dir, names[i]);
+      if(unlink(p) != 0 && errno != ENOENT && !bad) { say(err, en, "Eine Paketdatei ließ sich nicht löschen (%s): %s", strerror(errno), names[i]); bad = 1; }
+      free(names[i]);
+    }
+    free(names);
+    if(bad) return -1;
   } else {                                   /* an unreadable manifest: the volumes of this app by their names */
     DIR *d = opendir(dir);
     if(d) {
@@ -436,11 +457,6 @@ lzp_remove_set(const char *dir, char *err, size_t en) {
       }
       closedir(d);
     }
-  }
-  const char *tails[] = { "", ".crc", ".runtime", ".ps5cc-teil", ".crc.ps5cc-teil", ".runtime.ps5cc-teil" };
-  for(unsigned i = 0; i < sizeof(tails) / sizeof(tails[0]); i++) {
-    snprintf(p, sizeof(p), "%s%s", idx, tails[i]);
-    if(unlink(p) != 0 && errno != ENOENT) { say(err, en, "Eine Datei ließ sich nicht löschen (%s): %s", strerror(errno), p); return -1; }
   }
   return 0;
 }

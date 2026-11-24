@@ -149,7 +149,7 @@ boot_locked(void) {
     cJSON *j = cJSON_Parse(b);
     const cJSON *v;
     if(j) {
-      if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "delay"))) g_settle = clampi((int)v->valuedouble, DQ_SETTLE_MIN, DQ_SETTLE_MAX);
+      if(cJSON_IsNumber(v = cJSON_GetObjectItem(j, "delay"))) g_settle = clampi(ps5tm_num_i32(v->valuedouble), DQ_SETTLE_MIN, DQ_SETTLE_MAX);
       if(cJSON_IsBool(v = cJSON_GetObjectItem(j, "replace"))) g_replace = cJSON_IsTrue(v);
       cJSON_Delete(j);
     }
@@ -413,9 +413,9 @@ read_opt(const cJSON *o, ps5tm_dumpopt_t *opt) {
   if(cJSON_IsBool(v = cJSON_GetObjectItem(o, "decrypt"))) opt->decrypt = cJSON_IsTrue(v);
   if(cJSON_IsBool(v = cJSON_GetObjectItem(o, "fself"))) opt->fself = cJSON_IsTrue(v);
   if(cJSON_IsBool(v = cJSON_GetObjectItem(o, "backport"))) opt->backport = cJSON_IsTrue(v);
-  if(cJSON_IsNumber(v = cJSON_GetObjectItem(o, "ps4_backport_level"))) opt->bp_ps4 = clampi((int)v->valuedouble, 1, 6);
-  if(cJSON_IsNumber(v = cJSON_GetObjectItem(o, "ps5_backport_level"))) opt->bp_ps5 = clampi((int)v->valuedouble, 1, 10);
-  if(cJSON_IsNumber(v = cJSON_GetObjectItem(o, "ps4_split"))) opt->ps4_split = clampi((int)v->valuedouble, 0, 3);
+  if(cJSON_IsNumber(v = cJSON_GetObjectItem(o, "ps4_backport_level"))) opt->bp_ps4 = clampi(ps5tm_num_i32(v->valuedouble), 1, 6);
+  if(cJSON_IsNumber(v = cJSON_GetObjectItem(o, "ps5_backport_level"))) opt->bp_ps5 = clampi(ps5tm_num_i32(v->valuedouble), 1, 10);
+  if(cJSON_IsNumber(v = cJSON_GetObjectItem(o, "ps4_split"))) opt->ps4_split = clampi(ps5tm_num_i32(v->valuedouble), 0, 3);
   if(!opt->decrypt) opt->fself = opt->backport = 0;
   opt->set = 1;
 }
@@ -579,7 +579,7 @@ ps5tm_dumpq_action(const cJSON *b, char *msg, size_t n) {
   if(!strcmp(act, "queue_settings")) {
     const cJSON *v;
     pthread_mutex_lock(&g_lock);
-    if(cJSON_IsNumber(v = cJSON_GetObjectItem(b, "delay"))) g_settle = clampi((int)v->valuedouble, DQ_SETTLE_MIN, DQ_SETTLE_MAX);
+    if(cJSON_IsNumber(v = cJSON_GetObjectItem(b, "delay"))) g_settle = clampi(ps5tm_num_i32(v->valuedouble), DQ_SETTLE_MIN, DQ_SETTLE_MAX);
     if(cJSON_IsBool(v = cJSON_GetObjectItem(b, "replace"))) g_replace = cJSON_IsTrue(v);
     pthread_mutex_unlock(&g_lock);
     write_conf();

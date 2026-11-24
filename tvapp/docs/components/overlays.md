@@ -173,6 +173,7 @@ it to the component inside).
 | `size` | 560 | Width of a side sheet, height of a bottom sheet |
 | `margin` | 0 | Above 0 the sheet floats this far from the edges, fully rounded |
 | `padding` | 36 | Between the panel's edge and the title and content |
+| `edge_inset` | 0 | `margin` 0, a side sheet: this much more room for title and content on the side that touches the screen's edge, so they stay inside the safe area while the panel runs to the edge |
 | `overhang` | 96 | Attached sheets: how far the panel continues off screen |
 | `footer` | 0 | Room left free at the bottom of the bounds, for a hint row. The panel stops above it, the scrim still covers it |
 | `title_size` | 34 | Title size |

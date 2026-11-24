@@ -491,6 +491,33 @@ ps5tm_procmgr_pid_by_name(const char *name) {
 }
 
 
+/* 1 when the process `pid` exists and its name (ki_comm) ends in ".elf" and is not mini-syscore.elf - a payload; 0 when it is something else or gone; -1 when the
+   process table could not be read. main.c asks this before it signals a pid it was TOLD by a program on a port. */
+int
+ps5tm_procmgr_pid_is_payload(int pid) {
+#ifdef PS5TM_HOST_TEST
+  (void)pid;
+  return -1;
+#else
+  size_t need = 0;
+  void  *buf  = read_proc_table(&need);
+  if(!buf) return -1;
+  int found = 0;
+  for(char *p = buf; p < (char *)buf + need; ) {
+    struct kinfo_proc *ki = (struct kinfo_proc *)p;
+    if(ki->ki_structsize == 0) break;
+    p += ki->ki_structsize;
+    if((int)ki->ki_pid != pid) continue;
+    size_t n = strlen(ki->ki_comm);
+    found = n > 4 && !strcasecmp(ki->ki_comm + n - 4, ".elf") && strcmp(ki->ki_comm, "mini-syscore.elf");   /* the same two tests as is_payload() */
+    break;
+  }
+  free(buf);
+  return found;
+#endif
+}
+
+
 int
 ps5tm_procmgr_kill(int pid, const char **why) {
   if(why) *why = NULL;

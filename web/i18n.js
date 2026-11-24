@@ -155,13 +155,23 @@
   }
 
   function viaSegments(core, depth) {
+    var parts = core.split(SEP);
     var changed = false;
-    var out = core.split(SEP).map(function (part) {
-      var t = lookup(part.trim(), depth + 1);
-      if (t === null) return part;
-      changed = true;
-      return t;
-    });
+    var out = [];
+    for (var i = 0; i < parts.length;) {
+      /* Ein Schlüssel, der selbst „ · “ enthält („Spiel-CPUs {0} % · System {1} %“), wird nur gefunden, wenn mehrere Stücke zusammen nachgeschlagen
+         werden: erst zwei bis drei Stücke, dann das einzelne. */
+      var took = 0;
+      for (var n = Math.min(3, parts.length - i); n >= 2 && !took; n--) {
+        if (n === parts.length) continue;                    /* das Ganze wurde schon versucht */
+        var tj = lookup(parts.slice(i, i + n).join(SEP).trim(), depth + 1);
+        if (tj !== null) { out.push(tj); i += n; took = n; changed = true; }
+      }
+      if (took) continue;
+      var t = lookup(parts[i].trim(), depth + 1);
+      if (t === null) out.push(parts[i]); else { out.push(t); changed = true; }
+      i++;
+    }
     return changed ? out.join(SEP) : undefined;
   }
 

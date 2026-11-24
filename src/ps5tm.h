@@ -255,6 +255,7 @@ typedef struct {
   unsigned            schema_version;
   ps5tm_mode_t        mode;
   unsigned            fan_threshold_c;   /* manual pin, used in observe mode */
+  unsigned            fan_threshold_pinned; /* 1: fan_threshold_c was set by hand in observe mode and holds there (also after a restart); 0: observe leaves the fan to the console */
    unsigned            fan_reapply_sec;   /* periodic re-send interval (1..300) */
   unsigned            warning_cpu_c;
   unsigned            warning_soc_c;
@@ -1516,6 +1517,7 @@ int      ps5tm_procmgr_appinfo_ready(void);
 /* The pid of the first process with this kernel name (ki_comm); -1 when there
    is none, -2 when the process table could not be read at all. */
 int      ps5tm_procmgr_pid_by_name(const char *name);
+int      ps5tm_procmgr_pid_is_payload(int pid);   /* 1: a process whose name ends in ".elf"; 0: other or gone; -1: table unreadable */
 
 /* ----------------------------------------------------------- payload files
    The folder /data/PS5-Cooling-Center/payloads and the ELF files in the root

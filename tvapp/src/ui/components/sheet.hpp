@@ -27,6 +27,8 @@ struct SheetStyle : ComponentStyle
     float size = 560.0f;    // width of a side sheet, height of a bottom sheet
     float margin = 0.0f;    // above 0 the sheet floats this far from the edges, fully rounded
     float padding = 36.0f;  // between the panel's edge and the title and content
+    float edge_inset = 0.0f; // margin 0, a side sheet: title and content keep this much more room on the
+                             // side that touches the screen's edge (the safe area), the panel does not
     float overhang = 96.0f; // margin 0: how far the panel continues off screen (see below)
     float footer = 0.0f;    // room left free at the bottom of the bounds, for a hint row:
                             // the panel stops above it, the scrim still covers it

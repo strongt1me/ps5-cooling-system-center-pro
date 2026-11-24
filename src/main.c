@@ -111,6 +111,9 @@ sibling_on_port(unsigned port, int *pid_out) {
           char *end = NULL;
           long v = strtol(p + 6, &end, 10);
           *pid_out = (end != p + 6 && v > 1 && v < 1000000) ? (int)v : 0;
+          /* The pid is the word of whatever answers on that port (audit4: any local program on 8080-8095 can name any process, the shell
+             included, and the next start would signal it). Only a payload's pid is taken; else 0 = "cannot be targeted", the warning stands. */
+          if(*pid_out && ps5tm_procmgr_pid_is_payload(*pid_out) != 1) *pid_out = 0;
         }
       }
     }

@@ -220,8 +220,8 @@ class LogsPage final : public Page
             std::snprintf(text, sizeof(text), "%zu Zeilen · %s", count,
                           follow_ ? "läuft mit" : "angehalten");
         const float baseline = kTabY + kTabH * 0.5f + 8.0f;
-        ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f, follow_ ? kMuted : kWarning,
-                 gfx::Align::right);
+        const float count_w = ui::text(list, fonts.regular, text, 1824.0f, baseline, 21.0f,
+                                       follow_ ? kMuted : kWarning, gfx::Align::right);
         // Starts after the R2 glyph: right-aligned, a long file name ran back over it. The file
         // loses its fixed "aufnahme-" and ".log" so the line stays clear of the line count on the
         // right.
@@ -237,7 +237,11 @@ class LogsPage final : public Page
                 file.resize(file.size() - 4);
             const std::string rec =
                 "Aufnahme läuft · " + format_bytes(record_.bytes) + " · " + file;
-            ui::text(list, fonts.semibold, rec, status_x, baseline, 21.0f, kCritical);
+            // never over the line count on the right (a longer language or file name)
+            ui::Painter paint(list, fonts, theme_);
+            ui::text(list, fonts.semibold,
+                     ui::fit_label(paint, rec, 21.0f, 1824.0f - count_w - 24.0f - status_x), status_x,
+                     baseline, 21.0f, kCritical);
         }
         else if (view_ == kKernel && lost_)
             ui::text(list, fonts.semibold, "Zeilen verpasst", status_x, baseline, 21.0f, kWarning);
@@ -395,8 +399,9 @@ class LogsPage final : public Page
             const LogEntry &e = log_[at];
             ui::text(list, fonts.mono, format_time_of_day(e.t_ms, tz_), row.x + 16.0f, base, 18.0f,
                      kMuted);
-            ui::text(list, fonts.semibold, level_text(e.level), row.x + 136.0f, base, 17.0f,
-                     level_color(e.level));
+            // the word of a longer language (AVERTISSEMENT, ПРЕДУПРЕЖДЕНИЕ) must not run into the message
+            ui::text(list, fonts.semibold, ui::fit_label(paint, level_text(e.level), 17.0f, 106.0f),
+                     row.x + 136.0f, base, 17.0f, level_color(e.level));
             ui::text(list, fonts.regular, ui::fit_label(paint, e.message, 19.0f, row.w - 270.0f),
                      row.x + 250.0f, base, 19.0f, kInk);
             return;

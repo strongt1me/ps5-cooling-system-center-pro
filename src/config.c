@@ -149,6 +149,7 @@ ps5tm_config_defaults(ps5tm_config_t *cfg) {
   cfg->schema_version  = PS5TM_SCHEMA_VERSION;
   cfg->mode            = PS5TM_MODE_AUTOMATIC;
   cfg->fan_threshold_c = 65;
+  cfg->fan_threshold_pinned = 0;
   cfg->fan_reapply_sec = PS5TM_REAPPLY_SEC;
   cfg->warning_cpu_c   = 80;
   cfg->warning_soc_c   = 85;
@@ -317,6 +318,7 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
   cfg->schema_version  = PS5TM_SCHEMA_VERSION;
   cfg->fan_threshold_c = clampu(cfg->fan_threshold_c,
                                 PS5TM_THRESHOLD_MIN_C, PS5TM_THRESHOLD_MAX_C);
+  cfg->fan_threshold_pinned = cfg->fan_threshold_pinned ? 1u : 0u;
   cfg->fan_reapply_sec = clampu(cfg->fan_reapply_sec,
                                 PS5TM_REAPPLY_MIN_SEC,
                                 PS5TM_REAPPLY_MAX_SEC);
@@ -379,10 +381,11 @@ ps5tm_config_clamp(ps5tm_config_t *cfg) {
      older config file must not outlive the field that used to set it. */
   apply_profile_presets(cfg);
 
-  /* The safety limit must stay clear of the target, or the controller would
-     flip into emergency mode while it is doing its job correctly. */
-  if(cfg->safety_temp_c < cfg->target_temp_c + 4)
-    cfg->safety_temp_c = cfg->target_temp_c + 4;
+  /* The safety limit must stay clear of the target, or the controller would flip into emergency mode while it is doing its
+     job correctly. That is applied where the limit is USED (fan.c, and the two displays in api.c): max(stored, target + 4).
+     It used to be written into the stored value here, and a stored value that was raised once for a target of 91 (limit 95)
+     stayed at 95 for good after the person went back to a target of 66, with the fan capped at the comfort ceiling until
+     95 °C (audit 24.11.2026, test/sim A_hotroom_ratchet). The stored value is the person's own limit. */
 
   /* A game's own target is held to the same range as the global one. Only the
      two routes that edit rules used to look at it; a settings file or an
@@ -502,6 +505,12 @@ ps5tm_config_load(void) {
                       ? PS5TM_MODE_AUTOMATIC : PS5TM_MODE_OBSERVE;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "fan_threshold_c")))
     g_config.fan_threshold_c = ps5tm_num_u32(it->valuedouble);
+  if(cJSON_IsBool(it = cJSON_GetObjectItem(root, "fan_threshold_pinned")))
+    g_config.fan_threshold_pinned = cJSON_IsTrue(it) ? 1u : 0u;
+  else if(cJSON_IsNumber(it))
+    g_config.fan_threshold_pinned = it->valuedouble != 0 ? 1u : 0u;
+  else      /* a settings file from before 24.11.2026: a threshold other than the factory 65 was set by hand */
+    g_config.fan_threshold_pinned = g_config.fan_threshold_c != 65 ? 1u : 0u;
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "fan_reapply_sec")))
     g_config.fan_reapply_sec = ps5tm_num_u32(it->valuedouble);
   if(cJSON_IsNumber(it = cJSON_GetObjectItem(root, "warning_cpu_c")))
@@ -727,6 +736,7 @@ ps5tm_config_save(void) {
           "  \"schema_version\": %u,\n"
           "  \"mode\": \"%s\",\n"
           "  \"fan_threshold_c\": %u,\n"
+          "  \"fan_threshold_pinned\": %s,\n"
           "  \"fan_reapply_sec\": %u,\n"
           "  \"warning_cpu_c\": %u,\n"
           "  \"warning_soc_c\": %u,\n"
@@ -735,6 +745,7 @@ ps5tm_config_save(void) {
           c.schema_version,
           c.mode == PS5TM_MODE_AUTOMATIC ? "automatic" : "observe",
           c.fan_threshold_c,
+          c.fan_threshold_pinned ? "true" : "false",
           c.fan_reapply_sec,
           c.warning_cpu_c,
           c.warning_soc_c, c.http_port);

@@ -423,6 +423,7 @@ TEST_F(ComponentsNavigation, DrawsInEveryThemeAndVariant)
             tabs_.style.kind = kinds[variant];
             tabs_.style.width = static_cast<TabWidth>(variant % 3);
             tabs_.style.on_page = variant % 2 == 0;
+            tabs_.style.whole_only = variant >= 2;
             // The narrow bar overflows, so the scrolling path is drawn too.
             tabs_.set_bounds({400.0f, 300.0f, variant == 3 ? 320.0f : 900.0f, 56.0f});
             rail_.style.theme = theme;

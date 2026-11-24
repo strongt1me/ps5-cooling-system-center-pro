@@ -611,7 +611,32 @@ static int find_block(idx_ctx_t *ix, uint64_t vcn, int depth, find_one_t *f) {
 }
 
 /* 1 found (f->ref, f->exact), 0 not there, <0 error */
+/* (audit 24.11.2026) 1 if the entries of one leaf (from p to its end entry) are in the order the descent relies on. */
+static int leaf_sorted(const ntfs_vol_t *v, const uint8_t *p, const uint8_t *end) {
+  const uint8_t *prev = NULL;
+  while (p + 16 <= end) {
+    uint16_t len = le16(p + 8), klen = le16(p + 10), flags = le16(p + 12);
+    if (len < 16 || p + len > end) return 0;
+    if (flags & IE_LAST) return 1;
+    if (klen < 0x42 || 16u + klen > len || 0x42u + p[16 + 0x40] * 2u > klen) return 0;
+    if (prev) {
+      const uint8_t *a = prev + 16 + 0x42, *b = p + 16 + 0x42;
+      int al = prev[16 + 0x40], bl = p[16 + 0x40], n = al < bl ? al : bl, c = 0;
+      for (int i = 0; i < n && !c; i++) {
+        uint16_t x = up(v, le16(a + i * 2)), y = up(v, le16(b + i * 2));
+        c = x == y ? 0 : x < y ? -1 : 1;
+      }
+      if (!c && al != bl) c = al < bl ? -1 : 1;
+      if (c > 0) return 0;
+    }
+    prev = p;
+    p += len;
+  }
+  return 0;
+}
+
 static int find_node(idx_ctx_t *ix, const uint8_t *p, const uint8_t *end, int depth, find_one_t *f) {
+  const uint8_t *first = p;
   while (p + 16 <= end) {
     uint16_t len = le16(p + 8), klen = le16(p + 10), flags = le16(p + 12);
     if (len < 16 || p + len > end) return -EIO;
@@ -630,7 +655,12 @@ static int find_node(idx_ctx_t *ix, const uint8_t *p, const uint8_t *end, int de
         return 1;
       }
     }
-    if (c < 0) return (flags & IE_NODE) ? find_block(ix, le64(p + len - 8), depth, f) : 0;
+    if (c < 0) {
+      if (flags & IE_NODE) return find_block(ix, le64(p + len - 8), depth, f);
+      /* a miss in a leaf counts only if the leaf is sorted: in a damaged index (or one a foreign tool wrote) the name may be there, and
+       * the "name taken" check of a create would let a second one be made. -EIO: the caller walks every entry, as before. */
+      return leaf_sorted(ix->v, first, end) ? 0 : -EIO;
+    }
     p += len;
   }
   return -EIO;                                      /* a node without its end entry */

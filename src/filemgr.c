@@ -165,6 +165,39 @@ name_ok(const char *n) {
   return 1;
 }
 
+/* A name as the page gets it in a JSON answer: every byte that is not well-formed UTF-8 (a stick written by a tool with another code
+   page, a hostile image) becomes U+FFFD. cJSON copies bytes as they are, and a JSON text that is no UTF-8 breaks strict readers
+   (Python's json, a native client) for the whole folder. 1 when something was replaced; such a name cannot be addressed again by the
+   page (the path it would send holds the replacement), so the entry is shown but not offered for changing. */
+static int
+name_for_json(char *out, size_t n, const char *s) {
+  size_t o = 0;
+  int bad = 0;
+  const unsigned char *p = (const unsigned char *)s;
+  while(*p && o + 4 < n) {
+    int len = 0;
+    if(*p < 0x80) len = 1;
+    else {
+      int k = 0;
+      unsigned cp = 0;
+      if(*p >= 0xC2 && *p <= 0xDF)      { k = 1; cp = *p & 0x1F; }
+      else if(*p >= 0xE0 && *p <= 0xEF) { k = 2; cp = *p & 0x0F; }
+      else if(*p >= 0xF0 && *p <= 0xF4) { k = 3; cp = *p & 0x07; }
+      int good = k > 0;
+      for(int i = 1; good && i <= k; i++) {
+        if((p[i] & 0xC0) != 0x80) good = 0;
+        else cp = (cp << 6) | (p[i] & 0x3F);
+      }
+      if(good && ((k == 2 && (cp < 0x800 || (cp >= 0xD800 && cp <= 0xDFFF))) || (k == 3 && (cp < 0x10000 || cp > 0x10FFFF)))) good = 0;
+      len = good ? k + 1 : 0;
+    }
+    if(len) { memcpy(out + o, p, (size_t)len); o += (size_t)len; p += len; }
+    else { memcpy(out + o, "\xEF\xBF\xBD", 3); o += 3; p++; bad = 1; }
+  }
+  out[o] = 0;
+  return bad || *p;
+}
+
 /* Where the console's path p lies on this system (FM_ROOT before it). */
 static int
 real_path(const char *p, char *out, size_t n) {
@@ -474,6 +507,7 @@ places_json(void) {
 
 typedef struct {
   char     name[FM_NAME];
+  char     bad;                           /* the name is no UTF-8: shown cleaned, not offered for changing */
   char     type;                          /* 'd', 'f', 'l', 'o' */
   uint64_t size;
   int64_t  mtime;
@@ -514,7 +548,7 @@ handle_list(int fd, const ps5tm_request_t *req) {
     total++;
     if(n >= FM_LIST_MAX || strlen(e->d_name) >= FM_NAME) continue;
     entry_t *x = &v[n];
-    snprintf(x->name, sizeof(x->name), "%s", e->d_name);
+    x->bad = (char)name_for_json(x->name, sizeof(x->name), e->d_name);
     snprintf(child, sizeof(child), "%s/%s", real, e->d_name);
     struct stat st;
     if(lstat(child, &st) != 0) { x->type = 'o'; x->size = 0; x->mtime = 0; n++; continue; }
@@ -554,7 +588,7 @@ handle_list(int fd, const ps5tm_request_t *req) {
     cJSON_AddNumberToObject(x, "mtime", (double)v[i].mtime);
     /* may this entry be renamed, moved away or deleted? (a link only as a link, which no_links refuses: no) */
     int w = here && snprintf(vp, sizeof(vp), "%s/%s", strcmp(p, "/") ? p : "", v[i].name) < (int)sizeof(vp) &&
-            v[i].type != 'l' && v[i].type != 'L' && writable(vp);
+            v[i].type != 'l' && v[i].type != 'L' && !v[i].bad && writable(vp);
     cJSON_AddBoolToObject(x, "writable", w);
     cJSON_AddItemToArray(arr, x);
   }

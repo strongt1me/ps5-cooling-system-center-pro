@@ -58,6 +58,8 @@ struct TabBarStyle : ComponentStyle
     bool focus_ring = true; // the theme's ring around the active tab while focused
     bool on_page = false;   // labels with no surface under them use the page's text colours
     float edge_fade = 0.6f; // tabs fade over this share of their width where the bar is cut
+    bool whole_only = false; // a cut row draws only the tabs wholly inside it (and the active one):
+                             // no word cut in half at the edge, the place stays empty
     // ---- behaviour ----
     bool wrap = false; // past the last tab comes the first
     bool pitch_by_position = true;

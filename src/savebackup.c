@@ -89,10 +89,12 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <utime.h>
 
 #include "checkfile.h"
 #include "ioerr.h"
 #include "ps5tm.h"
+#include "savedb.h"
 #include "saveimport.h"
 #include "savexport.h"
 #include "third_party/cJSON.h"
@@ -543,6 +545,11 @@ rel_check(const char *rel, char uid[9], char id[10], int *area, int *is_meta) {
   }
   if(n == 5 && !strcmp(part[0], "system") && uid_ok(part[1]) && !strcmp(part[2], "db") &&
      !strcmp(part[3], "user") && !strcmp(part[4], "savedata.db")) {
+    snprintf(uid, 9, "%s", part[1]);
+    return 0;
+  }
+  if(n == 6 && !strcmp(part[0], "system") && uid_ok(part[1]) && !strcmp(part[2], "prospero") && !strcmp(part[3], "db") &&
+     !strcmp(part[4], "user") && !strcmp(part[5], "savedata.db")) {
     snprintf(uid, 9, "%s", part[1]);
     return 0;
   }
@@ -1053,6 +1060,38 @@ bk_write(bk_t *b, const char *tag, const char *phase, char *err, size_t err_len)
     job_current(r->rel);
     rc = copy_verified(src, dst, r, NULL, err, err_len);
     if(!rc) job_file_done();
+  }
+
+  /* The save database of the PS5 titles (/system_data/savedata_prospero/<user>/db/user/savedata.db) is a different file from the one bk_collect copies above (that one,
+     /system_data/savedata/<user>/..., is the PS4 titles' database): a snapshot by SQLite's own backup (the console may write to the file), read back and listed like the rest.
+     A record only: a restore never writes a database back. */
+  for(unsigned u = 0; !rc && b->with_db && u < b->nusers; u++) {
+    char src[PATH_MAX], rel[SV_REL_MAX], dst[PATH_MAX], dir[PATH_MAX], e2[400];
+    struct stat st;
+    if(snprintf(src, sizeof(src), "%s/savedata_prospero/%s/db/user/savedata.db", PS5TM_SYS_DATA, b->users[u]) >= (int)sizeof(src) || stat(src, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+    snprintf(rel, sizeof(rel), "system/%s/prospero/db/user/savedata.db", b->users[u]);
+    if(snprintf(dst, sizeof(dst), "%s/%s", b->dir, rel) >= (int)sizeof(dst)) { rc = ENAMETOOLONG; snprintf(err, err_len, "Ein Dateipfad ist zu lang."); break; }
+    snprintf(dir, sizeof(dir), "%s", dst);
+    char *sl = strrchr(dir, '/');
+    if(sl) { *sl = 0; rc = mkdir_p(dir, 0700); }
+    if(rc) { snprintf(err, err_len, "Ein Ordner der Sicherung ließ sich nicht anlegen: %s", err_text(rc)); break; }
+    job_current(rel);
+    if(savedb_backup(src, dst, e2, sizeof(e2)) != 0) { rc = EIO; snprintf(err, err_len, "Die Spielstand-Datenbank ließ sich nicht sichern: %s", e2); break; }
+    (void)chmod(dst, 0600);
+    const int dfd = open(dst, O_RDONLY);
+    struct stat ds;
+    uint32_t dcrc = 0;
+    uint8_t dsha[32];
+    char derr[400];
+    if(dfd < 0 || fstat(dfd, &ds) != 0) { rc = errno ? errno : EIO; snprintf(err, err_len, "Die Kopie der Spielstand-Datenbank ließ sich nicht lesen."); if(dfd >= 0) close(dfd); unlink(dst); break; }
+    ps5tm_drop_cache(dfd);
+    const int dr = ps5tm_digest_fd(dfd, (uint64_t)ds.st_size, &dcrc, dsha, cancel_flag(), NULL, NULL, derr, sizeof(derr));
+    close(dfd);
+    if(dr != 0) { rc = errno == ECANCELED ? ECANCELED : EIO; snprintf(err, err_len, "%s", derr); unlink(dst); break; }
+    const int fr = flist_add(&b->files, rel, (uint64_t)ds.st_size);
+    if(fr) { rc = fr; snprintf(err, err_len, "Zu viele Dateien."); break; }
+    memcpy(b->files.v[b->files.n - 1].sha, dsha, sizeof(dsha));
+    b->files.v[b->files.n - 1].crc = dcrc;
   }
 
   if(!rc) {
@@ -1912,7 +1951,7 @@ restore_main(void *arg) {
          backup and the state before it. Only when that state was saved first (undo), only regular files below the
          title's own folders of the restored areas, and nothing when a folder cannot be listed completely. */
   if(undo.dir[0]) {
-    unsigned removed = 0;
+    unsigned removed = 0, kept_extra = 0;                 /* kept_extra: files that were to go and could not (or whose folder could not be listed) */
     for(int ar = 0; ar < 2; ar++) {
       if(!(areas & (1u << ar))) continue;
       char data[PATH_MAX], meta[PATH_MAX], rd[SV_REL_MAX], rm[SV_REL_MAX];
@@ -1925,6 +1964,7 @@ restore_main(void *arg) {
       if(now.err) {
         PS5TM_WARN("saves_restore_extra_skipped", "Spielstände: Ordner von %s nicht vollständig lesbar, überzählige Dateien bleiben.", a->id);
         free(now.v);
+        kept_extra++;
         continue;
       }
       for(size_t k = 0; k < now.n; k++) {
@@ -1934,7 +1974,7 @@ restore_main(void *arg) {
         char path[PATH_MAX];
         console_path(now.v[k].rel, path, sizeof(path));
         if(unlink(path) == 0) removed++;
-        else PS5TM_WARN("saves_restore_extra_failed", "Spielstände: %s ließ sich nicht entfernen (%s).", now.v[k].rel, strerror(errno));
+        else { kept_extra++; PS5TM_WARN("saves_restore_extra_failed", "Spielstände: %s ließ sich nicht entfernen (%s).", now.v[k].rel, strerror(errno)); }
       }
       free(now.v);
     }
@@ -1942,6 +1982,12 @@ restore_main(void *arg) {
       PS5TM_INFO("saves_restore_extra", "Spielstände: %u Datei(en) von %s entfernt, die es in der Sicherung nicht gab.", removed, a->id);
       pthread_mutex_lock(&g_lock);
       snprintf(g_job.note, sizeof(g_job.note), "%u Datei(en), die es in der Sicherung nicht gab, wurden entfernt; sie liegen in der Sicherung vor dem Zurückspielen.", removed);
+      pthread_mutex_unlock(&g_lock);
+    }
+    if(kept_extra) {                                       /* the console is then not exactly the backup: said, not hidden */
+      pthread_mutex_lock(&g_lock);
+      const size_t on = strlen(g_job.note);
+      snprintf(g_job.note + on, sizeof(g_job.note) - on, "%sAchtung: Bei %u Datei(en) oder Ordnern, die es in der Sicherung nicht gab, ließ sich das Entfernen nicht abschließen; sie liegen noch neben dem zurückgespielten Stand.", on ? " · " : "", kept_extra);   /* " · ": both sentences are looked up on their own (the page and the full-screen app split there) */
       pthread_mutex_unlock(&g_lock);
     }
   }
@@ -2685,12 +2731,65 @@ saves_housekeeping(void) {
                db_dropped, oldest_db[0] ? oldest_db : "-", SV_DBBK_KEEP, up_dropped);
 }
 
+/* "<name>.ps5cc-neu" files in the console's save folders: the new files of a restore, or the new image of a put-in, that was cut off (power, a crash) before anything of
+   it was in place. For a put-in the record (SV_JOURNAL) has been dealt with by now; a restore keeps none. They are only ever made by this app, are no save, and nothing
+   runs at the start of the app that could use them; left alone they take the room of a whole image until the next restore or put-in of that very title. */
+static void
+sweep_new_leftovers(void) {
+  char uids[SV_MAX_USERS][9];
+  const unsigned nu = users_all(uids, SV_MAX_USERS);
+  for(unsigned u = 0; u < nu; u++)
+    for(int ar = 0; ar < 2; ar++)
+      for(int k = 0; k < 2; k++) {
+        char root[PATH_MAX];
+        if(snprintf(root, sizeof(root), "%s/%s/%s", PS5TM_SAVE_HOME, uids[u], k ? k_area[ar].meta : k_area[ar].data) >= (int)sizeof(root)) continue;
+        DIR *d = opendir(root);
+        if(!d) continue;
+        struct dirent *e;
+        while((e = readdir(d)) != NULL) {
+          char p[PATH_MAX];
+          if(!tid_ok(e->d_name) || snprintf(p, sizeof(p), "%s/%s", root, e->d_name) >= (int)sizeof(p)) continue;
+          sweep_tmp(p, strlen(p), 0);
+        }
+        closedir(d);
+      }
+}
+
+/* What a read-out or a put-in that was cut off left in the work folder (the copy of the image, the files read out of it, the picture, the key file) and the ZIPs that were
+   never finished: whole images that nobody asks for until the next job. Only where no mount can lie below: the folder of the mount must be empty and go (rmdir), else the next
+   job asks the console to let go of it first (savexport.c / saveimport.c) and nothing is touched here. */
+static void
+sweep_work_leftovers(void) {
+  char mnt[PATH_MAX];
+  if(snprintf(mnt, sizeof(mnt), "%s/mnt", SV_EXPORT_WORK) >= (int)sizeof(mnt)) return;
+  if(rmdir(mnt) != 0 && errno != ENOENT) return;
+  DIR *d = opendir(SV_EXPORT_WORK);
+  if(d) {
+    struct dirent *e;
+    while((e = readdir(d)) != NULL) {
+      char p[PATH_MAX];
+      struct stat st;
+      const size_t n = strlen(e->d_name);
+      const int ours = !strncmp(e->d_name, "sdimg_", 6) || !strcmp(e->d_name, "icon0.png") || (n > 4 && !strcmp(e->d_name + n - 4, ".bin"));
+      if(!ours || snprintf(p, sizeof(p), "%s/%s", SV_EXPORT_WORK, e->d_name) >= (int)sizeof(p)) continue;
+      if(lstat(p, &st) == 0 && S_ISREG(st.st_mode)) unlink(p);
+    }
+    closedir(d);
+  }
+  char stage[PATH_MAX];
+  if(snprintf(stage, sizeof(stage), "%s/stage", SV_EXPORT_WORK) < (int)sizeof(stage)) remove_own(stage);
+  export_sweep_partial(SV_EXPORT_DIR);
+}
+
 void
 ps5tm_saves_recover(void) {
   char rep[480];
   const int rc = saveimport_recover(SV_JOURNAL, rep, sizeof(rep));
   if(rc > 0) PS5TM_WARN("saves_recovered", "Spielstände: %s", rep);
   else if(rc < 0) PS5TM_WARN("saves_recover_pending", "Spielstände: %s", rep);
+  /* -1: a put-in is still open and its record kept; the next start finishes it and may need its .ps5cc-neu files until then */
+  if(rc >= 0) sweep_new_leftovers();
+  sweep_work_leftovers();
   saves_housekeeping();
 }
 
@@ -3055,6 +3154,14 @@ ps5tm_saves_import_start(const char *name, const char *from, const char *uid, co
       if(!strcmp(slots_seen[k], info.slot)) { snprintf(err, err_len, "Zwei der ZIP-Dateien enthalten denselben Spielstand (%.60s): Es kann nur eine davon eingespielt werden.", info.slot); return 400; }
     snprintf(slots_seen[i], sizeof(slots_seen[i]), "%s", info.slot);
   }
+
+  /* The job's housekeeping (saves_housekeeping) deletes ZIPs of the inbox that are more than a day old by their date: a file that was moved or copied there with its old
+     date would be deleted by the very job that is started for it. A file that is about to be used is made "new". */
+  if(!sdir[0])
+    for(unsigned i = 0; i < nl; i++) {
+      char zp[PATH_MAX];
+      if(import_zip_path(list[i], zp, sizeof(zp)) == 0) (void)utime(zp, NULL);
+    }
 
   job_args_t *a = calloc(1, sizeof(*a));
   if(!a) { snprintf(err, err_len, "Kein Speicher."); return 503; }

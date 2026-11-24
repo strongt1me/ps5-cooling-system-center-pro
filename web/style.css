@@ -35,6 +35,7 @@
   --warning:  #fab219;
   --serious:  #ec835a;
   --critical: #d03b3b;
+  --critical-ink: #ec6464;   /* red as TEXT on the dark cards: #d03b3b had 3.3 to 4.0:1 there, this one at least 4.9:1 (audit 24.11.2026) */
 
   --r-lg: 18px;
   --r-md: 12px;
@@ -347,11 +348,24 @@ body.offline .offline-note { display: flex; }
   background: rgba(255,255,255,.03); color: var(--ink); font: inherit; font-size: 13.5px;
   text-align: left; cursor: pointer; transition: background .15s, border-color .15s; }
 .co-preset span { color: var(--ink-muted); font-size: 12px; }
+.co-preset { min-width: 0; }
+.co-preset b { max-width: 100%; overflow-wrap: anywhere; }   /* nur noch letzte Rettung: die schmalen Breiten stehen unten untereinander */
 .co-preset:hover { border-color: rgba(59,130,246,.35); }
 .co-preset:focus-visible { border-color: rgba(59,130,246,.35); }
 .co-preset.on { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.4); }
 .co-preset.on span { color: #8ab4ff; }
 .co-preset:disabled { opacity: .5; cursor: default; }
+/* Schnellwahl in der schmalen Karte (die Seite ist zweispaltig ab 981 px): untereinander wie am Handy. In drei Spalten von 70 bis
+   128 px brach ein längerer Name mitten im Wort um oder ragte in die Nachbartaste – gemessen 24.11.2026: de „Ausgewogen“ und es bei
+   1024 px, ru „Сбалансированный“ bis 1366 px; ab 1101 px (Russisch ab 1440 px) passen alle Namen nebeneinander. */
+@media (min-width: 981px) and (max-width: 1100px) {
+  .co-quick-row { grid-template-columns: minmax(0, 1fr); }
+  .co-preset { flex-direction: row; align-items: center; justify-content: space-between; min-height: 46px; }
+}
+@media (min-width: 1101px) and (max-width: 1439px) {
+  :root[lang="ru"] .co-quick-row { grid-template-columns: minmax(0, 1fr); }
+  :root[lang="ru"] .co-preset { flex-direction: row; align-items: center; justify-content: space-between; min-height: 46px; }
+}
 
 /* „Wie arbeitet die Regelung?" — zugeklappt, Text wie im alten Erklärblock */
 .co-explain summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ink-2); }
@@ -468,7 +482,11 @@ body.offline .offline-note { display: flex; }
 .card { --surface-1: #0d1732; --surface-2: rgba(20,34,70,.9); --inset: rgba(6,12,30,.72); }
 .card-head { display: flex; align-items: center; justify-content: space-between;
   gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
-.card-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2; }
+.card-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -.015em; line-height: 1.2;
+  -webkit-hyphens: auto; hyphens: auto; }   /* a long word is hyphenated where the browser knows the language */
+/* The narrowest cards (two columns from 981 px): „Laufwerkstelemetrie“ (188 px at 19 px) ran 19 px into the card's picture at 1024 px,
+   and not every browser hyphenates German (audit 24.11.2026) */
+@media (min-width: 981px) and (max-width: 1100px) { .card-head h2 { font-size: 17px; } }
 .sub { margin: 4px 0 0; color: var(--ink-muted); font-size: 12.5px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
 
@@ -640,7 +658,8 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 
 .btn:focus-visible { border-color: rgba(255,255,255,.22); background-color: #222c40; }
 .btn.ghost:hover { background-color: rgba(255,255,255,.05); }
 .btn.ghost:focus-visible { background-color: rgba(255,255,255,.05); }
-.btn.primary { border: 0; background: linear-gradient(120deg, var(--s1), #7b5cf0);
+/* Weiße Schrift braucht 4,5:1 auf dem ganzen Verlauf: #3987e5 → #7b5cf0 hatte vorn nur 3,6:1 (Prüfung 24.11.2026), jetzt mindestens 4,7:1 */
+.btn.primary { border: 0; background: linear-gradient(120deg, #2c72d2, #7154e6);
   box-shadow: 0 8px 20px rgba(57,135,229,.28); }
 .btn.ghost { background: none; }
 .btn.full { width: 100%; margin-top: 14px; }
@@ -1104,7 +1123,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .entry .lvl { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; }
 .entry .lvl.info  { color: var(--good); }
 .entry .lvl.warn  { color: var(--warning); }
-.entry .lvl.error { color: var(--critical); }
+.entry .lvl.error { color: var(--critical-ink); }
 .entry p { margin: 0; color: var(--ink-2); line-height: 1.45; }
 .entry code { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 10.5px; }
 
@@ -1124,7 +1143,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .kl-line time { color: var(--ink-muted); font-variant-numeric: tabular-nums; user-select: none; }
 .kl-line span { color: var(--ink-2); }
-.kl-line.kl-err span  { color: var(--critical); }
+.kl-line.kl-err span  { color: var(--critical-ink); }
 .kl-line.kl-warn span { color: var(--warning); }
 .kl-line.kl-app span  { color: var(--good); }
 .kl-line.kl-mark { margin: 3px 0; background: rgba(255,255,255,.05); font-style: italic; }
@@ -1402,7 +1421,7 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 @media (max-width: 560px) {
   .pk-card { grid-template-columns: 52px minmax(0, 1fr); }
   .pk-ico { width: 52px; height: 52px; }
-  .pk-side { grid-column: 1 / -1; flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; }
+  .pk-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 8px; min-width: 0; }
   .pk-size { margin-right: auto; text-align: left; }
   .pk-side .btn { flex: 1 1 0; max-width: 11rem; }
 }
@@ -2195,6 +2214,13 @@ button.apr-drive:disabled { cursor: default; }
 :root[data-theme="hell"] .upd-diag-row .bad { color: #9a6200; }
 :root[data-theme="hell"] .pt-note { color: #8e640b; }
 :root[data-theme="hell"] .kl-rec[aria-pressed="true"] { color: #8e0b0b; }
+/* Kernel-Log live und „aktiv“-Marken auf hellem Grund: --warning 1,6:1, --good 2,9:1 (wie .hv-res oben) */
+:root[data-theme="hell"] { --critical-ink: #a31f1f; }     /* the same text red on light ground: at least 5.3:1 */
+:root[data-theme="hell"] .kl-line.kl-warn span { color: #8e640b; }
+:root[data-theme="hell"] .kl-line.kl-app span { color: #217821; }
+:root[data-theme="hell"] .probe-on { color: #217821 !important; }
+:root[data-theme="hell"] .entry .lvl.info, :root[data-theme="hell"] .pl-live { color: #217821; }
+:root[data-theme="hell"] .entry .lvl.warn, :root[data-theme="hell"] .fm-ro, :root[data-theme="hell"] .p4m-why, :root[data-theme="hell"] .pl-badtxt { color: #8e640b; }
 :root[data-theme="hell"] .pl-startup-tag { color: #0b3f8e; }
 :root[data-theme="hell"] .pl-prof-run li.bad { color: #8a0f0f; }
 :root[data-theme="hell"] .pq-note.warn { color: #8e640b; }
@@ -2447,7 +2473,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 .fc-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 6px; }
 .fc-actions .btn { text-decoration: none; display: inline-flex; align-items: center; }
 
-.dm-field small.dm-bad { color: var(--critical); }
+.dm-field small.dm-bad { color: var(--critical-ink); }
 
 /* Original danach (18.11.2026): behalten, löschen oder verschieben, in den Fenstern Konvertieren, Kopieren und Entpacken.
    Die Optionen sind die .cp-choice der anderen Fenster, der Block unter „Verschieben“ die .cp-sub, die Datenträger die Chips
