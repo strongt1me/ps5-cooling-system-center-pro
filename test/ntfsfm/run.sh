@@ -84,4 +84,16 @@ done
 cp "$work/clean.img" "$work/dirty.img"
 if out=$(timeout 60 "$work/dirty" "$work/dirty.img" 2>&1); then echo "   $out" | tail -1; else echo "FAIL dirty flag:"; echo "$out" | head -20; fail=1; fi
 [ "$fail" = 0 ] || exit 1
-echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive, 4 journals, dirty flag)"
+
+# a large folder (24.11.2026: names found down the sorted index, small writes cached until the sync): 3000 files, looked up in two
+# cases, half deleted; ntfs-3g must list exactly the other half and find the volume consistent
+clang -std=gnu11 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=undefined -Wall -Wextra -Werror   -I"$repo/src" "$here/bigdir.c" "$nb/ntfs.c" "$nb/ntfs_write.c" "$nb/bdev.c" "$nb/part.c" "$nb/utf.c" -lpthread -o "$work/bigdir"
+truncate -s 256M "$work/big.img"
+mkntfs -F -Q -q -L GROSS "$work/big.img" >/dev/null 2>&1
+if out=$(timeout 300 "$work/bigdir" "$work/big.img" 3000 2>&1); then echo "   $out" | tail -1; else echo "FAIL bigdir:"; echo "$out" | head -20; fail=1; fi
+left=$(ntfsls -p /gross "$work/big.img" 2>/dev/null | grep -c "_Mixed.TXT")
+[ "$left" = 1500 ] || { echo "FAIL bigdir: ntfs-3g lists $left files, not 1500"; fail=1; }
+ntfsresize --check --force "$work/big.img" >"$work/resize3.log" 2>&1 || { echo "FAIL bigdir: ntfs-3g check"; tail -5 "$work/resize3.log"; fail=1; }
+"$work/dirty" --clean "$work/big.img" >/dev/null 2>&1 || { echo "FAIL bigdir: dirty flag left set"; fail=1; }
+[ "$fail" = 0 ] || exit 1
+echo "ok: ntfsfm (file manager on NTFS images, read back by ntfs-3g; 5 hostile images, 1 a little larger than its drive, 4 journals, dirty flag, a folder of 3000 files)"

@@ -133,6 +133,8 @@ int      absorb(attr_t *a, const uint8_t *at, uint32_t at_len, int first);
 int      attr_find(ntfs_vol_t *v, uint64_t inode, uint32_t type,
                    const uint16_t *name, int nlen, attr_t *out);
 int      index_walk(ntfs_vol_t *v, uint64_t inode, idx_cb cb, void *ctx);
+/* (app) One name in a folder, down the sorted index: 0 with *ref (and *exact: same case) set, -ENOENT, or another error. */
+int      index_find(ntfs_vol_t *v, uint64_t dir, const uint16_t *name, int nlen, uint64_t *ref, int *exact);
 int      stat_locked(ntfs_vol_t *v, uint64_t inode, ntfs_stat_t *st);
 uint16_t up(const ntfs_vol_t *v, uint16_t c);
 int      lookup_locked(ntfs_vol_t *v, const char *path, uint64_t *inode);

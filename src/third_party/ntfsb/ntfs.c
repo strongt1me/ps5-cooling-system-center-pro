@@ -523,41 +523,135 @@ static int walk_node(idx_ctx_t *ix, const uint8_t *p, const uint8_t *end,
   return 0;
 }
 
+/* The index of a folder opened for a walk or a search: its root (resident) and, if it has one, its allocation. 0, or an error with
+ * nothing left to free. */
+static int ix_open(ntfs_vol_t *v, uint64_t inode, idx_ctx_t *ix, attr_t *root) {
+  int rc = attr_find(v, inode, AT_INDEX_ROOT, I30, 4, root);
+  if (rc) return rc == -ENOENT ? -ENOTDIR : rc;
+  if (!root->resident || root->data_len < 32) { attr_free(root); return -EIO; }
+
+  memset(ix, 0, sizeof *ix);
+  ix->v = v;
+  ix->block_size = le32(root->data + 8);
+  ix->vcn_unit = v->cluster <= ix->block_size ? v->cluster : 512;
+  if (attr_find(v, inode, AT_INDEX_ALLOCATION, I30, 4, &ix->alloc) == 0) {
+    ix->have_alloc = 1;
+    if (ix->block_size < 512 || ix->block_size > 65536) rc = -EIO;
+    uint64_t mapped = 0;
+    for (size_t i = 0; i < ix->alloc.nruns; i++)
+      if (ix->alloc.runs[i].lcn >= 0) mapped += ix->alloc.runs[i].len;
+    uint64_t blocks = ix->alloc.size / (ix->block_size ? ix->block_size : 1);
+    uint64_t mblocks = mapped * v->cluster / (ix->block_size ? ix->block_size : 1);
+    if (blocks > mblocks) blocks = mblocks;
+    ix->max_visits = (unsigned)(blocks > (1u << 20) ? (1u << 20) : blocks) + 1;
+  }
+  if (rc) {
+    if (ix->have_alloc) attr_free(&ix->alloc);
+    attr_free(root);
+  }
+  return rc;
+}
+
+static void ix_close(idx_ctx_t *ix, attr_t *root) {
+  for (int i = 0; i < MAX_DEPTH; i++) free(ix->blocks[i]);
+  free(ix->seen);
+  if (ix->have_alloc) attr_free(&ix->alloc);
+  attr_free(root);
+}
+
 int index_walk(ntfs_vol_t *v, uint64_t inode, idx_cb cb, void *ctx) {
   attr_t root;
-  int rc = attr_find(v, inode, AT_INDEX_ROOT, I30, 4, &root);
-  if (rc) return rc == -ENOENT ? -ENOTDIR : rc;
-  if (!root.resident || root.data_len < 32) { attr_free(&root); return -EIO; }
-
   idx_ctx_t ix;
-  memset(&ix, 0, sizeof ix);
-  ix.v = v;
-  ix.block_size = le32(root.data + 8);
-  ix.vcn_unit = v->cluster <= ix.block_size ? v->cluster : 512;
-  if (attr_find(v, inode, AT_INDEX_ALLOCATION, I30, 4, &ix.alloc) == 0) {
-    ix.have_alloc = 1;
-    if (ix.block_size < 512 || ix.block_size > 65536) rc = -EIO;
-    uint64_t mapped = 0;
-    for (size_t i = 0; i < ix.alloc.nruns; i++)
-      if (ix.alloc.runs[i].lcn >= 0) mapped += ix.alloc.runs[i].len;
-    uint64_t blocks = ix.alloc.size / (ix.block_size ? ix.block_size : 1);
-    uint64_t mblocks = mapped * v->cluster / (ix.block_size ? ix.block_size : 1);
-    if (blocks > mblocks) blocks = mblocks;
-    ix.max_visits = (unsigned)(blocks > (1u << 20) ? (1u << 20) : blocks) + 1;
-  }
-
-  if (!rc) {
-    const uint8_t *h = root.data + 16;
-    uint32_t eo = le32(h), il = le32(h + 4);
-    if (16 + (uint64_t)il > root.data_len || eo >= il) rc = -EIO;
-    else rc = walk_node(&ix, h + eo, h + il, 0, cb, ctx);
-  }
-
-  for (int i = 0; i < MAX_DEPTH; i++) free(ix.blocks[i]);
-  free(ix.seen);
-  if (ix.have_alloc) attr_free(&ix.alloc);
-  attr_free(&root);
+  int rc = ix_open(v, inode, &ix, &root);
+  if (rc) return rc;
+  const uint8_t *h = root.data + 16;
+  uint32_t eo = le32(h), il = le32(h + 4);
+  if (16 + (uint64_t)il > root.data_len || eo >= il) rc = -EIO;
+  else rc = walk_node(&ix, h + eo, h + il, 0, cb, ctx);
+  ix_close(&ix, &root);
   return rc < 0 ? rc : 0;
+}
+
+/* ---- Finding one name: down the sorted tree --------------------------------
+ * (app, 24.11.2026) The entries of a folder's index are sorted by the upper-case name ($UpCase), shorter first on a tie, as Windows
+ * writes them and index_insert keeps them. A name is found by going down one path: in each node the first entry that does not sort
+ * before it is either the name or the one whose sub-node holds it. Before, every lookup walked all entries: copying or deleting n files
+ * in a folder of n entries read the folder n times (a folder of 100 000 files took hours). */
+
+typedef struct find_one {
+  const uint16_t *name;
+  int             nlen;
+  uint64_t        ref;
+  int             exact;
+} find_one_t;
+
+static int name_cmp(const ntfs_vol_t *v, const uint16_t *a, int al, const uint8_t *b, int bl) {
+  int n = al < bl ? al : bl;
+  for (int i = 0; i < n; i++) {
+    uint16_t x = up(v, a[i]), y = up(v, le16(b + i * 2));
+    if (x != y) return x < y ? -1 : 1;
+  }
+  return al == bl ? 0 : al < bl ? -1 : 1;
+}
+
+static int find_node(idx_ctx_t *ix, const uint8_t *p, const uint8_t *end, int depth, find_one_t *f);
+
+static int find_block(idx_ctx_t *ix, uint64_t vcn, int depth, find_one_t *f) {
+  if (!ix->have_alloc || depth >= MAX_DEPTH || ++ix->visited > ix->max_visits) return -EIO;
+  int fresh = seen_add(ix, vcn);
+  if (fresh <= 0) return fresh < 0 ? fresh : -EIO;
+  if (!ix->blocks[depth] && !(ix->blocks[depth] = malloc(ix->block_size))) return -ENOMEM;
+  uint8_t *b = ix->blocks[depth];
+  if (attr_pread(ix->v, &ix->alloc, vcn * ix->vcn_unit, b, ix->block_size) != (ssize_t)ix->block_size) return -EIO;
+  if (memcmp(b, "INDX", 4) || apply_fixups(b, ix->block_size)) return -EIO;
+  const uint8_t *h = b + 0x18;
+  uint32_t eo = le32(h), il = le32(h + 4);
+  if (0x18 + (uint64_t)il > ix->block_size || eo >= il) return -EIO;
+  return find_node(ix, h + eo, h + il, depth + 1, f);
+}
+
+/* 1 found (f->ref, f->exact), 0 not there, <0 error */
+static int find_node(idx_ctx_t *ix, const uint8_t *p, const uint8_t *end, int depth, find_one_t *f) {
+  while (p + 16 <= end) {
+    uint16_t len = le16(p + 8), klen = le16(p + 10), flags = le16(p + 12);
+    if (len < 16 || p + len > end) return -EIO;
+    if ((flags & IE_NODE) && len < 24) return -EIO;
+    int c = -1;                                     /* the end entry sorts after every name */
+    if (!(flags & IE_LAST)) {
+      if (klen < 0x42 || 16u + klen > len) return -EIO;
+      const uint8_t *fn = p + 16;
+      if (0x42u + fn[0x40] * 2u > klen) return -EIO;
+      c = name_cmp(ix->v, f->name, f->nlen, fn + 0x42, fn[0x40]);
+      if (c == 0) {
+        f->ref = le64(p);
+        f->exact = 1;
+        for (int i = 0; i < f->nlen; i++)
+          if (le16(fn + 0x42 + i * 2) != f->name[i]) f->exact = 0;
+        return 1;
+      }
+    }
+    if (c < 0) return (flags & IE_NODE) ? find_block(ix, le64(p + len - 8), depth, f) : 0;
+    p += len;
+  }
+  return -EIO;                                      /* a node without its end entry */
+}
+
+int index_find(ntfs_vol_t *v, uint64_t dir, const uint16_t *name, int nlen, uint64_t *ref, int *exact) {
+  attr_t root;
+  idx_ctx_t ix;
+  int rc = ix_open(v, dir, &ix, &root);
+  if (rc) return rc;
+  find_one_t f = {name, nlen, 0, 0};
+  const uint8_t *h = root.data + 16;
+  uint32_t eo = le32(h), il = le32(h + 4);
+  if (16 + (uint64_t)il > root.data_len || eo >= il) rc = -EIO;
+  else rc = find_node(&ix, h + eo, h + il, 0, &f);
+  ix_close(&ix, &root);
+  if (rc < 0) return rc;
+  if (!rc) return -ENOENT;
+  *ref = f.ref;
+  if (exact) *exact = f.exact;
+  return 0;
 }
 
 /* ---- Stat ---------------------------------------------------------------- */
@@ -729,11 +823,20 @@ int lookup_locked(ntfs_vol_t *v, const char *path, uint64_t *inode) {
     int nlen = utf8_to_utf16(comp, name, 256);
     if (nlen <= 0) return -ENOENT;
 
-    find_ctx_t f = {v, name, (size_t)nlen, (uint64_t)-1};
-    int rc = index_walk(v, cur, find_cb, &f);
-    if (rc < 0) return rc;
-    if (f.ref == (uint64_t)-1) return -ENOENT;
-    cur = f.ref;
+    uint64_t ref = 0;
+    int exact = 0, rc = index_find(v, cur, name, nlen, &ref, &exact);
+    if (rc == -ENOENT || rc == -ENOTDIR) return rc;
+    if (rc == 0 && exact) {
+      cur = MREF(ref);
+    } else {
+      /* (app) only another case was found (a name that differs in case only may sit beside it), or the index is damaged: every
+       * entry, as before */
+      find_ctx_t f = {v, name, (size_t)nlen, (uint64_t)-1};
+      rc = index_walk(v, cur, find_cb, &f);
+      if (rc < 0) return rc;
+      if (f.ref == (uint64_t)-1) return -ENOENT;
+      cur = f.ref;
+    }
     p += clen;
   }
   *inode = cur;

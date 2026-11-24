@@ -30,9 +30,14 @@ int bdev_is_writable(const bdev_t *b);
 /* Write len bytes at off (any alignment; partial sectors are
  * read-modify-written). Returns 0 on success, -1 on error. */
 int bdev_write(bdev_t *b, uint64_t off, const void *buf, size_t len);
+/* (app) As bdev_write, but on the device before it returns (file data); bdev_write keeps small writes in the cache until the next
+ * bdev_flush. */
+int bdev_write_through(bdev_t *b, uint64_t off, const void *buf, size_t len);
 
 /* Push written data to the device. */
 int bdev_flush(bdev_t *b);
+/* (app) The cached writes to the device, in order, without fsync (an ordering point between two steps). */
+int bdev_writeout(bdev_t *b);
 /* (app) Ask the device to empty its own write cache (on eject). */
 void bdev_flush_cache(bdev_t *b);
 

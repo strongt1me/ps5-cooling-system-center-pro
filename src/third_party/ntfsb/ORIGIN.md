@@ -66,6 +66,21 @@ in the code; the full list:
   `ntfs_umount`: the dirty flag of `$VOLUME_INFORMATION` is set before the first change after a sync and cleared by the sync once the
   rest is on the disk (it was never set: a stick pulled while writing looked clean to Windows, a half-written file showed its full
   size). Upstream issue #9; test `test/ntfsfm/dirty.c`.
+- Speed (24.11.2026, the three cases the app called slow):
+  - `ntfs.c` `index_find` (new), used by `lookup_locked`, the "name taken" check of `ntfs_mkdir`/`ntfs_create` and the search of
+    `ntfs_unlink`: one name is found by going down the sorted index (as `index_insert` does) instead of walking every entry; only a
+    match in another case (an exact one may sit beside it) or a damaged index falls back to the walk. Copying or deleting n files in a
+    folder of n entries read the folder n times.
+  - `bdev.c`: the block cache keeps the small and unaligned writes of the metadata (records, index blocks, bitmap bytes) and writes
+    only the changed sectors, sorted, at the next `bdev_flush` or when the block is needed for another (`block_out`, `cache_out`); a
+    large direct read writes out the cached blocks of its range first. File data goes straight to the device (`bdev_write_through`,
+    `write_raw_how(..., 1)` in `ntfs_wwrite`), before the size that covers it. `ntfs_wclose` and `finish_record` no longer flush per
+    file; in `ntfs_unlink` the flush between removing the names and freeing the records is `bdev_writeout` (the order on the device
+    without a device sync). The app syncs at the end of every upload, folder and job; the dirty flag marks the drive in between (set
+    and flushed before the first change, cleared after the rest is out). Each small write was a read and a write of the edge sectors,
+    and each file several device syncs: a cheap stick took seconds per new file. Test `test/ntfsfm/bigdir.c`.
+  - `ntfs_write.c` `prepare_once_locked`: a journal that is empty already (only 0xFF where a log page could begin: 0, 512, 1024 …, as
+    ntfs-3g's `ntfs_check_logfile` looks) is not written again; before, every mount wrote the whole `$LogFile` at the first change.
 - `bdev.c` `bdev_flush_cache`, `ntfs_write.c` `ntfs_flush_cache` (new): `DIOCGFLUSH`, so that the stick empties its own write cache;
   the app calls it once when a drive is ejected, after `ntfs_sync` (not at every sync: some USB bridges are slow on the command; an
   error is ignored, not every stick knows it).

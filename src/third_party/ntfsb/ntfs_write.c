@@ -75,8 +75,10 @@ static uint64_t now_nt(void) { return unix2nt((int64_t)time(NULL)); }
 /* ---- Raw attribute writes ------------------------------------------------ */
 
 /* Write into already-allocated clusters of a non-resident attribute. */
-static int write_raw(ntfs_vol_t *v, const attr_t *a, uint64_t off,
-                     const uint8_t *buf, size_t len) {
+/* through (app, 24.11.2026): file data straight to the device; everything else (records, index blocks, bitmaps) in the cache of
+ * bdev.c until the next flush */
+static int write_raw_how(ntfs_vol_t *v, const attr_t *a, uint64_t off,
+                         const uint8_t *buf, size_t len, int through) {
   uint32_t cs = v->cluster;
   while (len) {
     int64_t vcn = (int64_t)(off / cs);
@@ -86,10 +88,15 @@ static int write_raw(ntfs_vol_t *v, const attr_t *a, uint64_t off,
     size_t n = run_end - off < len ? (size_t)(run_end - off) : len;
     if (!n) return -EIO;
     uint64_t phys = (uint64_t)r->lcn * cs + (off - (uint64_t)r->vcn * cs);
-    if (bdev_write(v->dev, phys, buf, n)) return -EIO;
+    if ((through ? bdev_write_through : bdev_write)(v->dev, phys, buf, n)) return -EIO;
     buf += n; off += n; len -= n;
   }
   return 0;
+}
+
+static int write_raw(ntfs_vol_t *v, const attr_t *a, uint64_t off,
+                     const uint8_t *buf, size_t len) {
+  return write_raw_how(v, a, off, buf, len, 0);
 }
 
 /* Reverse of apply_fixups: protect a record before it goes to disk. */
@@ -2249,8 +2256,16 @@ int ntfs_unlink(ntfs_vol_t *v, uint64_t parent, const char *name) {
   if (!rec || !ext || !names) { rc = -ENOMEM; goto out; }
 
   del_find_t f = {v, n16, nlen, 0, 0};
-  rc = index_walk(v, parent, del_find_cb, &f);
-  if (rc < 0) goto out;
+  {
+    uint64_t r = 0;
+    int ex = 0, frc = index_find(v, parent, n16, nlen, &r, &ex);   /* (app, 24.11.2026) down the sorted index */
+    if (frc == 0 && ex) { f.ref = r; f.exact = 1; }
+    else if (frc == -ENOENT || frc == -ENOTDIR) { rc = frc; goto out; }
+    else {
+      rc = index_walk(v, parent, del_find_cb, &f);
+      if (rc < 0) goto out;
+    }
+  }
   if (!f.ref) { rc = -ENOENT; goto out; }
   uint64_t ino = MREF(f.ref);
   if (ino < 24) { rc = -EPERM; goto out; } /* system files, root */
@@ -2327,9 +2342,10 @@ int ntfs_unlink(ntfs_vol_t *v, uint64_t parent, const char *name) {
   for (int i = 0; i < nnames && !rc; i++)
     if (remove[i]) rc = index_remove(v, names[i].parent, names[i].name, names[i].nlen, ino);
   if (rc) goto out;
-  bdev_flush(v->dev);
+  /* (app, 24.11.2026) the order kept on the device (the names gone before the records and clusters are free), without a device sync:
+   * the app syncs once at the end of the job */
+  if (bdev_writeout(v->dev)) { rc = -EIO; goto out; }
   rc = free_inode(v, recs, nrecs);
-  bdev_flush(v->dev);
 
 out:
   free(rec);
@@ -2404,10 +2420,17 @@ static int start_record(ntfs_vol_t *v, uint64_t parent, const uint16_t *name, in
   free(prec);
   if (rc) return rc;
 
-  exist_ctx_t ex = {v, name, nlen, 0};
-  rc = index_walk(v, parent, exist_cb, &ex);
-  if (rc < 0) return rc;
-  if (ex.found) return -EEXIST;
+  {
+    uint64_t r = 0;
+    int frc = index_find(v, parent, name, nlen, &r, NULL);   /* (app, 24.11.2026) down the sorted index; any case counts */
+    if (frc == 0) return -EEXIST;
+    if (frc != -ENOENT) {
+      exist_ctx_t ex = {v, name, nlen, 0};
+      rc = index_walk(v, parent, exist_cb, &ex);
+      if (rc < 0) return rc;
+      if (ex.found) return -EEXIST;
+    }
+  }
 
   rc = alloc_record(v, ino);
   if (rc) return rc;
@@ -2453,7 +2476,8 @@ static int finish_record(ntfs_vol_t *v, uint64_t parent, uint64_t ino, uint64_t 
   int rc = write_record(v, ino, rec);
   if (!rc) rc = index_insert(v, parent, key, klen, ref);
   if (rc) release_record(v, ino);
-  bdev_flush(v->dev);
+  /* (app, 24.11.2026) no flush per file: the record and its index entry go out with the next sync (after every upload, folder and job)
+   * or when the cache needs the block; the dirty flag marks the drive meanwhile */
   return rc;
 }
 
@@ -2606,7 +2630,7 @@ int ntfs_wwrite(ntfs_wfile_t *f, const void *buf, size_t len) {
   pthread_mutex_lock(&v->lock);
   /* (app) a sync for another file may have cleared the dirty flag meanwhile */
   int rc = !v->vol_marked && mark_volume(v, 1) ? -EIO : 0;
-  if (!rc) rc = write_raw(v, &f->a, f->pos, buf, len);
+  if (!rc) rc = write_raw_how(v, &f->a, f->pos, buf, len, 1);
   if (!rc) {
     f->pos += len;
     if (f->pos - f->flushed >= INIT_FLUSH_EVERY) {
@@ -2622,10 +2646,11 @@ int ntfs_wclose(ntfs_wfile_t *f) {
   if (!f) return 0;
   ntfs_vol_t *v = f->v;
   pthread_mutex_lock(&v->lock);
-  bdev_flush(v->dev);
   int rc = !v->vol_marked && mark_volume(v, 1) ? -EIO : 0;   /* (app) as in ntfs_wwrite */
+  /* (app, 24.11.2026) The data is on the device already (write_raw_how through): the size that covers it waits in the cache for the
+   * next sync, which the app makes after every upload and job. The two flushes of every close made each small file several device
+   * syncs. */
   if (!rc) rc = store_init(f);
-  bdev_flush(v->dev);
   pthread_mutex_unlock(&v->lock);
   attr_free(&f->a);
   free(f);
@@ -2788,9 +2813,17 @@ static int prepare_once_locked(ntfs_vol_t *v) {
     /* Empty the journal like ntfs-3g does, so Windows starts a fresh log
      * instead of trying to replay an old one. */
     attr_t lf;
-    if (attr_find(v, INODE_LOGFILE, AT_DATA, NULL, 0, &lf) == 0 && !lf.resident) {
+    if (attr_find(v, INODE_LOGFILE, AT_DATA, NULL, 0, &lf) == 0) {
+      /* (app, 24.11.2026) As ntfs-3g (ntfs_check_logfile): where a log page could begin (0, 512, 1024, 2048 ...) there is only 0xFF,
+       * so the journal is empty already (the app emptied it before and Windows has not used the drive since): it is not written again.
+       * Before, every start of the app wrote the whole journal (64 MB) at the first change, seconds on a slow stick. */
+      int empty = !lf.resident;
+      for (uint64_t pos = 0; empty && pos < lf.init; pos = pos ? pos << 1 : 512) {
+        uint8_t m[4];
+        if (attr_pread(v, &lf, pos, m, sizeof m) != (ssize_t)sizeof m || le32(m) != 0xFFFFFFFFu) empty = 0;
+      }
       enum { CH = 1024 * 1024 };
-      uint8_t *ff = malloc(CH);
+      uint8_t *ff = !lf.resident && !empty ? malloc(CH) : NULL;
       if (ff) {
         memset(ff, 0xFF, CH);
         for (uint64_t off = 0; off < lf.init && !rc; off += CH) {
