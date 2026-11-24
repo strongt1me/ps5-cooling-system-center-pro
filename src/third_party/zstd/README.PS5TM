@@ -1,7 +1,13 @@
-zstd 1.5.7 (https://github.com/facebook/zstd, release v1.5.7; archive sha256 eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3),
-unchanged: lib/zstd.h, zstd_errors.h and the files of lib/common (debug, entropy_common, error_private, fse_decompress, xxhash, zstd_common),
+zstd 1.6.0 (https://github.com/facebook/zstd, release v1.6.0 of 23.11.2026; archive zstd-1.6.0.tar.gz, sha256
+2ba599ae2a257976278e7e71e998433a387bfd18aa7b78678229fd5d84f5e9b8, the same as the release's .sha256 file and its GitHub digest),
+unchanged: lib/zstd.h, zstd_errors.h and the files of lib/common (debug, entropy_common, error_private, fse_decompress, xxhash, zstd_common;
+headers including bmi2.h, new in 1.6.0),
 lib/compress (all but the multi-threaded zstdmt_compress.c) and lib/decompress (all but the assembly huf_decompress_amd64.S) that the single-threaded
 build needs. Licence: BSD 3-Clause (see LICENSE; zstd is also available under GPLv2, this copy is used under the BSD one).
 Used by src/zstdpack.c: the compressor makes the zstd frames of the asset packs for AMPR EMU NG (AMPRZPK1 / AMPRZDT1, 256 KiB chunks), the
 decompressor reads them back for the check and for unpacking. Built single-threaded and without assembly (see the Makefile), strings of errors
-stripped. Added 06.11.2026.
+stripped. Added 06.11.2026 (1.5.7, archive sha256 eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3); 1.6.0 since
+24.11.2026: 31 files replaced, bmi2.h added, no file of the app's build list added or removed (the Makefile's ZSTD_SRCS is unchanged).
+1.6.0 fixes CVE-2026-124851 (streaming decompression of malformed data could expose uninitialized memory) and other bugs; the app
+only calls the one-shot functions (ZSTD_compress2, ZSTD_decompressDCtx, ZSTD_decompress, ZSTD_getFrameHeader), no streaming,
+dictionaries, prefixes or sequence API, so none of the listed bugs was on its path; updated as a precaution.

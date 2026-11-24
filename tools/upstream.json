@@ -37,7 +37,7 @@
     {"id": "exfat2ampr", "repo": "exFAT2AMPR/exfat2ampr", "current": "v1.104", "prereleases": false,
      "where": "src/trace.c, src/dupimg.c, src/lz4*.c (nur Wissen; Zusatzbedingungen der Lizenz: Credit 'Made by V-10')",
      "how": "Release-Notizen lesen; Ideen eigenständig nachbauen, nie Code übernehmen"},
-    {"id": "zstd", "repo": "facebook/zstd", "current": "v1.5.7", "prereleases": false,
+    {"id": "zstd", "repo": "facebook/zstd", "current": "v1.6.0", "prereleases": false,
      "where": "src/third_party/zstd/ (README.PS5TM), Makefile (ZSTD_SRCS), src/zstdpack.c",
      "how": "Neues Quellarchiv laden, SHA-256 prüfen, die Dateien aus lib/common, lib/compress, lib/decompress ersetzen (Liste in der README.PS5TM), mit test/zstdpack/run.sh und dem Bau prüfen; Ausgabe der Frames bleibt formatgleich"},
     {"id": "ps5-dump-forge", "repo": "quer3q/ps5-dump-forge", "current": "v0.5.7", "prereleases": false,

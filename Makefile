@@ -244,7 +244,7 @@ NTFSB_OBJS := gen/ntfsb/ntfs.o gen/ntfsb/ntfs_write.o gen/ntfsb/bdev.o gen/ntfsb
 NTFSB_HDRS := $(wildcard src/third_party/ntfsb/*.h)
 LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)
 
-# zstd 1.5.7 (BSD-3-Clause) for the zstd asset packs (zstdpack.c, 06.11.2026): the compressor makes the frames, the decoder reads them
+# zstd 1.6.0 (BSD-3-Clause; 1.5.7 until 24.11.2026) for the zstd asset packs (zstdpack.c, 06.11.2026): the compressor makes the frames, the decoder reads them
 # back for the check and the unpacking. Single-threaded (the app runs its own pool), without the assembly decoder, without legacy
 # formats and error strings; built at -O2 like libdeflate and lz4, because packing speed is the person's waiting time.
 ZSTD_DIR  := src/third_party/zstd/lib

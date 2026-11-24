@@ -4,6 +4,11 @@
 
 ## Unveröffentlicht
 
+### Fremdbaustein: zstd 1.6.0 (facebook/zstd, 23.11.2026; Wunsch des Users, 24.11.2026)
+- **zstd 1.5.7 → 1.6.0** in `src/third_party/zstd` (BSD-3): 31 Dateien der Bibliothek ersetzt, `common/bmi2.h` neu; die Liste der gebauten Dateien bleibt gleich (ohne Mehrfädigkeit, ohne Assembler-Entpacker). Prüfsumme des Quellarchivs mit der `.sha256` der Veröffentlichung verglichen.
+- **Anlass:** 1.6.0 schließt CVE-2026-124851 (beim fortlaufenden Entpacken fehlerhafter Daten konnte nicht gesetzter Speicher sichtbar werden) und weitere Fehler. Die App ruft nur die einfachen Funktionen auf (Packen in einem Stück, Entpacken in einem Stück, Kopf eines Frames lesen), kein fortlaufendes Entpacken, keine Wörterbücher, keine Sequenz-Schnittstelle: keiner der genannten Fehler lag auf ihrem Weg; aktualisiert zur Vorsicht.
+- Die Pakete bleiben formatgleich (AMPRZPK1/AMPRZDT1, ein zstd-Frame je 256-KiB-Stück); `README.PS5TM`, `THIRD_PARTY_NOTICES.md`, `tools/upstream.json`.
+
 ### Fremdbaustein: AMPR EMU NG v0.5.1 (quer3q, 23.11.2026; Hinweis des Users, 24.11.2026)
 - **Eingebettet sind jetzt 0.5.1 und 0.5.0** (je mit und ohne Protokoll; Regel „die zwei neuesten“), 0.4.1 ist entfernt. SHA-256 mit der `SHA256SUMS` der Veröffentlichung verglichen, SELF-Kopf und Kennung `ampr-emu-ng 0.5.1` geprüft; `NG_VERSION` 0.5.1 (die Reparatur bei zstd-Paketen nimmt 0.5.1, wenn im Ordner nichts Neueres liegt).
 - **Neu in 0.5.1 laut Veröffentlichung:** schnellere Lese-Stapel (im pkg-Modus etwa 10 %, ein zstd-Spiel mit ungünstig gereihten Lesevorgängen von 98 auf 5 ms je Stapel, 8 statt 6 Lesefäden); im pkg-Modus behoben: Spielstände bei Marvel's Wolverine (#116), Hänger beim Beenden von Hades (#114), Absturz von DIRT 5 (#117), Start von MARVEL Cosmic Invasion (#111) und Scott Pilgrim EX. FPKG bleibt laut Veröffentlichung experimentell.

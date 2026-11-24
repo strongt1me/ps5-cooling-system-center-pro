@@ -115,7 +115,7 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 - **LZ4** 1.11.1 (Yann Collet, BSD-2-Clause): `src/third_party/lz4/` (`lz4.c`, `lz4hc.c`), unverändert (seit 10.11.2026; vorher 1.11.0, davor 1.10.0). Die
   APR-EMU entpackt mit ihrer eigenen Fassung (1.10.0); das Blockformat ist gleich, `test/lz4cross` prüft beide Richtungen. Lizenztext:
   `src/third_party/lz4/LICENSE`.
-- **zstd** 1.5.7 (Meta Platforms / Yann Collet, BSD-3-Clause, auch GPLv2 möglich; hier unter der BSD-Lizenz): `src/third_party/zstd/`
+- **zstd** 1.6.0 (Meta Platforms / Yann Collet, BSD-3-Clause, auch GPLv2 möglich; hier unter der BSD-Lizenz): `src/third_party/zstd/`
   (Kompressor und Dekompressor der Bibliothek ohne Mehrfädigkeit und ohne Assembler-Entpacker, unverändert), für die zstd-Pakete
   (`src/zstdpack.c`). Lizenztext: `src/third_party/zstd/LICENSE`. Herkunft: <https://github.com/facebook/zstd>, Archiv-Prüfsumme in
   `src/third_party/zstd/README.PS5TM`.
