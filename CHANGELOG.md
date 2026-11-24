@@ -2,6 +2,20 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### NTFS schneller: große Ordner, kleine Dateien, der erste Schreibvorgang (Wunsch des Users, 24.11.2026)
+- **Große Ordner:** Ein Name in einem Ordner wird jetzt im sortierten Index gesucht (ein Weg nach unten, wie beim Einfügen), nicht mehr durch alle Einträge. Das betraf jedes Nachschlagen eines Pfads, die Prüfung „Name schon vergeben?“ beim Anlegen und das Löschen: Kopieren oder Löschen von n Dateien in einem Ordner mit n Einträgen las den Ordner n-mal. Am PC gemessen: 20 000 Namen nachschlagen 0,03 s statt 2,45 s, 20 000 Dateien anlegen 0,17 s statt 4,2 s. Nur ein Treffer in anderer Groß-/Kleinschreibung (ein genau passender kann daneben liegen) oder ein beschädigter Index nimmt den alten Weg.
+- **Viele kleine Dateien:** Der Treiber schrieb jede Änderung seiner Verwaltungsdaten sofort und einzeln auf den Stick (Lesen und Neuschreiben der Randsektoren) und schrieb nach jeder Datei mehrmals alles aus. Jetzt sammelt sein Zwischenspeicher (8 MiB je Stick) diese kleinen Änderungen und schreibt nur die geänderten Sektoren, sortiert, beim Ausschreiben am Ende jedes Hochladens, Ordners und Auftrags; der Dateiinhalt geht wie bisher sofort auf den Stick, vor der Größenangabe, die ihn abdeckt. Die Reihenfolge beim Löschen (erst der Eintrag im Ordner, dann Satz und Cluster) bleibt auf dem Stick erhalten. Am PC mit einem nachgebildeten langsamen Stick: 300 kleine Dateien anlegen 0,8 s statt 14,2 s, löschen 3,9 s statt 10,4 s. Wird mitten im Auftrag abgezogen, ist der Stick als „nicht sauber getrennt“ markiert.
+- **Erster Schreibvorgang nach dem Start der App:** Das Windows-Journal des Sticks (bis 64 MB) wird nur noch geleert, wenn es nicht schon leer ist (geprüft wie bei ntfs-3g an den Stellen, an denen eine Journalseite beginnen kann). Leer ist es, wenn der Stick seit dem letzten Leeren nicht an Windows war; vorher schrieb jeder Start der App das ganze Journal neu (am PC 0,12 s statt 1,5 s, auf dem 60-GB-Stick an der Slim waren es etwa 9 s).
+- **Geprüft:** Host-Test `test/ntfsfm` (mit Gegenprüfung durch ntfs-3g), Messprogramm alter gegen neuer Treiber mit ntfs-3g-Prüfung jedes Abbilds.
+
+### Handbuch, FAQ und Bildschirmfotos auf Stand 1.93.0 (Wunsch des Users, 24.11.2026)
+- **Bilder:** Alle 98 Bildschirmfotos (14 Seiten × 7 Sprachen) aus dem Demo-Modus neu: Version 1.93.0, der NTFS-Ort `ntfs0 (NTFS · BACKUP)` mit „Auswerfen“ im Dateimanager, die graue Firmware-Marke, wenn das SDK passt, „Vollständig“ an der gekürzten Seriennummer. Die Demo-Daten (`tools/demo/fixtures`, `make_fixtures.py`) haben die echten Ortsnamen und den NTFS-Ort; der Demo-Server beantwortet `/favicon.ico` wie die App und lässt die Spielzeit bis „jetzt“ laufen (sonst stand „Die Uhr der Konsole geht um 65 Std. nach“).
+- **Texte (sieben Sprachen):** Stand 24.11.2026; „Internet nur auf Knopfdruck“ nennt auch neuere Fassungen von Dump Forge und Kraken Mount; ShadowMountPlus braucht es nur zum Auswerfen von USB-Laufwerken (NTFS wirft die App selbst aus); der Startschutz hält, solange der erste Start läuft, und 30 s danach; die Wiederholung bei „Device busy“; ein an der PS5 mitten im Schreiben abgezogenes NTFS-Laufwerk bleibt nur lesbar; die App nimmt nur IP-Adresse, `localhost` und Namen mit Heimnetz-Endung an (Handbuch „Sicherheit“ und FAQ „Fehler 403“). `docs/HANDBUCH.md` entsprechend.
+- **Behoben, Übersetzungen:** Im Dateimanager blieb der Ort „Interne SSD (/data)“ in allen Sprachen deutsch, auf der Seite Spielzeit die Zeile des laufenden Spiels und die Angaben unter „Meistgespielt“ halb deutsch („vorn … gespielt … SoC bis“, „im Schnitt … zuletzt“); sechs Einträge je Wörterbuch.
+- Neue Fassung für den User als HTML und PDF in „Handbuch und FAQ/Stand 2026-11-24 (v1.93.0)“ (außerhalb des Repos).
+
 ## v1.93.0 – 24.11.2026
 
 ### NTFS: Dirty-Flag und Windows-Journal (Upstream-Issue #9, Wunsch des Users, 23.11.2026)

@@ -180,8 +180,18 @@ etwas dazu (eine Absage, ein Angebot „Starten“), zeigt sie es als Meldung ob
 - **Ein Spiel wird nie zweimal gestartet.** Einen laufenden Titel noch einmal zu
   starten, bringt die Konsole zum Absturz (Erfahrung aus Elf Arsenal, am
   03.10.2026 vermutlich auch hier passiert). Ein zweiter Klick auf „Starten“
-  innerhalb von 30 Sekunden startet deshalb nichts und bietet auch keine zweite
-  Meldung an.
+  startet deshalb nichts und bietet auch keine zweite Meldung an, solange der
+  erste Start läuft (etwa während er auf das Aushängen bei ShadowMountPlus oder
+  das Ende der Vollbild-App wartet) und noch 30 Sekunden danach; jeder Titel hat
+  seine eigene Marke (seit 23.11.2026, vorher 30 Sekunden ab dem Tippen).
+- **„Device busy“ beim Start (seit 23.11.2026, `start_retrying_busy` in `src/api.c`):**
+  Lehnt ShadowMountPlus einen Start kurz ab (der Starter antwortet `0x80940033`,
+  im Protokoll von ShadowMountPlus `launch mount unavailable … status=16`), fragt
+  die App den Starter noch zweimal im Abstand von 3 Sekunden, bevor sie die
+  Meldung mit „Starten“ anbietet. Ein Titel, der inzwischen läuft, wird nie ein
+  zweites Mal gestartet. Das gilt für den Start im Browser, nach dem Ende der
+  Vollbild-App, beim Spielwechsel und in der Dump-Warteschlange; der Browser
+  wartet auf diese Antwort bis zu 20 Sekunden.
 
 ## Ein- und Aushängen über ShadowMountPlus (seit 30.10.2026; Hinweis seit 14.11.2026)
 

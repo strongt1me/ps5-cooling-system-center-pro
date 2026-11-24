@@ -395,7 +395,7 @@ bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
   `msedge --headless=new --print-to-pdf=<Datei>.pdf <Datei>.html`).
 - **Demo-Modus und Bildschirmfotos (seit 21.11.2026):** `tools/demo/` stellt die Weboberfläche ohne Konsole bereit, mit erfundenen Daten:
   `python tools/demo/demo_server.py --lang de` bedient `web/` und `/api/v1/…` aus `tools/demo/fixtures/*.json` (Spiele heißen „Spiel 1 …“, die Cover
-  zeichnet der Server, Uhr und Verlauf laufen bis „jetzt“); `python tools/demo/make_shots.py [Sprache …]` öffnet damit die 14 Seiten des Handbuchs in
+  zeichnet der Server, Uhr, Verlauf und Spielzeit laufen bis „jetzt“); `python tools/demo/make_shots.py [Sprache …]` öffnet damit die 14 Seiten des Handbuchs in
   jeder Sprache und schreibt `docs/shots/<xx>/NN-name.png` (1500 × 937; braucht Python mit playwright und Microsoft Edge, es wird nichts geladen).
   Die Fixtures entstehen aus Antworten einer echten Konsole: `tools/demo/record.py http://<Konsole>:8086` (nur lesend) und
   `tools/demo/make_fixtures.py <Ordner>` ersetzen jeden persönlichen Wert (Titel, Kennungen, Konto, Netz, Pfade); am Ende sucht das Skript jeden echten

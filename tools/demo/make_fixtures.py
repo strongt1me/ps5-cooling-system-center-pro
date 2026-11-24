@@ -19,7 +19,7 @@ OUT = os.path.join(HERE, "fixtures")
 RAW = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "raw")
 
 PERSONAL = {                      # key (lower case) -> the invented value
-    "serial_masked": "XXXXX0000", "serial": "XXXXX0000", "console_name": "PS5 Pro", "username": "Spieler", "ssid": "Heimnetz", "ip": "192.168.1.50",
+    "serial_masked": "••••0000", "serial": "XXXXX0000", "console_name": "PS5 Pro", "username": "Spieler", "ssid": "Heimnetz", "ip": "192.168.1.50",
     "uid": "1234567890", "uid_hex": "0x499602D2", "account_id": "0000000000000000", "psn_name": "Spieler", "mac": "00:00:00:00:00:00",
     "bind_ip": "192.168.1.50", "host": "192.168.1.50", "console": "PS5 Pro", "owner": "Spieler",
 }
@@ -263,10 +263,14 @@ def hand(name):
                 "internal": [{"name": n, "dir": "", "size": s, "mtime": 1794263349 - i * 86400, "valid": True} for i, (n, s) in enumerate(fl)],
                 "usb": [], "usb_count": 0}
     if name == "files_places":
-        return {"ok": True, "places": [{"label": "Interne SSD", "path": "/data", "free_bytes": 1083896823808, "writable": True, "ejectable": False},
-                                       {"label": "usb0", "path": "/mnt/usb0", "free_bytes": 127025741824, "writable": True, "ejectable": True},
-                                       {"label": "usb1", "path": "/mnt/usb1", "free_bytes": 50104696832, "writable": True, "ejectable": True},
-                                       {"label": "Konsole", "path": "/", "free_bytes": 778240, "writable": False, "ejectable": False}]}
+        # the labels of the app (src/filemgr.c places_json); an NTFS stick since v1.93.0 (src/fm_ntfs.inc fmn_places, 24.11.2026)
+        return {"ok": True, "eject_blocked": False, "places": [
+            {"label": "Interne SSD (/data)", "path": "/data", "free_bytes": 1083896823808, "writable": True, "ejectable": False},
+            {"label": "usb0", "path": "/mnt/usb0", "free_bytes": 127025741824, "writable": True, "ejectable": True},
+            {"label": "usb1", "path": "/mnt/usb1", "free_bytes": 50104696832, "writable": True, "ejectable": True},
+            {"label": "ntfs0 (NTFS · BACKUP)", "path": "/ntfs0", "free_bytes": 412316860416, "total_bytes": 1000202273280, "writable": True,
+             "ejectable": True, "fs": "ntfs"},
+            {"label": "Ganzes System", "path": "/", "free_bytes": 778240, "writable": False, "ejectable": False}]}
     if name == "files_list":
         ents = [("FPKG-Games", "dir", 0), ("PS5-Cooling-Center", "dir", 0), ("PS5-Sicherung", "dir", 0), ("homebrew", "dir", 0), ("etaHEN", "dir", 0),
                 ("pkg", "dir", 0), ("ShadowMountPlus", "dir", 0), ("config.ini", "file", 1480), ("notizen.txt", "file", 612), ("startliste.txt", "file", 2048)]

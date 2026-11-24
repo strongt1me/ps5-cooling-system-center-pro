@@ -5,7 +5,7 @@
 
 The pages of the manual are photographed from it (tools/demo/make_shots.py). Nothing here is part of the app on the console; the app is not changed.
 What it does:
-  - GET /api/v1/<route> answers fixtures/<route>.json ("/" and "-" become "_"), with the clock moved to now (timestamps of status and history);
+  - GET /api/v1/<route> answers fixtures/<route>.json ("/" and "-" become "_"), with the clock moved to now (timestamps of status, history and playtime);
   - what a game is called follows --lang ("Spiel 3", "Game 3", ...);
   - the covers of the games are drawn here (a colour, a game pad, "Spiel N"; needs Pillow, without it they are not there and the page draws its own);
     icons of packages are not there (404);
@@ -68,6 +68,8 @@ class Demo(BaseHTTPRequestHandler):
             d["timestamp_ms"] = now_ms
         elif route == "history":
             self.shift_history(d, now_ms)
+        elif route == "playtime":
+            self.shift_playtime(d, now_ms // 1000)
         text = json.dumps(d, ensure_ascii=False)
         word = GAME.get(self.lang, "Spiel")
         if word != "Spiel":
@@ -150,6 +152,19 @@ class Demo(BaseHTTPRequestHandler):
                     shift(x)
         shift(d)
 
+    @staticmethod
+    def shift_playtime(d, now_s):
+        """The sessions end now as well: the page compares "now" of the console with the clock of the browser and, more than 10 minutes apart,
+        says the console's clock is wrong (24.11.2026: three days after the recording it said "65 h behind")."""
+        if not isinstance(d.get("now"), (int, float)):
+            return
+        delta = now_s - int(d["now"])
+        d["now"] = now_s
+        for s in ([d["live"]] if isinstance(d.get("live"), dict) else []) + list(d.get("sessions") or []):
+            for k in ("start", "end"):
+                if isinstance(s.get(k), (int, float)) and s[k] > 10 ** 9:
+                    s[k] += delta
+
     def klog(self, query):
         """Kernel messages of the demo: the same few lines again and again, numbered."""
         after = int((query.get("after") or ["0"])[0])
@@ -167,6 +182,11 @@ class Demo(BaseHTTPRequestHandler):
         u = urlsplit(self.path)
         if u.path.startswith("/api/v1/"):
             return self.api(u.path, parse_qs(u.query))
+        if u.path == "/favicon.ico":                     # like the app since v1.93.0 (src/assets.c): empty, no 404 in the console of the browser
+            self.send_response(204)
+            self.send_header("Content-Type", "image/x-icon")
+            self.end_headers()
+            return
         rel = "index.html" if u.path in ("/", "") else u.path.lstrip("/")
         p = os.path.normpath(os.path.join(WEB, rel))
         if not p.startswith(os.path.normpath(WEB)) or not os.path.isfile(p):
