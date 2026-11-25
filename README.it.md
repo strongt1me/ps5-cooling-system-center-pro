@@ -185,7 +185,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 - Tempo di gioco con temperature, backup e ripristino dei salvataggi, trovare, dividere e installare pacchetti, cronologia di tutte le operazioni.
 
 **Gestione**
-- Gestione file: visualizzare, modificare, scaricare e caricare (anche cartelle intere), creare cartelle, rinominare, copiare, spostare, eliminare – ovunque, con velocità e tempo residuo durante la copia; l'eliminazione chiede prima conferma e indica cosa verrà eliminato.
+- Gestione file: visualizzare, modificare, scaricare e caricare (anche cartelle intere), creare cartelle, rinominare, copiare, spostare, eliminare – ovunque, con velocità e tempo residuo durante la copia; l'eliminazione chiede prima conferma e indica cosa verrà eliminato. Ricerca per nome nella cartella o sotto di essa (anche su tutta l'unità), e le cartelle con un ID titolo come nome mostrano il titolo del gioco.
 - Unità NTFS (Windows): leggere e scrivere chiavette e dischi NTFS nella gestione file (caricare, creare cartelle, copiare, spostare, eliminare; senza rinominare né sostituire), espellere senza ShadowMountPlus (driver da PS5-NTFS-BROWSER di abcde6543).
 - Payload: vedere e fermare quelli in esecuzione, avviare i propri `.elf` da una cartella o da una chiavetta USB, profili come sequenza di avvio; scaricare e aggiornare i payload dall'elenco del Payload Manager di itsPLK e da quello di strongt1me (con controllo SHA-256).
 - Profilo: nome visualizzato e immagine del profilo (30 immagini integrate o un file proprio).

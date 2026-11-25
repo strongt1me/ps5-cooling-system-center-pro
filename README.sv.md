@@ -185,7 +185,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 - Speltid med temperaturer, säkerhetskopiera och återställ spelsparningar, hitta, dela och installera paket, historik över alla jobb.
 
 **Hantering**
-- Filhanterare: visa, redigera, hämta och ladda upp (även hela mappar), skapa mappar, byta namn, kopiera, flytta, ta bort – överallt, med hastighet och återstående tid vid kopiering; borttagning frågar först och anger vad som försvinner.
+- Filhanterare: visa, redigera, hämta och ladda upp (även hela mappar), skapa mappar, byta namn, kopiera, flytta, ta bort – överallt, med hastighet och återstående tid vid kopiering; borttagning frågar först och anger vad som försvinner. Sökning efter namn i mappen eller under den (även på hela enheten), och mappar med ett titel-ID som namn visar spelets titel.
 - NTFS-enheter (Windows): läsa och skriva NTFS-minnen och -diskar i filhanteraren (ladda upp, skapa mappar, kopiera, flytta, ta bort; utan att byta namn eller ersätta), mata ut utan ShadowMountPlus (drivrutin från PS5-NTFS-BROWSER av abcde6543).
 - Payloads: se och avsluta pågående, starta egna `.elf` från en mapp eller ett USB-minne, profiler som startföljd; hämta och uppdatera payloads från itsPLK:s Payload Manager-lista och från strongt1mes lista (med SHA-256-kontroll).
 - Profil: visningsnamn och profilbild (30 inbyggda bilder eller en egen fil).

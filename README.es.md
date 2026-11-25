@@ -185,7 +185,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
 - Tiempo de juego con temperaturas, copia y restauración de partidas, buscar, dividir e instalar paquetes, historial de todas las tareas.
 
 **Gestión**
-- Gestor de archivos: ver, editar, descargar y subir (también carpetas enteras), crear carpetas, cambiar nombre, copiar, mover, eliminar – en todas partes, con velocidad y tiempo restante al copiar; eliminar pregunta primero y nombra lo que se borrará.
+- Gestor de archivos: ver, editar, descargar y subir (también carpetas enteras), crear carpetas, cambiar nombre, copiar, mover, eliminar – en todas partes, con velocidad y tiempo restante al copiar; eliminar pregunta primero y nombra lo que se borrará. Búsqueda por nombre en la carpeta o debajo de ella (también en toda la unidad), y las carpetas con un ID de título como nombre muestran el título del juego.
 - Unidades NTFS (Windows): leer y escribir memorias y discos NTFS en el gestor de archivos (subir, crear carpetas, copiar, mover, eliminar; sin cambiar nombre ni reemplazar), expulsar sin ShadowMountPlus (controlador de PS5-NTFS-BROWSER de abcde6543).
 - Payloads: ver y detener los que están en marcha, iniciar `.elf` propios desde una carpeta o un USB, perfiles como secuencia de inicio; descargar y actualizar los payloads de la lista del Payload Manager de itsPLK y de la lista de strongt1me (con comprobación SHA-256).
 - Perfil: nombre visible e imagen de perfil (30 imágenes integradas o un archivo propio).

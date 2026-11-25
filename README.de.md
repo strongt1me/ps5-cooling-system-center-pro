@@ -185,7 +185,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 - Spielzeit mit Temperaturen, Spielstände sichern, zurückspielen und auf eine andere Konsole übertragen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
 
 **Verwaltung**
-- Dateimanager: ansehen, bearbeiten, herunter- und hochladen (auch ganze Ordner), Ordner anlegen, umbenennen, kopieren, verschieben, löschen – überall, mit Geschwindigkeit und Restzeit beim Kopieren; Löschen fragt zuerst und nennt, was weggeht.
+- Dateimanager: ansehen, bearbeiten, herunter- und hochladen (auch ganze Ordner), Ordner anlegen, umbenennen, kopieren, verschieben, löschen – überall, mit Geschwindigkeit und Restzeit beim Kopieren; Löschen fragt zuerst und nennt, was weggeht. Suche nach Namen im Ordner oder darunter (auch auf dem ganzen Laufwerk), und Ordner mit einer Titel-ID als Namen zeigen den Titel des Spiels.
 - NTFS-Laufwerke (Windows): NTFS-Sticks und -Festplatten im Dateimanager lesen und beschreiben (hochladen, Ordner anlegen, kopieren, verschieben, löschen; nicht umbenennen oder ersetzen), auswerfen ohne ShadowMountPlus (Treiber aus PS5-NTFS-BROWSER von abcde6543).
 - Payloads: laufende ansehen und beenden, eigene `.elf` aus einem Ordner oder vom USB-Stick starten, Profile als Startfolge; die Payloads aus der Liste des Payload Managers von itsPLK und aus der Liste von strongt1me herunterladen und aktualisieren (mit SHA-256-Prüfung).
 - Profil: Anzeigename und Profilbild (30 eingebaute Bilder oder eigene Datei).

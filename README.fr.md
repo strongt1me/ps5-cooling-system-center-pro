@@ -185,7 +185,7 @@ Une seule application, deux façons de l'utiliser. L'application plein écran fa
 - Temps de jeu avec températures, sauvegarde et restauration des données de jeu, trouver, découper et installer des paquets, historique de toutes les tâches.
 
 **Gestion**
-- Gestionnaire de fichiers : afficher, modifier, télécharger et téléverser (dossiers entiers compris), créer des dossiers, renommer, copier, déplacer, supprimer – partout, avec débit et temps restant pendant la copie ; la suppression demande d'abord confirmation et nomme ce qui disparaît.
+- Gestionnaire de fichiers : afficher, modifier, télécharger et téléverser (dossiers entiers compris), créer des dossiers, renommer, copier, déplacer, supprimer – partout, avec débit et temps restant pendant la copie ; la suppression demande d'abord confirmation et nomme ce qui disparaît. Recherche par nom dans le dossier ou en dessous (sur tout le lecteur aussi), et les dossiers portant un ID de titre affichent le titre du jeu.
 - Lecteurs NTFS (Windows) : lire et écrire les clés et disques NTFS dans le gestionnaire de fichiers (téléverser, créer des dossiers, copier, déplacer, supprimer ; sans renommer ni remplacer), éjecter sans ShadowMountPlus (pilote de PS5-NTFS-BROWSER d’abcde6543).
 - Payloads : voir et arrêter ceux en cours, lancer ses propres `.elf` depuis un dossier ou une clé USB, profils comme séquence de démarrage ; télécharger et mettre à jour les payloads de la liste du Payload Manager d'itsPLK et de celle de strongt1me (vérification SHA-256).
 - Profil : nom affiché et image de profil (30 images intégrées ou un fichier personnel).

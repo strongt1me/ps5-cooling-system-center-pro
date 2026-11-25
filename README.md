@@ -185,7 +185,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 - Play time with temperatures, back up and restore saves, find, split and install packages, history of all jobs.
 
 **Management**
-- File manager: view, edit, download and upload (whole folders too), create folders, rename, copy, move, delete – everywhere, with speed and time left while copying; deleting asks first and names what will go.
+- File manager: view, edit, download and upload (whole folders too), create folders, rename, copy, move, delete – everywhere, with speed and time left while copying; deleting asks first and names what will go. Search by name in a folder or below it (a whole drive too), and folders named after a title ID show the game's title.
 - NTFS drives (Windows): read and write NTFS sticks and hard drives in the file manager (upload, new folders, copy, move, delete; no renaming or replacing), eject without ShadowMountPlus (driver from PS5-NTFS-BROWSER by abcde6543).
 - Payloads: view and stop running ones, start your own `.elf` from a folder or a USB stick, profiles as a start sequence; download and update the payloads from itsPLK's Payload Manager list and from strongt1me's list (SHA-256 checked).
 - Profile: display name and profile picture (30 built-in pictures or your own file).
