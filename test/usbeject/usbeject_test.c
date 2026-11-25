@@ -46,6 +46,8 @@ int ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n) {
 }
 static int  g_fm_reading;
 int ps5tm_filemgr_reading(void) { return g_fm_reading; }
+static int  g_search_stops;                       /* the file manager's search stopped for the drive */
+void ps5tm_filemgr_search_stop(const char *mount) { (void)mount; ++g_search_stops; }
 static int  g_ps4m_wait;
 int ps4m_wait_drive_free(const char *mount, int ms) { (void)mount; (void)ms; return g_ps4m_wait; }
 int ps4m_game_running_from(const char *tid, const char *mount) { (void)tid; (void)mount; return 0; }
@@ -174,8 +176,10 @@ main(void) {
   {
     reset("/mnt/usb1");
     g_job_busy = 1;
+    g_search_stops = 0;
     int rc = ps5tm_usbeject_start("/mnt/usb1", msg, sizeof(msg));
     CHECK(rc == 409 && strstr(msg, "Auftrag") != NULL);
+    CHECK(g_search_stops == 1);                                                               /* a search on the drive ended before the checks */
     CHECK(g_smp_eject_calls == 0 && g_smp_list_calls == 0 && !exists());
     CHECK(!ps5tm_usbeject_busy());                                                            /* the claim is released again */
   }

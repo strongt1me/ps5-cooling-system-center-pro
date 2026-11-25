@@ -641,6 +641,10 @@ void HttpSource::files_write(const std::string &path, const std::string &text)
 {
     push({Request::Kind::fs_write, 0, path, text});
 }
+void HttpSource::files_search(const std::string &path, const std::string &term)
+{
+    push({Request::Kind::fs_search, 0, path, term});
+}
 void HttpSource::watch(Watch page)
 {
     watching_ = page;
@@ -1268,7 +1272,7 @@ void HttpSource::run()
     std::int64_t last_playtime = 0, last_save_job = 0, last_curve = 0;
     bool curve_open = false;
     bool playtime_open = false, saves_open = false, backups_open = false, backup_deleting = false;
-    std::int64_t last_fs_job = 0;
+    std::int64_t last_fs_job = 0, last_fs_search = 0;
     bool files_open_ = false;
     std::int64_t last_extras = 0, last_record = 0, last_klog_files = 0, last_profile = 0;
     std::string extras_polled_;
@@ -1748,6 +1752,17 @@ void HttpSource::run()
                     poll_fs_list(folder);
             }
             files_open_ = true;
+            // the search of Dateien: asked again every 0.7 s while the console searches
+            bool searching = false;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                searching = data_.fs_search.state == "running";
+            }
+            if (searching && now - last_fs_search >= 700000)
+            {
+                last_fs_search = now;
+                poll_fs_search();
+            }
         }
         else
         {
@@ -2777,6 +2792,39 @@ void HttpSource::handle(const Request &request)
         v.seq = data_.fs_view.seq + 1;
         data_.fs_view = std::move(v);
         ++data_.serial;
+        break;
+    }
+    case Request::Kind::fs_search:
+    {
+        if (request.text.empty())
+        {
+            exchange("POST", "/api/v1/files/search/cancel", "{}", &status, &body, 10);
+            poll_fs_search();
+            break;
+        }
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "path", request.id.c_str());
+        cJSON_AddStringToObject(o, "q", request.text.c_str());
+        char *text = cJSON_PrintUnformatted(o);
+        const std::string payload = text != nullptr ? text : "{}";
+        cJSON_free(text);
+        cJSON_Delete(o);
+        const Net net = exchange("POST", "/api/v1/files/search", payload, &status, &body, 15);
+        if (net != Net::ok || status >= 300)
+        {
+            // refused (the whole system, a drive being ejected …): said as the answer of the search
+            std::lock_guard<std::mutex> lock(mutex_);
+            FsSearch s;
+            s.seq = data_.fs_search.seq + 1;
+            s.state = "failed";
+            s.path = request.id;
+            s.q = request.text;
+            s.error = message_of(body, "Die App hat nicht geantwortet.");
+            data_.fs_search = std::move(s);
+            ++data_.serial;
+            break;
+        }
+        poll_fs_search();
         break;
     }
     case Request::Kind::fs_size:
@@ -4462,6 +4510,7 @@ void HttpSource::poll_fs_list(const std::string &path)
                 x.size = static_cast<std::uint64_t>(num(e, "size"));
                 x.mtime = static_cast<std::int64_t>(num(e, "mtime"));
                 x.writable = flag(e, "writable");
+                x.title = str(e, "title");
                 l.entries.push_back(std::move(x));
             }
             cJSON_Delete(root);
@@ -4470,6 +4519,44 @@ void HttpSource::poll_fs_list(const std::string &path)
     std::lock_guard<std::mutex> lock(mutex_);
     l.seq = data_.fs_list.seq + 1;
     data_.fs_list = std::move(l);
+    ++data_.serial;
+}
+
+void HttpSource::poll_fs_search()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/files/search", {}, &status, &body, 15) != Net::ok || status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    FsSearch s;
+    s.state = str(root, "state");
+    s.path = str(root, "path");
+    s.q = str(root, "q");
+    s.scanned = static_cast<std::uint64_t>(num(root, "scanned"));
+    s.current = str(root, "current");
+    s.truncated = flag(root, "truncated");
+    s.error = str(root, "error");
+    const cJSON *h = nullptr;
+    cJSON_ArrayForEach(h, cJSON_GetObjectItemCaseSensitive(root, "hits"))
+    {
+        FsEntry e;
+        e.full = str(h, "path");
+        const std::size_t cut = e.full.find_last_of('/');
+        e.name = cut == std::string::npos ? e.full : e.full.substr(cut + 1);
+        e.type = str(h, "type");
+        e.size = static_cast<std::uint64_t>(num(h, "size"));
+        e.mtime = static_cast<std::int64_t>(num(h, "mtime"));
+        e.writable = flag(h, "writable");
+        e.title = str(h, "title");
+        s.hits.push_back(std::move(e));
+    }
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    s.seq = data_.fs_search.seq + 1;
+    data_.fs_search = std::move(s);
     ++data_.serial;
 }
 

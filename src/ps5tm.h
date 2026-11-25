@@ -699,6 +699,10 @@ int  ps5tm_gamestate_measured(void);
    its last answer in place, and whoever acts on that answer has to be able to
    tell that it is old. */
 uint64_t ps5tm_gamestate_age_ms(void);
+/* The title of a game: out of one param.json (or param.sfo, by the ending), or from the system's records of installed and
+   registered titles by its id. 0 when found (gamestate.c; for the file manager, 25.11.2026). */
+int ps5tm_title_from_param(const char *path, char *name, size_t name_len);
+int ps5tm_title_installed(const char *title_id, char *name, size_t name_len);
 
 /* The games on the home screen, read from the system's app database — see
    library.c. The JSON is the caller's to free; the cover path is one of the
@@ -856,6 +860,8 @@ int           ps5tm_usbeject_covers(const char *path);
    again within seconds (kernel log of the Pro, 21.11.2026), and a background walk down a drive that is just coming back is I/O on a bridge that
    is not settled. The scanners of the app (PS4Mount, the library) keep away while this is 1 (22.11.2026). */
 int           ps5tm_usbeject_settling(const char *path);
+/* A search of the file manager on the drive of `mount` (/mnt/usb0, /ntfs0 …; NULL: any) is stopped and waited for (up to 3 s): an eject, the end of the app. */
+void          ps5tm_filemgr_search_stop(const char *mount);
 void          ps5tm_filemgr_shutdown(void);                             /* the app ends: a running copy/move/delete is asked to stop */
 
 /* The history of the app's jobs (jobhist.c): one line per finished job in /data/PS5-Cooling-Center/history.jsonl.

@@ -90,6 +90,7 @@ class HttpSource final : public Source
     void files_view(const std::string &path) override;
     void files_size(const std::string &path) override;
     void files_write(const std::string &path, const std::string &text) override;
+    void files_search(const std::string &path, const std::string &term) override;
     void quit_app() override;
     std::uint64_t request_plan(Tool tool, const std::string &id) override;
     void start_tool(Tool tool, const std::string &id, const std::string &body) override;
@@ -153,6 +154,7 @@ class HttpSource final : public Source
             fs_view,
             fs_size,
             fs_write,
+            fs_search,
             orig_plan,  // id: the title; value: the ticket
             orig_check, // id: the title; text: the folder; value: the ticket
         } kind;
@@ -226,6 +228,7 @@ class HttpSource final : public Source
     void poll_fs_places();
     void poll_fs_list(const std::string &path);
     void poll_fs_job();
+    void poll_fs_search();
     void fetch_ps4_detail(const std::string &id);
     void fetch_ps4_log();
     void poll_disc();

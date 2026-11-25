@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.3.2 (24.11.2026)
+**Version:** v0.4.0 (25.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.3.2`, Commit `dbe78a7a7c8d3f2381247ca478fbef65f4c58b77`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.4.0`, Commit `6e51ef197feb7ad3487dee91e88392a468b38d08`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.3.2.elf` (PS5-ELF, 6 552 144 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `5b72ea22af0b28dd3522be4a4f10cbec9b5423fbe2e4e8990b45b4d1daeabdde` (gleich `SHA256SUMS` der Veröffentlichung; am 24.11.2026 mit `gh release download v0.3.2` geladen, ELF-Kopf und Kennung `kraken-mount/0.3.2` geprüft)
+**Datei:** `kraken-mount_v0.4.0.elf` (PS5-ELF, 7 077 216 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `6c778613b796039230f6690a16e4c04a76069a6b7b6c8030e292f54e904cc401` (gleich `SHA256SUMS` der Veröffentlichung; am 25.11.2026 mit `gh release download v0.4.0` geladen, ELF-Kopf und Kennung `kraken-mount/0.4.0` geprüft)
 
 ## Verwendung
 
@@ -26,7 +26,34 @@ Datei, und es entsteht keine Kachel (nur eine Zeile „not registered“ im Prot
 löscht die Markierung (`keep_tile_away` in `src/kraken.c`, `src/tilekeep.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.3.2`).
+gibt es unter der oben genannten Adresse (Tag `v0.4.0`).
+
+## Neu in v0.4.0 (25.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.3.2…v0.4.0)
+
+- **Installierte Spiele in der Bibliothek:** Spiele, die auf der Konsole installiert sind (`/user/app` und der erweiterte Speicher), stehen jetzt
+  auch in seiner Liste (`GET /api/state`, `kind: "installed"`, neue Felder `installed`, `installed_version`, `retail` je Spiel). Kraken Mount hängt sie
+  nie ein, nimmt sie nie vom Startbildschirm und löscht sie nie (`/api/delete`, `/api/hide` lehnen ab: „an installed game: uninstall it from the
+  console's menu“). Eine installierte Kopie gewinnt gegen dasselbe Spiel als FPKG oder Ordner (#121). **Die App lässt diese Einträge aus** ihrem Reiter
+  FPKGMount, aus der Warnliste für doppelt angemeldete Titel und aus der Prüfung vor dem Löschen heraus (`kr_drop_installed` in `src/kraken.c`); die
+  Seite Spiele der App zeigt sie ohnehin.
+- **Backports für installierte Spiele:** Ein Backport in `backports/<TITLE_ID>*` (in den Suchordnern, sonst in `/data/homebrew` wie bei ShadowMountPlus)
+  gilt jetzt auch für ein installiertes Spiel: Seine Bibliotheken kommen in den Fakelib-Überbau, seine übrigen Dateien werden bei jedem Start über
+  NSFS-Umleitungen in das `/app0` des Spiels gelegt (Port von ShadowMountPlus 1.7 `sm_pkg_backport.c`, neu `src/launch/nsfs.rs`); die Installation
+  selbst bleibt unverändert. Mit `ampr_installed` aus (Standard) läuft bei einem installierten Spiel die `libSceAmpr.sprx` des Systems.
+  **Wichtig für diese App:** Weil die App Kraken Mount neben ShadowMountPlus laufen lässt (siehe „Änderung durch diese App“), könnten beide denselben
+  Backport eines installierten Spiels anwenden. Ob sich das stört, ist an der Konsole noch nicht geprüft.
+- **Installieren auf die Konsole:** Ein FPKG-Spiel lässt sich auf seiner Seite installieren (`/api/install`, Reiter „Install“ mit Patches und DLC; die
+  Konsole lädt die Datei über `http://127.0.0.1:8097/pkg/…`). Solange eine Installation läuft oder wartet, lehnt `POST /api/quit` mit 409 ab („an install
+  is running“); die App nennt das beim Ausschalten.
+- **Neue Weboberfläche** (einklappbare Seitenleiste, helles und dunkles Design, drei Farbschemata, Sprachwahl; neue Einstellungen `ui_theme`,
+  `ui_scheme`, `ui_sidebar_collapsed`, `ui_lang`, dazu `ampr_installed` und `install_delete_source`). Die Einstellungsdatei bleibt verträglich; die App
+  schreibt sie weiter nur beim allerersten Start.
+- **Titelmusik:** Kacheln behalten ihre Hintergrundmusik nach einem Spiel, und Kraken Mount stellt einen Ton wieder her, den das System später
+  verliert (#124, #125; Dank an aTenb).
+- **ampr-emu-ng v0.5.1** ist weiter eingebaut. Die Schnittstelle, die `src/kraken.c` benutzt (`version`, `scanpath`, `games` mit `title_id`,
+  `title_name`, `path`, `kind`, `status`, `playgo`, `playgo_off`, `rebuild_queued`; `/api/rescan`, `/api/rebuild/<TID>`, `/api/rebuild-all`,
+  `/api/playgo/<TID>`, `/api/delete/<TID>`, `/api/quit`), ist sonst unverändert; beide Ein-Byte-Eingriffe greifen unverändert (je 2 Stellen, an der
+  ELF dieser Fassung mit `tools/patch_kraken.py` geprüft).
 
 ## Neu in v0.3.2 (24.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.3.1…v0.3.2)
 
@@ -131,9 +158,9 @@ trägt sich für seine Selbstkopie zweimal in der Datei):
    dann auf das Ende von ShadowMountPlus wartet. Neue Fassungen kommen über den Knopf der App, der beide Änderungen macht. Die Abfrage für
    ampr-emu-ng hat eine eigene Adresse und bleibt.
 
-Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.3.2.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
+Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.4.0.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
 oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderungen sind die beiden Werte
-`SMP_PROCESS` (`src/main.rs`) und `RELEASE_URL` (`src/update.rs`) im Quellprojekt, Tag `v0.3.2`.
+`SMP_PROCESS` (`src/main.rs`) und `RELEASE_URL` (`src/update.rs`) im Quellprojekt, Tag `v0.4.0`.
 
 ## Hinweise des Autors
 

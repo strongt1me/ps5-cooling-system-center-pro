@@ -30,6 +30,20 @@ int ps5tm_usbeject_covers(const char *path) {
 }
 /* the same drive for the 30 s after an eject, too (usbeject.c); here the eject is over when the test clears it, so it is the same rule */
 int ps5tm_usbeject_settling(const char *path) { return ps5tm_usbeject_covers(path); }
+/* the titles of games (gamestate.c): the stub takes a param file's whole text as the title, and knows one installed game */
+int ps5tm_title_from_param(const char *path, char *name, size_t name_len) {
+  name[0] = 0;
+  FILE *f = fopen(path, "r");
+  if(!f) return -1;
+  size_t got = fread(name, 1, name_len - 1, f);
+  fclose(f);
+  name[got] = 0;
+  return name[0] ? 0 : -1;
+}
+int ps5tm_title_installed(const char *title_id, char *name, size_t name_len) {
+  snprintf(name, name_len, "%s", strcmp(title_id, "PPSA06240") ? "" : "Iron Tide");
+  return name[0] ? 0 : -1;
+}
 /* the drive gate (drivegate.c): the places count their statvfs through it; here: refused for the drive that is being ejected, counted in g_gate_in otherwise */
 static int g_gate_in, g_gate_out;
 int ps5tm_drive_enter(const char *path) {
@@ -397,6 +411,77 @@ main(void) {
   callq("/api/v1/files/list", "path=%2Fdata%2Fsrc");
   CHECK(g_status == 200, "after the eject the list works again: %d", g_status);
   CHECK(!ps5tm_filemgr_reading(), "no count is left at the end");
+
+  /* the search (25.11.2026): a part of the name, upper and lower case the same, * and ?, below the folder, links not followed */
+  {
+    char cmd[900];
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s/data/s' && mkdir -p '%s/data/s/a/b/c' '%s/data/s/Spiele/PPSA04933' && ln -s '%s/data/s/a' '%s/data/s/link'",
+             ROOT, ROOT, ROOT, ROOT, ROOT);
+    if(system(cmd) != 0) exit(2);
+    put("/data/s/notiz.txt", "1");
+    put("/data/s/a/NOTIZEN.TXT", "2");
+    put("/data/s/a/b/c/tief-notiz.md", "3");
+    put("/data/s/Spiele/PPSA04933/param.json", "4");
+    put("/data/s/Spiele/spiel.pkg", "5");
+    put("/data/s/Spiele/spiel.pkg.bak", "6");
+    put("/data/s/Äpfel-Übersicht.txt", "7");
+    put("/data/s/Spiele/PPSA04933/sce_sys/param.json", "Lantern Pass");   /* a dump: its own param.json names the game */
+    put("/data/s/Spiele/PPSA06240.exfat", "8");                           /* an image: only the installed game names it */
+    put("/data/s/Spiele/PPSA012345.txt", "9");                            /* ten digits: no title ID */
+    struct { const char *q; int hits; const char *must; } cases[] = {
+      { "notiz", 3, "/data/s/a/b/c/tief-notiz.md" },          /* part of the name, all levels, case ignored; the link to a is not followed */
+      { "*.pkg", 1, "/data/s/Spiele/spiel.pkg" },              /* a wildcard matches the whole name: not spiel.pkg.bak */
+      { "PPSA?????", 1, "/data/s/Spiele/PPSA04933" },          /* a folder is a hit too */
+      { "äpfel", 1, "/data/s/Äpfel-Übersicht.txt" },           /* umlauts without case */
+      { "lantern", 1, "/data/s/Spiele/PPSA04933" },            /* found by its game (25.11.2026) */
+      { "IRON", 1, "/data/s/Spiele/PPSA06240.exfat" },         /* an image by the installed game's title */
+      { "gibtesnicht", 0, NULL },
+    };
+    for(size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+      char body[300];
+      snprintf(body, sizeof(body), "{\"path\":\"/data/s\",\"q\":\"%s\"}", cases[i].q);
+      call("POST", "/api/v1/files/search", body);
+      CHECK(g_status == 200, "search %s starts: %d %s", cases[i].q, g_status, g_body);
+      for(int k = 0; k < 300; k++) {
+        call("GET", "/api/v1/files/search", NULL);
+        if(!strstr(g_body, "\"state\":\"running\"")) break;
+        usleep(10000);
+      }
+      CHECK(strstr(g_body, "\"state\":\"done\"") != NULL, "search %s ends done: %s", cases[i].q, g_body);
+      int n = 0;
+      for(const char *s = g_body; (s = strstr(s, "\"path\":\"/data/s/")) != NULL; s++) n++;
+      CHECK(n == cases[i].hits, "search %s: %d hits, want %d: %s", cases[i].q, n, cases[i].hits, g_body);
+      if(cases[i].must) {
+        char want[300];
+        snprintf(want, sizeof(want), "\"path\":\"%s\"", cases[i].must);
+        CHECK(strstr(g_body, want) != NULL, "search %s finds %s: %s", cases[i].q, cases[i].must, g_body);
+      }
+      CHECK(!ps5tm_filemgr_reading(), "search %s: no reader count left", cases[i].q);
+    }
+    /* the titles in the folder list and in the hits */
+    callq("/api/v1/files/list", "path=%2Fdata%2Fs%2FSpiele");
+    CHECK(g_status == 200 && strstr(g_body, "\"name\":\"PPSA04933\",\"type\":\"dir\"") != NULL, "list of the games: %s", g_body);
+    CHECK(strstr(g_body, "\"title\":\"Lantern Pass\"") != NULL, "a dump folder names its game: %s", g_body);
+    CHECK(strstr(g_body, "\"title\":\"Iron Tide\"") != NULL, "an image names the installed game: %s", g_body);
+    { const char *x = strstr(g_body, "PPSA012345.txt"); const char *e = x ? strchr(x, '}') : NULL;
+      CHECK(x && e && !memmem(x, (size_t)(e - x), "title", 5), "no title ID, no title: %s", g_body); }
+    call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"PPSA?????\"}");
+    for(int k = 0; k < 300; k++) { call("GET", "/api/v1/files/search", NULL); if(!strstr(g_body, "\"state\":\"running\"")) break; usleep(10000); }
+    CHECK(strstr(g_body, "\"title\":\"Lantern Pass\"") != NULL, "a hit names its game: %s", g_body);
+    call("POST", "/api/v1/files/search", "{\"path\":\"/\",\"q\":\"a\"}");
+    CHECK(g_status == 400, "the whole system is not searched: %d", g_status);
+    call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"**\"}");
+    CHECK(g_status == 400, "a term of stars only is refused: %d", g_status);
+    call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"\"}");
+    CHECK(g_status == 400, "an empty term is refused: %d", g_status);
+    call("POST", "/api/v1/files/search/cancel", NULL);
+    CHECK(g_status == 409, "cancel with nothing running: 409, got %d", g_status);
+    /* the drive is being ejected: no search starts there */
+    g_eject_mount = "/data/s";
+    call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"notiz\"}");
+    CHECK(g_status == 409, "no search on a drive being ejected: %d", g_status);
+    g_eject_mount = NULL;
+  }
 
   printf("%d checks passed, %d failed\n", g_ok, g_fail);
   return g_fail ? 1 : 0;

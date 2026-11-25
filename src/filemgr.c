@@ -505,6 +505,8 @@ places_json(void) {
   return o;
 }
 
+#include "fm_title.inc"                          /* the games of entries named after a title ID (25.11.2026) */
+
 typedef struct {
   char     name[FM_NAME];
   char     bad;                           /* the name is no UTF-8: shown cleaned, not offered for changing */
@@ -590,6 +592,7 @@ handle_list(int fd, const ps5tm_request_t *req) {
     int w = here && snprintf(vp, sizeof(vp), "%s/%s", strcmp(p, "/") ? p : "", v[i].name) < (int)sizeof(vp) &&
             v[i].type != 'l' && v[i].type != 'L' && !v[i].bad && writable(vp);
     cJSON_AddBoolToObject(x, "writable", w);
+    fmt_add(x, real, v[i].name, v[i].type);
     cJSON_AddItemToArray(arr, x);
   }
   free(v);
@@ -1598,6 +1601,7 @@ job_finish(int state, const char *error, const char *note) {
 }
 
 #include "fm_ntfs.inc"                           /* NTFS drives: listing, looking, uploading, and the jobs with them */
+#include "fm_search.inc"                         /* the search: names in a folder and below it (25.11.2026) */
 
 static void
 run_delete(fm_args_t *a) {
@@ -2319,6 +2323,7 @@ ps5tm_filemgr_shutdown(void) {
   pthread_mutex_lock(&g_lock);
   if(g_job.state == FM_COUNTING || g_job.state == FM_COPYING || g_job.state == FM_DELETING) __atomic_store_n(&g_cancel, 1, __ATOMIC_RELEASE);
   pthread_mutex_unlock(&g_lock);
+  ps5tm_filemgr_search_stop(NULL);                /* and a search */
 }
 
 int
@@ -2448,10 +2453,11 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
     { "/api/v1/files/delete", 1 }, { "/api/v1/files/job/cancel", 1 },
     { "/api/v1/files/view", 0 }, { "/api/v1/files/size", 0 },
     { "/api/v1/files/write", 1 }, { "/api/v1/files/eject", 1 },
+    { "/api/v1/files/search", 2 }, { "/api/v1/files/search/cancel", 1 },
   };
   for(size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
     if(strcmp(p, routes[i].path)) continue;
-    if(routes[i].post ? !post : !get) {
+    if(routes[i].post == 2 ? !(get || post) : routes[i].post ? !post : !get) {
       ps5tm_http_send_error(fd, 405, "method_not_allowed", routes[i].post ? "Nur POST erlaubt." : "Nur GET erlaubt.");
       return 1;
     }
@@ -2480,6 +2486,8 @@ ps5tm_filemgr_api(int fd, const ps5tm_request_t *req) {
       case 12: with_read(fd, req, handle_size); break;
       case 13: with_read(fd, req, handle_write); break;    /* the query's path is asked (the body is the file's content, not paths: review R2) */
       case 14: fmn_handle_eject(fd, req); break;          /* NTFS sticks only (fm_ntfs.inc) */
+      case 15: if(get) send_obj(fd, 200, fs_json()); else fs_start(fd, req); break;   /* the search (fm_search.inc) */
+      case 16: fs_cancel(fd); break;
     }
     return 1;
   }

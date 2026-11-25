@@ -357,6 +357,32 @@ resolve_title_meta(const char *title_id, char *name, size_t name_len,
   }
 }
 
+/* For the file manager (25.11.2026): the title out of one param.json, or one
+ * param.sfo when the path ends in .sfo (a game folder's own sce_sys). 0 when
+ * a name was found. */
+int
+ps5tm_title_from_param(const char *path, char *name, size_t name_len) {
+  char ver[40] = "";
+  if(!name || !name_len) return -1;
+  name[0] = 0;
+  size_t l = strlen(path);
+  if(l > 4 && !strcmp(path + l - 4, ".sfo"))
+    return read_title_sfo(path, name, name_len, ver, sizeof(ver));
+  return read_title_meta(path, name, name_len, ver, sizeof(ver));
+}
+
+/* The title of a game the system knows (installed or registered) by its id,
+ * from the same records as the running game; 0 when found. Thread-safe: no
+ * cache of its own (the file manager keeps one). */
+int
+ps5tm_title_installed(const char *title_id, char *name, size_t name_len) {
+  char ver[40] = "";
+  if(!name || !name_len) return -1;
+  name[0] = 0;
+  resolve_title_meta_read(title_id, name, name_len, ver, sizeof(ver));
+  return name[0] ? 0 : -1;
+}
+
 static void
 resolve_title_meta_read(const char *title_id, char *name, size_t name_len,
                         char *ver, size_t ver_len) {

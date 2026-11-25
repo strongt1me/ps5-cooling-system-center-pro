@@ -525,6 +525,7 @@ fmn_handle_list(int fd, const char *p) {
     cJSON_AddNumberToObject(x, "mtime", (double)e->mtime);
     /* system entries of Windows ("System Volume Information", "$RECYCLE.BIN") are shown but not offered for deleting */
     cJSON_AddBoolToObject(x, "writable", here && e->type != 'o' && !bad_name && !(e->attrs & NTFS_FA_SYSTEM));
+    fmt_add(x, NULL, shown, e->type);                                         /* only the system's records: nothing on the stick is read for it */
     cJSON_AddItemToArray(arr, x);
   }
   fmn_dir_free(&d);
@@ -1377,6 +1378,11 @@ fmn_handle_eject(int fd, const ps5tm_request_t *req) {
   if(p && ps5tm_ntfs_path(p) && p[6] == 0) snprintf(name, sizeof(name), "%s", p + 1);
   cJSON_Delete(b);
   if(!name[0]) { ps5tm_http_send_error(fd, 400, "bad_path", "Das ist kein NTFS-Laufwerk."); return; }
+  {
+    char mount[16];
+    snprintf(mount, sizeof(mount), "/%s", name);
+    ps5tm_filemgr_search_stop(mount);             /* a search on the stick ends first (it holds the drive) */
+  }
   if(ps5tm_filemgr_busy()) {
     ps5tm_http_send_error(fd, 409, "files_busy", "Der Dateimanager arbeitet gerade (Kopieren, Verschieben, Löschen oder Hochladen). Bitte danach noch einmal.");
     return;

@@ -10268,7 +10268,8 @@
      des Sendens meldet. Namen kommen von der Konsole und gehen durch esc(); Knöpfe tragen nur Nummern. */
   const fm = { path: "", places: [], list: null, sel: new Set(), clip: null, poll: 0, xhr: null, upQueue: [],
                loaded: false, pick: null,
-               sort: "name", desc: false, sorted: [], sizes: new Map(), sizing: false, viewSeq: 0 };
+               sort: "name", desc: false, sorted: [], sizes: new Map(), sizing: false, viewSeq: 0,
+               q: "", deep: false, search: null, searchSeq: 0, searchTimer: 0, flash: "" };
   /* Die Sortierung merkt sich der Browser (nur eine Annehmlichkeit, nichts davon hängt daran). */
   try {
     const s = JSON.parse(localStorage.getItem("fmSort") || "null");
@@ -10285,7 +10286,10 @@
   };
   /* Die Einträge in der Reihenfolge, in der sie auf der Seite stehen: Die Knöpfe tragen Nummern aus dieser Liste. */
   const fmEntries = () => fm.sorted;
-  const fmSelected = () => fmEntries().filter((e) => fm.sel.has(e.name));
+  /* Ein Treffer der Suche in Unterordnern trägt seinen ganzen Pfad (full); alles andere liegt im geöffneten Ordner. Die Auswahl merkt sich den Pfad. */
+  const fmFull = (e) => e.full || fmJoin(fm.path, e.name);
+  const fmKey = (e) => e.full || e.name;
+  const fmSelected = () => fmEntries().filter((e) => fm.sel.has(fmKey(e)));
   const fmIsDir = (e) => e.type === "dir" || e.type === "dirlink";
   const fmSelectable = (e) => e.type !== "link" && e.type !== "dirlink" && e.type !== "other";
   /* Ordner stehen immer zuerst. Innerhalb der Gruppen: nach Namen (ohne Groß-/Kleinschreibung, Zahlen als Zahlen),
@@ -10295,7 +10299,7 @@
     const dir = fm.desc ? -1 : 1;
     const size = (e) => {
       if (e.type === "file") return e.size;
-      const s = fm.sizes.get(fmJoin(fm.path, e.name));
+      const s = fm.sizes.get(fmFull(e));
       return s ? s.bytes : 0;
     };
     const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base", numeric: true })
@@ -10389,8 +10393,15 @@
   /* Nur die neueste Antwort zählt: Ein Neuladen nach einem fertigen Auftrag, das erst ankommt, wenn schon ein
      anderer Ordner offen ist, darf nicht zurückspringen (und die Auswahl dort löschen). */
   let fmSeq = 0;
-  const fmLoad = async (path) => {
+  const fmLoad = async (path, keepSearch) => {
     const seq = ++fmSeq;
+    if (!keepSearch && (fm.q || fm.search)) {        /* ein anderer Ordner: die Suche endet, das Feld wird leer */
+      fmSearchStop();
+      fm.q = "";
+      fm.search = null;
+      const q = $("#fm-q");
+      if (q) q.value = "";
+    }
     txt("#fm-sub", "wird geladen …");
     try {
       const d = await api(`/api/v1/files/list?path=${encodeURIComponent(path)}`, { timeoutMs: 30000 });
@@ -10478,25 +10489,157 @@
       dirBtn.setAttribute("aria-label", fm.desc ? "absteigend sortiert" : "aufsteigend sortiert");
       dirBtn.title = fm.desc ? "Absteigend (zum Umkehren tippen)" : "Aufsteigend (zum Umkehren tippen)";
     }
-    $("#fm-sizes").hidden = !fm.sorted.some((e) => e.type === "dir");
-    $("#fm-list").innerHTML = n ? fm.sorted.map((e, i) => {
+    const deep = fmSearchDeepShown();
+    if (deep) fm.sorted = fmSortList(fmSearchEntries());
+    else if (fm.q) fm.sorted = fm.sorted.filter((e) => fmMatch(fm.q, e.name) || (e.title && fmMatch(fm.q, e.title)));
+    fmSearchRenderHead(n);
+    $("#fm-sizes").hidden = deep || !fm.sorted.some((e) => e.type === "dir");
+    const shown = fm.sorted.length;
+    $("#fm-list").innerHTML = shown ? fm.sorted.map((e, i) => {
       const isDir = fmIsDir(e);
       const ico = isDir ? FM_ICO.dir : (e.type === "link" ? FM_ICO.link : FM_ICO.file);
       const canSel = fmSelectable(e);
-      const name = isDir ? `<button type="button" class="fm-name fm-open" data-fm-open="${i}">${esc(e.name)}</button>`
-        : `<span class="fm-name">${esc(e.name)}</span>`;
+      const label = fm.q ? fmMark(fm.q, e.name) : esc(e.name);
+      const name = isDir ? `<button type="button" class="fm-name fm-open" data-fm-open="${i}">${label}</button>`
+        : `<span class="fm-name">${label}</span>`;
+      // the game a folder or image named after a title ID belongs to (from its param.json/param.sfo or the installed
+      // titles; 25.11.2026): "PPSA01325" alone says nothing
+      const game = e.title ? `<span class="fm-game" title="Spiel">${fm.q ? fmMark(fm.q, e.title) : esc(e.title)}</span>` : "";
+      const where = e.full ? `<span class="fm-where">in ${esc(fmParent(e.full))}</span>` : "";
       const kind = e.type === "dirlink" ? "Verknüpfung zu einem Ordner" : e.type === "link" ? "Verknüpfung" : e.type === "other" ? "Gerät oder Sonderdatei" : "";
       const sz = e.type === "dir" ? fm.sizes.get(fmJoin(d.path, e.name)) : null;
       const sizeText = e.type === "file" ? (e.size === 0 ? "0 B" : bytes(e.size))
         : sz ? `${bytes(sz.bytes) === "--" ? "0 B" : bytes(sz.bytes)}${sz.partial ? "+" : ""} · ${num(sz.files)} ${sz.files === 1 ? "Datei" : "Dateien"}${sz.partial ? " (mindestens)" : ""}` : "";
-      return `<div class="fm-row${fm.sel.has(e.name) ? " sel" : ""}" role="listitem">
-          <input type="checkbox" class="fm-check" data-fm-sel="${i}" aria-label="${esc(e.name)} auswählen"${fm.sel.has(e.name) ? " checked" : ""}${canSel ? "" : " disabled"}>
+      const selected = fm.sel.has(fmKey(e));
+      const more = e.full
+        ? `<button type="button" class="btn ghost fm-goto" data-fm-goto="${i}" title="Öffnet den Ordner und zeigt den Eintrag"><span class="fm-goto-long">Ordner öffnen</span><span class="fm-goto-short">Öffnen</span></button>`
+        : `<button type="button" class="fm-dots" data-fm-menu="${i}" aria-label="${esc(e.name)} Menü" title="Aktionen">···</button>`;
+      return `<div class="fm-row${selected ? " sel" : ""}${fm.flash && fm.flash === fmFull(e) ? " fm-flash" : ""}" role="listitem">
+          <input type="checkbox" class="fm-check" data-fm-sel="${i}" aria-label="${esc(e.name)} auswählen"${selected ? " checked" : ""}${canSel ? "" : " disabled"}>
           <span class="fm-ico${isDir ? " dir" : ""}">${ico}</span>
-          <div class="fm-main">${name}<small class="muted">${[sizeText, fmWhen(e.mtime), kind].filter(Boolean).map(esc).join(" · ")}</small></div>
-          <div class="fm-more"><button type="button" class="fm-dots" data-fm-menu="${i}" aria-label="${esc(e.name)} Menü" title="Aktionen">···</button></div>
+          <div class="fm-main">${name}${game}${where}<small class="muted">${[sizeText, fmWhen(e.mtime), kind].filter(Boolean).map(esc).join(" · ")}</small></div>
+          <div class="fm-more">${more}</div>
         </div>`;
-    }).join("") : `<p class="muted fm-empty">Dieser Ordner ist leer.</p>`;
+    }).join("") : `<p class="muted fm-empty">${deep ? (fm.search && fm.search.state === "running" ? "Noch kein Treffer …" : "Kein Treffer.")
+      : fm.q && n ? "Kein Eintrag in diesem Ordner passt zur Suche." : "Dieser Ordner ist leer."}</p>`;
+    if (fm.flash) {
+      const row = $("#fm-list .fm-flash");
+      if (row) row.scrollIntoView({ block: "center", behavior: "smooth" });
+      fm.flash = "";
+    }
     fmRenderBars();
+  };
+
+  /* ---- Suche (25.11.2026, Wunsch des Users) ----
+     Ohne „Auch Unterordner“ filtert das Feld den geöffneten Ordner beim Tippen (hier im Browser). Mit dem Haken sucht die Konsole im Ordner und
+     allem darunter (POST /api/v1/files/search, dann GET bis zum Ende); die Treffer ersetzen die Liste, „Ordner öffnen“ springt hin und zeigt den
+     Eintrag. Regeln wie auf der Konsole (fm_search.inc): ohne * und ? ein Teil des Namens, mit ihnen der ganze Name; Groß und klein gleich. */
+  const fmFold = (s) => String(s || "").toLocaleLowerCase("de-DE");
+  const fmGlobRe = (q) => new RegExp(`^${fmFold(q).replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`, "su");
+  const fmMatch = (q, name) => {
+    if (!q) return true;
+    if (/[*?]/.test(q)) { try { return fmGlobRe(q).test(fmFold(name)); } catch { return false; } }
+    return fmFold(name).includes(fmFold(q));
+  };
+  /* der passende Teil gelb; bei Platzhaltern (der ganze Name passt) nichts markieren */
+  const fmMark = (q, name) => {
+    const s = String(name || "");
+    if (!q || /[*?]/.test(q)) return esc(s);
+    const i = fmFold(s).indexOf(fmFold(q));
+    if (i < 0) return esc(s);
+    return `${esc(s.slice(0, i))}<mark>${esc(s.slice(i, i + q.length))}</mark>${esc(s.slice(i + q.length))}`;
+  };
+  const fmParent = (p) => { const i = p.lastIndexOf("/"); return i > 0 ? p.slice(0, i) : "/"; };
+  const fmSearchDeepShown = () => !!(fm.deep && fm.q && fm.search && fm.search.path === fm.path);
+  const fmSearchEntries = () => ((fm.search && fm.search.hits) || []).map((h) => {
+    const p = String(h.path || "");
+    return { name: p.slice(p.lastIndexOf("/") + 1), full: p, type: h.type === "other" ? "other" : h.type, size: h.size || 0,
+             mtime: h.mtime || 0, writable: !!h.writable, title: h.title || "" };
+  });
+  const fmSearchRenderHead = (n) => {
+    const box = $("#fm-search");
+    if (!box) return;
+    const d = fm.list;
+    const deepOk = d && d.path !== "/";
+    $("#fm-deep").disabled = !deepOk;
+    $("#fm-deep").closest("label").title = deepOk ? "Sucht auch in allen Ordnern darunter. Vom Laufwerk aus: auf dem ganzen Laufwerk."
+      : "Das ganze System wird nicht durchsucht. Bitte zuerst ein Laufwerk oder einen Ordner öffnen.";
+    $("#fm-qx").hidden = !fm.q;
+    const hits = $("#fm-hits");
+    const job = $("#fm-searchjob");
+    if (!fm.q) { hits.hidden = true; job.hidden = true; return; }
+    hits.hidden = false;
+    if (!fm.deep) {
+      job.hidden = true;
+      txt("#fm-hits", n === 1 ? `${num(fm.sorted.length)} von 1 Eintrag in diesem Ordner` : `${num(fm.sorted.length)} von ${num(n)} Einträgen in diesem Ordner`);
+      return;
+    }
+    const s = fm.search;
+    if (!s || s.path !== fm.path) { txt("#fm-hits", "Die Suche beginnt …"); job.hidden = true; return; }
+    const count = (s.hits || []).length;
+    const where = `in ${s.path} und darunter`;
+    if (s.state === "running") {
+      txt("#fm-hits", [`${num(count)} Treffer bisher`, where].join(" · "));
+      job.hidden = false;
+      job.innerHTML = `<span>Sucht in ${esc(s.current || s.path)} … ${esc(num(s.scanned || 0))} Einträge geprüft</span><span class="fm-sbar"><i></i></span>`
+        + `<button type="button" class="btn ghost" id="fm-scancel">Abbrechen</button>`;
+      return;
+    }
+    job.hidden = true;
+    if (s.state === "failed") { txt("#fm-hits", s.error || "Die Suche ging nicht."); return; }
+    /* Sätze mit „ · “ dazwischen: jeder wird für sich übersetzt */
+    txt("#fm-hits", [`${num(count)} Treffer`, where, s.truncated ? "Es gibt mehr; bitte genauer suchen." : "",
+      s.state === "cancelled" ? "Abgebrochen." : "", s.error || "", `${num(s.scanned || 0)} Einträge geprüft`].filter(Boolean).join(" · "));
+  };
+  /* Die Konsole sucht; die Seite fragt alle 700 ms nach, solange sie läuft. Ein neuer Begriff startet eine neue Suche (die alte endet dabei). */
+  const fmSearchPoll = async (seq) => {
+    while (seq === fm.searchSeq && state.page === "files") {
+      let r;
+      try { r = await api("/api/v1/files/search", { timeoutMs: 15000 }); } catch (e) { break; }
+      if (seq !== fm.searchSeq) return;
+      fm.search = r;
+      fmRender();
+      if (r.state !== "running") return;
+      await new Promise((res) => setTimeout(res, 700));
+    }
+  };
+  const fmSearchStart = async () => {
+    const seq = ++fm.searchSeq;
+    fm.sel.clear();
+    fm.search = null;
+    fmRender();
+    if (!fm.deep || !fm.q || !fm.list || fm.list.path === "/") return;
+    try {
+      await api("/api/v1/files/search", { method: "POST", body: JSON.stringify({ path: fm.list.path, q: fm.q }), timeoutMs: 15000 });
+    } catch (e) {
+      if (seq !== fm.searchSeq) return;
+      fm.search = { state: "failed", path: fm.list.path, error: e.message, hits: [] };
+      fmRender();
+      return;
+    }
+    fmSearchPoll(seq);
+  };
+  const fmSearchStop = () => {
+    fm.searchSeq++;
+    if (fm.search && fm.search.state === "running") api("/api/v1/files/search/cancel", { method: "POST", body: "{}" }).catch(() => {});
+  };
+  /* Feld leeren: der Ordner steht wieder ganz da; eine laufende Suche endet */
+  const fmSearchClear = () => {
+    fmSearchStop();
+    fm.q = "";
+    fm.search = null;
+    const q = $("#fm-q");
+    if (q) q.value = "";
+    fm.sel.clear();
+    fmRender();
+  };
+  const fmSearchInput = () => {
+    fm.q = $("#fm-q").value.trim();
+    clearTimeout(fm.searchTimer);
+    if (!fm.deep) { fm.sel.clear(); fmRender(); return; }
+    /* auf der Konsole erst, wenn eine halbe Sekunde nichts mehr getippt wurde */
+    fm.searchTimer = setTimeout(() => { if (fm.q) fmSearchStart(); else fmSearchClear(); }, 500);
+    if (!fm.q) fmRender();
   };
 
   const fmRenderBars = () => {
@@ -10612,7 +10755,7 @@
     fmMenuIdx = i;
     const isFile = e.type === "file";
     const isDir = fmIsDir(e);
-    const full = fmJoin(fm.path, e.name);
+    const full = fmFull(e);
     const fullEnc = encodeURIComponent(full);
     const items = [];
     if (isFile) items.push(`<button type="button" data-fmma="view" data-fmmi="${i}">Ansehen</button>`);
@@ -10729,7 +10872,7 @@
   const fmAskDelete = async (list, fromSelection) => {
     const rows = list.filter((e) => e && e.writable);
     if (!rows.length) return;
-    const paths = rows.map((e) => fmJoin(fm.path, e.name));
+    const paths = rows.map(fmFull);
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.remove("fm-view");
     txt("#fm-dlg-title", rows.length > 1 ? `${rows.length} Einträge löschen?` : fmIsDir(rows[0]) ? "Ordner löschen?" : "Datei löschen?");
@@ -10811,7 +10954,7 @@
   const fmEdit = async (i) => {
     const e = fmEntries()[i];
     if (!e) return;
-    const full = fmJoin(fm.path, e.name);
+    const full = fmFull(e);
     const url = `/api/v1/files/view?path=${encodeURIComponent(full)}&max=${FM_EDIT_MAX}`;
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.add("fm-view");
@@ -11156,7 +11299,7 @@
   const fmView = async (i) => {
     const e = fmEntries()[i];
     if (!e) return;
-    const full = encodeURIComponent(fmJoin(fm.path, e.name));
+    const full = encodeURIComponent(fmFull(e));
     const url = `/api/v1/files/view?path=${full}`;
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.add("fm-view");
@@ -11239,8 +11382,8 @@
       if (act === "view") fmView(idx);
       else if (act === "edit") fmEdit(idx);
       else if (act === "size") fmSizeOne(idx);
-      else if (act === "ren") fmAskName("Umbenennen", "Neuer Name", en.name, (v) => api("/api/v1/files/rename", { method: "POST", body: JSON.stringify({ path: fmJoin(fm.path, en.name), name: v }) }));
-      else if (act === "copy" || act === "move") fmPickDest(act === "move" ? "Verschieben nach" : "Kopieren nach", fmJoin(fm.path, en.name), act === "move");
+      else if (act === "ren") fmAskName("Umbenennen", "Neuer Name", en.name, (v) => api("/api/v1/files/rename", { method: "POST", body: JSON.stringify({ path: fmFull(en), name: v }) }));
+      else if (act === "copy" || act === "move") fmPickDest(act === "move" ? "Verschieben nach" : "Kopieren nach", fmFull(en), act === "move");
       else if (act === "del1") fmDeleteOne(idx);
       return;
     }
@@ -11251,7 +11394,14 @@
       if (p && p.ejectable) fmEjectPlace(p, t);
     }
     else if (d.fmCrumb !== undefined) fmLoad(d.fmCrumb);
-    else if (d.fmOpen !== undefined) { const en = fmEntries()[+d.fmOpen]; if (en) fmLoad(fmJoin(fm.path, en.name)); }
+    else if (d.fmOpen !== undefined) { const en = fmEntries()[+d.fmOpen]; if (en) fmLoad(fmFull(en)); }
+    else if (d.fmGoto !== undefined) {
+      /* ein Treffer: seinen Ordner öffnen und den Eintrag dort zeigen (die Suche endet) */
+      const en = fmEntries()[+d.fmGoto];
+      if (en) { fm.flash = en.full; fmLoad(fmParent(en.full)); }
+    }
+    else if (t.id === "fm-qx") fmSearchClear();
+    else if (t.id === "fm-scancel") fmSearchStop();
     else if (d.fmView !== undefined) fmView(+d.fmView);
     else if (t.id === "fm-sizes") fmSizeAll();
     else if (t.id === "fm-dir") { fm.desc = !fm.desc; fmSaveSort(); fmRender(); }
@@ -11260,7 +11410,7 @@
     else if (t.id === "fm-mkdir") fmAskName("Neuer Ordner", "Name des Ordners", "Neuer Ordner", (v) => api("/api/v1/files/mkdir", { method: "POST", body: JSON.stringify({ path: fm.path, name: v }) }));
     else if (t.id === "fm-copy" || t.id === "fm-cut") {
       if (!fmSelected().length) return;
-      fm.clip ={ move: t.id === "fm-cut", from: fm.path, paths: fmSelected().map((en) => fmJoin(fm.path, en.name)) };
+      fm.clip ={ move: t.id === "fm-cut", from: fm.path, paths: fmSelected().map(fmFull) };
       fm.sel.clear();
       fmRender();
       toast(fm.clip.move ? "Gemerkt. Jetzt den Zielordner öffnen und „Hier einfügen“." : "Gemerkt. Jetzt den Zielordner öffnen und „Hier einfügen“.");
@@ -11269,7 +11419,7 @@
       const sel = fmSelected();
       if (!sel.length) return;
       const move = t.id === "fm-moveto";
-      fmPickDest(move ? "Verschieben nach" : "Kopieren nach", sel.map((en) => fmJoin(fm.path, en.name)), move,
+      fmPickDest(move ? "Verschieben nach" : "Kopieren nach", sel.map(fmFull), move,
         () => { fm.sel.clear(); fmRender(); });
     }
     else if (t.id === "fm-paste") fmPaste();
@@ -11286,7 +11436,7 @@
     if (c.dataset && c.dataset.fmSel !== undefined) {
       const en = fmEntries()[+c.dataset.fmSel];
       if (!en) return;
-      if (c.checked) fm.sel.add(en.name); else fm.sel.delete(en.name);
+      if (c.checked) fm.sel.add(fmKey(en)); else fm.sel.delete(fmKey(en));
       c.closest(".fm-row").classList.toggle("sel", c.checked);
       fmRenderBars();
     } else if (c.id === "fm-upload" && c.files && c.files.length) {
@@ -11303,11 +11453,22 @@
       fmSaveSort();
       fmRender();
     } else if (c.id === "fm-selall") {
-      if (c.checked) fmEntries().filter(fmSelectable).forEach((en) => fm.sel.add(en.name));
+      if (c.checked) fmEntries().filter(fmSelectable).forEach((en) => fm.sel.add(fmKey(en)));
       else fm.sel.clear();
       fmRender();
+    } else if (c.id === "fm-deep") {
+      fm.deep = c.checked;
+      try { localStorage.setItem("fmDeep", fm.deep ? "1" : "0"); } catch { /* egal */ }
+      if (fm.deep && fm.q) fmSearchStart();
+      else { fmSearchStop(); fm.search = null; fm.sel.clear(); fmRender(); }
     }
   });
+  $("#fm-q").addEventListener("input", fmSearchInput);
+  $("#fm-q").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); fmSearchClear(); }
+    else if (e.key === "Enter" && fm.deep && fm.q) { e.preventDefault(); clearTimeout(fm.searchTimer); fmSearchStart(); }
+  });
+  try { fm.deep = localStorage.getItem("fmDeep") === "1"; $("#fm-deep").checked = fm.deep; } catch { /* ohne: nur der Ordner */ }
   const fmDrop = $("#fm-list");
   fmDrop.addEventListener("dragover", (e) => { if (fm.list && fm.list.writable) { e.preventDefault(); fmDrop.classList.add("drop"); } });
   fmDrop.addEventListener("dragleave", () => fmDrop.classList.remove("drop"));

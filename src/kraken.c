@@ -36,7 +36,7 @@
 #include "upd_http.h"
 
 #define KR_PORT              8097
-#define KR_EMBEDDED_VERSION  "0.3.2"
+#define KR_EMBEDDED_VERSION  "0.4.0"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"
@@ -305,6 +305,7 @@ valid_tid(const char *t) {
 }
 
 static int store_games(const cJSON *k, uint64_t now);
+static int kr_drop_installed(cJSON *k);
 
 struct cJSON *
 ps5tm_kraken_state(void) {
@@ -326,6 +327,7 @@ ps5tm_kraken_state(void) {
   cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
   free(body);
   if(cJSON_IsObject(k)) {
+    cJSON_AddNumberToObject(o, "installed_games", kr_drop_installed(k));   /* Kraken Mount 0.4.0: the console's installed games are not its own */
     store_games(k, ps5tm_mono_ms());                     /* the games of this very answer: the conflict list below and the library need no second ask */
     pending_clear();                                     /* it answers: the start with the app went through */
     cJSON_AddBoolToObject(o, "running", 1);
@@ -398,6 +400,22 @@ static uint64_t            g_games_ms;
 static int                 g_games_flying;             /* one ask at a time: the others wait for its answer (audit 17.11.2026) */
 static pthread_cond_t      g_games_cv = PTHREAD_COND_INITIALIZER;
 
+/* Kraken Mount 0.4.0 lists the games installed on the console too (kind "installed", /user/app and the M.2 drive). It never mounts, rebuilds
+   or deletes them (it refuses with "an installed game: uninstall it from the console's menu"); the app's page Spiele shows them already. They
+   are taken out of its answer here, so the page FPKGMount, the duplicate warning (mounters.c) and the delete check see Kraken Mount's own
+   sources only. The number taken out, for the page. */
+static int
+kr_drop_installed(cJSON *k) {
+  cJSON *games = k ? cJSON_GetObjectItem(k, "games") : NULL;
+  if(!cJSON_IsArray(games)) return 0;
+  int dropped = 0;
+  for(int i = cJSON_GetArraySize(games) - 1; i >= 0; i--) {
+    const cJSON *kd = cJSON_GetObjectItem(cJSON_GetArrayItem(games, i), "kind");
+    if(cJSON_IsString(kd) && !strcmp(kd->valuestring, "installed")) { cJSON_DeleteItemFromArray(games, i); dropped++; }
+  }
+  return dropped;
+}
+
 /* The games out of a parsed /api/state into the small copy (the page's own ask hands it over, so the library does not ask Kraken Mount again
    a moment later). 1 when stored. */
 static int
@@ -457,6 +475,7 @@ ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
     int st = kr_http("GET", "/api/state", NULL, 0, 1500, &body, &bn);
     cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
     free(body);
+    kr_drop_installed(k);
     if(st == 200 || st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) pending_clear();      /* it is there: the start with the app went through */
     if(st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) {
       /* It listens and is busy (a scan, a rebuild): what was known stays - the mark "FPKGMount" and the warning for titles two mounters want
@@ -650,7 +669,8 @@ stop_kraken(char *msg, size_t n) {
     PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite FPKGMount).");
     return 200;
   }
-  if(st == 409) { snprintf(msg, n, "Ein Spiel läuft gerade. Kraken Mount lässt sich erst nach dem Spiel beenden."); return 409; }
+  /* 409: a game runs, or (from 0.4.0) an install of its own runs or waits */
+  if(st == 409) { snprintf(msg, n, "Ein Spiel läuft gerade oder Kraken Mount installiert gerade ein Spiel. Es lässt sich erst danach beenden."); return 409; }
   if(st == LHTTP_NO_ANSWER) { snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es arbeitet vermutlich). Bitte gleich noch einmal versuchen."); return 409; }
   if(st < 0) {
     pthread_mutex_lock(&g_lock);
@@ -680,6 +700,7 @@ game_known(const char *id, const char *path) {
   int st = kr_http("GET", "/api/state", NULL, 0, 3000, &body, &bn);
   cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
   free(body);
+  kr_drop_installed(k);                                    /* an installed game is never deleted from here (Kraken Mount refuses it too) */
   int found = 0;
   const cJSON *games = k ? cJSON_GetObjectItem(k, "games") : NULL, *g;
   cJSON_ArrayForEach(g, games) {

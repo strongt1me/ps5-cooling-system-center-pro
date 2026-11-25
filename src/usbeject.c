@@ -387,6 +387,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     g_job.at_ms = ps5tm_now_ms();
   }
   pthread_mutex_unlock(&g_lock);
+  if(!busy) ps5tm_filemgr_search_stop(mount);     /* a search of the file manager on this drive ends first (it is a reader; 25.11.2026) */
   if(busy) {
     snprintf(msg, n, "Es wird schon ein Laufwerk ausgeworfen.");
     return 409;

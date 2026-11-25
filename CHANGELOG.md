@@ -2,6 +2,23 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### Dateimanager: Suche (Wunsch des Users, 25.11.2026)
+- **Im Ordner suchen:** Über der Liste steht ein Suchfeld. Es zeigt sofort nur die Einträge des offenen Ordners, deren Name den Suchbegriff enthält (Groß-/Kleinschreibung egal, auch bei Ä/Ö/Ü). Mit `*` und `?` als Platzhalter muss der ganze Name passen (`*.pkg`, `PPSA?????`).
+- **„Auch Unterordner“:** Die Konsole sucht im offenen Ordner und in allen Ordnern darunter; vom Laufwerk aus also auf dem ganzen Laufwerk (Konsole, USB, M.2 und NTFS). Die Treffer kommen nach und nach, mit dem Ordner, in dem sie liegen. Höchstens 2.000 Treffer und 1 Million geprüfte Einträge; Verknüpfungen werden nicht verfolgt, ein anderes Laufwerk darunter nicht betreten; das ganze System (`/`) wird nicht durchsucht. Die Suche lässt sich abbrechen; Auswerfen beendet sie vorher.
+- **Mit den Treffern arbeiten:** Auswählen, Kopieren, Verschieben, Löschen (fragt wie immer zuerst), Umbenennen, Ansehen und Größe messen gehen wie bei normalen Einträgen. „Ordner öffnen“ springt in den Ordner des Treffers und markiert ihn.
+- **Vollbild-App:** △-Menü → „Suchen …“ (Eingabe über die Bildschirmtastatur), „Auch Unterordner: an/aus“, „Suche ändern …“ und „Suche beenden“; X öffnet einen Treffer, „Ordner öffnen“ im Menü des Eintrags, O beendet die Suche.
+- **Spieltitel bei Titel-IDs** (Wunsch des Users, 25.11.2026): Ordner und Abbilder, deren Name mit einer Titel-ID beginnt (`PPSA01325`, `PPSA01325.exfat`, `CUSA05041-app`), zeigen den Titel des Spiels (Browser: unter dem Namen; Vollbild-App: hinter dem Namen und als Zeile „Spiel“). Ein Ordner nennt ihn aus seiner `sce_sys/param.json` bzw. `param.sfo`, sonst aus den installierten und angemeldeten Spielen der Konsole; Abbilder werden dafür nicht eingehängt, auf NTFS zählen nur die Spiele der Konsole. Die Suche (sofort und in Unterordnern) findet sie auch über den Titel. Feld `title` in `GET /api/v1/files/list` und den Treffern (`src/fm_title.inc`, `ps5tm_title_from_param`/`ps5tm_title_installed` in `src/gamestate.c`), Zwischenspeicher für 128 Titel; Host-Tests für Konsole und NTFS.
+- Neue Routen `POST/GET /api/v1/files/search` und `POST /api/v1/files/search/cancel` (`src/fm_search.inc`, `docs/API.md`); Host-Tests für Konsole und NTFS; Wörterbücher (Browser und Vollbild, je sechs Sprachen), Handbuch ×7 und `docs/HANDBUCH.md`.
+
+### Fremdbaustein: Kraken Mount v0.4.0 (quer3q, 25.11.2026; Hinweis des Users, 25.11.2026)
+- **Kraken Mount 0.3.2 → 0.4.0** im Reiter FPKGMount: `third_party/kraken_mount/kraken-mount_v0.4.0.elf` (7.077.216 Bytes, SHA-256 gleich der `SHA256SUMS` der Veröffentlichung, ELF-Kopf und Kennung `kraken-mount/0.4.0` geprüft), `Makefile`, `KR_EMBEDDED_VERSION`. Mitgeliefert ist weiter ampr-emu-ng 0.5.1. Beide Eingriffe der App (kein Warten auf ShadowMountPlus, keine eigene Update-Abfrage) greifen unverändert an je 2 Stellen; die Schnittstelle, die die App benutzt, ist gleich geblieben.
+- **Installierte Spiele:** Kraken Mount 0.4.0 listet auch die auf der Konsole installierten Spiele (`kind: "installed"`), hängt sie aber nie ein und löscht sie nie. Die App lässt diese Einträge aus ihrem Reiter FPKGMount, aus der Warnliste für doppelt angemeldete Titel, aus der Marke FPKGMount auf den Spielkarten und aus der Prüfung vor dem Löschen heraus (`kr_drop_installed` in `src/kraken.c`); sonst stünden alle installierten Spiele dort als „Ordner“ mit Löschen-Knopf.
+- **Beenden während einer Installation:** Kraken Mount lehnt das Beenden ab, solange es ein Spiel installiert (409); die App sagt das jetzt so.
+- **Neu in Kraken Mount 0.4.0 laut Veröffentlichung** (auf seiner eigenen Seite, Port 8097): FPKG-Spiele auf die Konsole installieren (Reiter „Install“ mit Patches und DLC); Backports (`backports/<Titel-ID>`) auch für installierte Spiele; neu gestaltete Oberfläche mit hellem und dunklem Design, Farbschemata und Sprachwahl; Titelmusik der Kacheln bleibt nach einem Spiel erhalten (#124, #125; Dank an aTenb); ein nativ installiertes Spiel scheitert nicht mehr neben seinem FPKG (#121; Dank an Norbi7454).
+- `third_party/kraken_mount/ORIGIN.md`, `THIRD_PARTY_NOTICES.md`, Handbuch ×7 und `docs/HANDBUCH.md`, `tools/upstream.json`, Probe-Daten der Vollbild-App und der Vorführung.
+
 ## v1.95.1 – 24.11.2026
 
 ### Kraken Mount ist keine Beta mehr (Hinweis des Users, 24.11.2026)

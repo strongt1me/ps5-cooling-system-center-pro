@@ -743,6 +743,27 @@ struct FsEntry
     std::uint64_t size = 0;
     std::int64_t mtime = 0;
     bool writable = false;
+    // a hit of the search below folders: its whole path (it lies somewhere below the open folder);
+    // "" for an entry of the open folder itself
+    std::string full;
+    // the game a folder or image named after a title ID belongs to ("Lantern Pass" for PPSA01325; "" when none
+    // is known; 25.11.2026)
+    std::string title;
+};
+
+// The search of Dateien below a folder (GET /api/v1/files/search, 25.11.2026): the console walks
+// the folder and everything below it; the hits come with their whole path.
+struct FsSearch
+{
+    std::uint64_t seq = 0;     // goes up with every answer
+    std::string state;         // "", running, done, cancelled, failed
+    std::string path;          // the folder searched
+    std::string q;             // the term
+    std::uint64_t scanned = 0; // entries looked at
+    std::string current;       // the folder it is in now
+    bool truncated = false;    // more than the 2000 hits kept
+    std::string error;
+    std::vector<FsEntry> hits; // name = the last part of full
 };
 
 struct FsList
@@ -1346,6 +1367,7 @@ struct Snapshot
     FsConflict fs_conflict;
     FsView fs_view;
     FsWrite fs_write;
+    FsSearch fs_search;
     std::map<std::string, FsSize> fs_sizes; // by path
     Playtime playtime;
     FanCurve fan_curve;
@@ -1514,6 +1536,9 @@ class Source
     // POST /api/v1/files/write: the text replaces a text file (up to 64 KiB); the answer is
     // Snapshot::fs_write.
     virtual void files_write(const std::string &path, const std::string &text) = 0;
+    // The search below a folder (POST /api/v1/files/search, then asked again while it runs; the
+    // answer is Snapshot::fs_search); an empty term stops a search that runs.
+    virtual void files_search(const std::string &path, const std::string &term) = 0;
     // POST /api/v1/backdrops: which picture an area shows. "custom" needs the user's picture
     // (uploaded in the browser).
     virtual void set_backdrop(const std::string &area, BackdropMode mode) = 0;

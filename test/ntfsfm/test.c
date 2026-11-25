@@ -25,6 +25,13 @@ int ps5tm_usbeject_blocked(void) { return 0; }
 int ps5tm_usbeject_path_ok(const char *mount) { return mount && !strncmp(mount, "/mnt/usb", 8); }
 int ps5tm_usbeject_covers(const char *path) { (void)path; return 0; }
 int ps5tm_usbeject_settling(const char *path) { (void)path; return 0; }
+/* the titles of games (gamestate.c): on NTFS only the system's records are asked; the stub knows one game */
+static int g_param_reads;
+int ps5tm_title_from_param(const char *path, char *name, size_t name_len) { (void)path; (void)name_len; name[0] = 0; g_param_reads++; return -1; }
+int ps5tm_title_installed(const char *title_id, char *name, size_t name_len) {
+  snprintf(name, name_len, "%s", strcmp(title_id, "PPSA01325") ? "" : "Lantern Pass");
+  return name[0] ? 0 : -1;
+}
 int ps5tm_drive_enter(const char *path) { (void)path; return -1; }
 void ps5tm_drive_leave(int token) { (void)token; }
 int ps5tm_jobs_busy_except(int self, int flags, char *why, size_t n) { (void)self; (void)flags; (void)why; (void)n; return 0; }
@@ -264,6 +271,24 @@ main(int argc, char **argv) {
   CHECK(upload("path=%2Fntfs0%2FSpiele&name=notiz.txt&conflict=replace", "zweite") == 409 && has("no_replace"), "upload: no replacing on NTFS");
   CHECK(upload("path=%2Fntfs0%2FSpiele&name=notiz.txt&conflict=keep", "zweite") == 200 && has("notiz (2).txt"), "upload: keep both");
   CHECK(upload("path=%2Fntfs0%2FSpiele&name=notiz.txt&conflict=skip", "dritte") == 200 && has("\"skipped\":true"), "upload: skip");
+
+  /* the search on the stick (25.11.2026): from the root, below folders, case ignored */
+  call("POST", "/api/v1/files/search", "{\"path\":\"/ntfs0\",\"q\":\"NOTIZ\"}");
+  CHECK(g_status == 200, "search on NTFS starts: %d %s", g_status, g_body);
+  for(int k = 0; k < 300; k++) {
+    call("GET", "/api/v1/files/search", NULL);
+    if(!has("\"state\":\"running\"")) break;
+    usleep(10000);
+  }
+  CHECK(has("\"state\":\"done\"") && has("\"path\":\"/ntfs0/Spiele/notiz.txt\"") && has("\"path\":\"/ntfs0/Spiele/notiz (2).txt\""),
+        "search on NTFS finds both files: %s", g_body);
+  CHECK(!ps5tm_filemgr_reading(), "search on NTFS: no reader count left");
+
+  /* the game of a folder named after a title ID (25.11.2026): on NTFS from the system's records only, nothing on the stick read for it */
+  call("POST", "/api/v1/files/mkdir", "{\"path\":\"/ntfs0\",\"name\":\"PPSA01325\"}");
+  CHECK(g_status == 200, "mkdir PPSA01325: %s", g_body);
+  callq("/api/v1/files/list", "path=%2Fntfs0");
+  CHECK(has("\"title\":\"Lantern Pass\"") && g_param_reads == 0, "an NTFS folder names its game (%d param reads): %s", g_param_reads, g_body);
 
   /* download, view, size */
   char out[8192];

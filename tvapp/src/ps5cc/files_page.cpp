@@ -11,6 +11,7 @@
 // Uploading from a computer and downloading to one stay in the web app.
 
 #include "ps5cc/files_edit.hpp"
+#include "ps5cc/files_search.hpp"
 #include "ps5cc/look.hpp"
 #include "ps5cc/pages.hpp"
 #include "ps5cc/playtime_rules.hpp"
@@ -177,6 +178,10 @@ enum MenuTag
     kLineDelete,
     kKeepEditing = 70,
     kDiscard,
+    kSearch = 80, // the search (25.11.2026): also the keyboard's mode while the term is typed
+    kSearchDeep,
+    kSearchEnd,
+    kGoto,
 };
 
 enum Dialog
@@ -284,6 +289,13 @@ class FilesPage final : public Page
         }
         sizes_ = data.fs_sizes;
         tz_ = data.config.tz_offset_min;
+        if (data.fs_search.seq != search_seq_)
+        {
+            search_seq_ = data.fs_search.seq;
+            search_ = data.fs_search;
+            if (search_deep_ && !search_q_.empty())
+                sort_entries();
+        }
         if (data.fs_list.seq != list_seq_)
         {
             list_seq_ = data.fs_list.seq;
@@ -291,6 +303,7 @@ class FilesPage final : public Page
             if (folder_.path != shown_path_)
             {
                 shown_path_ = folder_.path;
+                end_search();
                 picked_.clear();
                 pick_mode_ = false;
                 stop_measure();
@@ -448,6 +461,16 @@ class FilesPage final : public Page
             feedback.play(audio::Cue::back);
             return;
         }
+        if (input.is_pressed(Action::back) && !search_q_.empty())
+        {
+            // O ends the search first: the folder is shown whole again
+            end_search();
+            sort_entries();
+            key_.clear();
+            rebuild();
+            feedback.play(audio::Cue::back);
+            return;
+        }
         if (input.is_pressed(Action::back) && !folder_.path.empty())
         {
             go_back(feedback);
@@ -555,6 +578,9 @@ class FilesPage final : public Page
                               ? std::string("X-Taste setzt den Haken · O-Taste beendet die Auswahl")
                               : std::string("Quadrat-Taste: Kopieren, Ausschneiden, Löschen …"),
                           kBlue);
+        if (!search_q_.empty())
+            y = note_card(canvas, paint, card, y, "Suche: \xE2\x80\x9E" + search_q_ + "\xE2\x80\x9C",
+                          search_note(), kBlue);
         if (measuring())
             y = note_card(canvas, paint, card, y, "Größen werden gemessen",
                           std::to_string(measure_done_) + " von " + std::to_string(measure_total_) +
@@ -668,11 +694,19 @@ class FilesPage final : public Page
             const bool line_mode = name_mode_ == kEditLineMode;
             ui::text(list, fonts.display,
                      line_mode ? "Zeile " + std::to_string(edit_line_ + 1) + " ändern"
-                               : std::string(name_mode_ == kRename ? "Umbenennen" : "Neuer Ordner"),
+                               : std::string(name_mode_ == kRename   ? "Umbenennen"
+                                             : name_mode_ == kSearch ? "Suchen"
+                                                                     : "Neuer Ordner"),
                      panel.x + 40.0f, panel.y + 66.0f, 36.0f, kInk);
             ui::text(list, fonts.regular,
-                     ui::fit_label(paint, line_mode ? edit_path_ : "Ordner: " + folder_.path, 21.0f,
-                                   panel.w - 80.0f),
+                     ui::fit_label(paint,
+                                   line_mode ? edit_path_
+                                   : name_mode_ == kSearch
+                                       ? std::string(search_deep_ ? "In " + folder_.path + " und darunter"
+                                                                  : "In " + folder_.path) +
+                                             " \xC2\xB7 Teil des Namens; * und ? als Platzhalter"
+                                       : "Ordner: " + folder_.path,
+                                   21.0f, panel.w - 80.0f),
                      panel.x + 40.0f, panel.y + 104.0f, 21.0f, kMuted);
             const Rect field{panel.x + 120.0f, panel.y + 160.0f, panel.w - 240.0f, 84.0f};
             list.rounded_rect(field, 14.0f, Color::rgb(0x3880ff, 0.12f));
@@ -829,6 +863,73 @@ class FilesPage final : public Page
     }
 
   private:
+    // ---------------------------------------------------------------- the search
+
+    // The path of an entry: a hit of the search below folders carries it, the rest lie in the folder.
+    std::string path_of(const FsEntry &e) const
+    {
+        return e.full.empty() ? join(folder_.path, e.name) : e.full;
+    }
+
+    // What the checks remember: the name in the folder, the whole path of a hit.
+    static const std::string &key_of(const FsEntry &e)
+    {
+        return e.full.empty() ? e.name : e.full;
+    }
+
+    // Are the rows the console's hits (and not the open folder filtered)?
+    bool search_deep_shown() const
+    {
+        return search_deep_ && !search_q_.empty() && !search_.state.empty() &&
+               search_.path == folder_.path && search_.q == search_q_;
+    }
+
+    // The search ends: the term goes, a search of the console that still runs is stopped.
+    // "Auch Unterordner" stays as chosen.
+    void end_search()
+    {
+        if (search_.state == "running")
+            source().files_search(search_.path, {});
+        search_q_.clear();
+        const std::uint64_t seq = search_.seq;
+        search_ = FsSearch{};
+        search_.seq = seq;
+        picked_.clear();
+    }
+
+    // A hit's folder opened, with the focus on the hit (the search ends with the new folder).
+    void go_to(const std::string &full, ui::Feedback &feedback)
+    {
+        came_from_ = full;
+        open(fs_parent_of(full), feedback);
+    }
+
+    // The quiet line of the search's note on the card: sentences with " · " between them (each is
+    // translated on its own).
+    std::string search_note() const
+    {
+        const std::string sep = " \xC2\xB7 ";
+        if (!search_deep_)
+            return std::to_string(entries_.size()) + " von " + std::to_string(folder_.entries.size()) +
+                   " Einträgen in diesem Ordner" + sep + "Mehr: Auch Unterordner";
+        if (!search_deep_shown())
+            return "Die Suche beginnt …";
+        if (search_.state == "failed")
+            return search_.error.empty() ? std::string("Die Suche ging nicht.") : search_.error;
+        if (search_.state == "running")
+            return std::to_string(entries_.size()) + " Treffer bisher" + sep +
+                   std::to_string(search_.scanned) + " Einträge geprüft";
+        std::string out = std::to_string(entries_.size()) + " Treffer" + sep + "in " + folder_.path +
+                          " und darunter";
+        if (search_.truncated)
+            out += sep + "Es gibt mehr; bitte genauer suchen.";
+        if (search_.state == "cancelled")
+            out += sep + "Abgebrochen.";
+        if (!search_.error.empty())
+            out += sep + search_.error;
+        return out;
+    }
+
     // ---------------------------------------------------------------- what is focused
 
     int focused_tag() const
@@ -920,7 +1021,7 @@ class FilesPage final : public Page
         std::vector<const FsEntry *> out;
         for (const FsEntry &e : entries_)
         {
-            if (picked_.count(e.name))
+            if (picked_.count(key_of(e)))
                 out.push_back(&e);
         }
         if (out.empty())
@@ -992,8 +1093,8 @@ class FilesPage final : public Page
         {
             // the selection mode (user, 13.11.2026): X sets or takes away the check and goes to the
             // next row, so that many entries are checked one after the other
-            if (!picked_.erase(e->name))
-                picked_.insert(e->name);
+            if (!picked_.erase(key_of(*e)))
+                picked_.insert(key_of(*e));
             feedback.play(audio::Cue::select);
             key_.clear();
             rebuild();
@@ -1004,10 +1105,12 @@ class FilesPage final : public Page
             refresh_info();
             return;
         }
-        if (e != nullptr && (e->type == "dir" || e->type == "dirlink"))
-            open(join(folder_.path, e->name), feedback);
+        if (e != nullptr && !e->full.empty() && e->type != "dir")
+            go_to(e->full, feedback); // a hit: its folder, with the focus on it
+        else if (e != nullptr && (e->type == "dir" || e->type == "dirlink"))
+            open(path_of(*e), feedback);
         else if (e != nullptr && e->type == "file")
-            show(join(folder_.path, e->name), feedback);
+            show(path_of(*e), feedback);
         else
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
     }
@@ -1052,13 +1155,15 @@ class FilesPage final : public Page
                                               { return x->writable && pickable(*x); });
         const std::string count = t.size() > 1 ? " (" + std::to_string(t.size()) + ")" : "";
         std::vector<ui::MenuItem> items;
+        if (!e->full.empty())
+            items.push_back(item("Ordner öffnen", kGoto));
         if (pickable(*e))
-            items.push_back(item(picked_.count(e->name) ? "Abwählen" : "Auswählen", kPick));
+            items.push_back(item(picked_.count(key_of(*e)) ? "Abwählen" : "Auswählen", kPick));
         if (pick_mode_)
             items.push_back(item("Auswahl beenden", kPickMode));
         if (e->type == "file")
             items.push_back(item("Ansehen", kView));
-        const bool ntfs = is_ntfs_path(folder_.path); // NTFS: add and delete, never change
+        const bool ntfs = is_ntfs_path(path_of(*e)); // NTFS: add and delete, never change
         if (e->type == "file" && is_text_name(e->name))
             items.push_back(item("Bearbeiten", kEdit, !edit_refusal(*e).empty() || ntfs));
         if (e->type == "dir")
@@ -1141,6 +1246,11 @@ class FilesPage final : public Page
             eject_path_ = p->path;
             items.push_back(item("Sicher auswerfen", kEject, !can_eject(*p)));
         }
+        items.push_back(item(search_q_.empty() ? "Suchen …" : "Suche ändern …", kSearch, !inside));
+        items.push_back(item(std::string("Auch Unterordner: ") + (search_deep_ ? "an" : "aus"),
+                             kSearchDeep, !inside || folder_.path == "/"));
+        if (!search_q_.empty())
+            items.push_back(item("Suche beenden", kSearchEnd));
         items.push_back(item("Aktualisieren", kReload));
         menu_.set_items(items);
         menu_.open({kRightX, kFilesTop, kRightW, 80.0f}, feedback);
@@ -1159,13 +1269,13 @@ class FilesPage final : public Page
         feedback.play(audio::Cue::select);
         std::vector<std::string> paths;
         for (const FsEntry *e : targets())
-            paths.push_back(join(folder_.path, e->name));
+            paths.push_back(path_of(*e));
         switch (tag)
         {
         case kPick:
-            if (!picked_.erase(menu_entry_.name))
+            if (!picked_.erase(key_of(menu_entry_)))
             {
-                picked_.insert(menu_entry_.name);
+                picked_.insert(key_of(menu_entry_));
                 pick_mode_ = true; // "Auswählen" starts the selection: the boxes appear
             }
             break;
@@ -1173,7 +1283,7 @@ class FilesPage final : public Page
             pick_mode_ = !pick_mode_;
             break;
         case kEdit:
-            open_editor(join(folder_.path, menu_entry_.name));
+            open_editor(path_of(menu_entry_));
             break;
         case kMeasureAll:
             start_measure();
@@ -1203,10 +1313,29 @@ class FilesPage final : public Page
             dialog_ = kNone;
             break;
         case kView:
-            show(join(folder_.path, menu_entry_.name), feedback);
+            show(path_of(menu_entry_), feedback);
             break;
         case kMeasure:
-            source().files_size(join(folder_.path, menu_entry_.name));
+            source().files_size(path_of(menu_entry_));
+            break;
+        case kGoto:
+            go_to(path_of(menu_entry_), feedback);
+            break;
+        case kSearch:
+            open_name(kSearch, feedback);
+            break;
+        case kSearchDeep:
+            search_deep_ = !search_deep_;
+            picked_.clear();
+            if (search_deep_ && !search_q_.empty())
+                source().files_search(folder_.path, search_q_);
+            else if (!search_deep_ && search_.state == "running")
+                source().files_search(search_.path, {});
+            sort_entries();
+            break;
+        case kSearchEnd:
+            end_search();
+            sort_entries();
             break;
         case kCopy:
         case kCut:
@@ -1240,7 +1369,7 @@ class FilesPage final : public Page
             for (const FsEntry &e : entries_)
             {
                 if (pickable(e))
-                    picked_.insert(e.name);
+                    picked_.insert(key_of(e));
             }
             break;
         case kPickNone:
@@ -1305,7 +1434,7 @@ class FilesPage final : public Page
         bool any_folder = false;
         for (const FsEntry *e : t)
         {
-            const std::string full = join(folder_.path, e->name);
+            const std::string full = path_of(*e);
             delete_paths_.push_back(full);
             const bool folder = e->type == "dir";
             any_folder = any_folder || folder;
@@ -1319,7 +1448,8 @@ class FilesPage final : public Page
         }
         if (t.size() > names.size())
             names.push_back("und " + std::to_string(t.size() - names.size()) + " weitere");
-        std::vector<std::string> notes{"Ordner: " + folder_.path};
+        std::vector<std::string> notes{search_deep_shown() ? "Gefunden in " + folder_.path + " und darunter"
+                                                           : "Ordner: " + folder_.path};
         const std::string warn =
             std::string("Das lässt sich nicht rückgängig machen.") +
             (any_folder ? "\nOrdner werden mit allem gelöscht, was darin liegt." : "");
@@ -1334,7 +1464,7 @@ class FilesPage final : public Page
         (void)feedback;
         name_mode_ = mode;
         name_error_.clear();
-        name_ = mode == kRename ? menu_entry_.name : "Neuer Ordner";
+        name_ = mode == kRename ? menu_entry_.name : mode == kSearch ? search_q_ : "Neuer Ordner";
         keys_.style.max_length = 120;
         keys_.set_layout(0);
         keys_.set_length(static_cast<int>(name_.size()));
@@ -1356,6 +1486,26 @@ class FilesPage final : public Page
             feedback.play(audio::Cue::select);
             return;
         }
+        if (name_mode_ == kSearch)
+        {
+            // an empty term ends the search; with "Auch Unterordner" the console searches below
+            if (name_.empty())
+                end_search();
+            else
+            {
+                search_q_ = name_;
+                picked_.clear();
+                if (search_deep_ && folder_.path != "/")
+                    source().files_search(folder_.path, search_q_);
+            }
+            sort_entries();
+            key_.clear();
+            rebuild();
+            list_.set_focus(0);
+            dialog_ = kNone;
+            feedback.play(audio::Cue::select);
+            return;
+        }
         if (name_.empty() || name_ == "." || name_ == ".." ||
             name_.find('/') != std::string::npos || name_.find('\\') != std::string::npos)
         {
@@ -1365,7 +1515,7 @@ class FilesPage final : public Page
         }
         if (name_mode_ == kRename)
             source().files_post("rename",
-                                "{\"path\":" + json_text(join(folder_.path, menu_entry_.name)) +
+                                "{\"path\":" + json_text(path_of(menu_entry_)) +
                                     ",\"name\":" + json_text(name_) + "}");
         else
             source().files_post("mkdir", "{\"path\":" + json_text(folder_.path) +
@@ -1667,14 +1817,25 @@ class FilesPage final : public Page
     // web page.
     void sort_entries()
     {
-        entries_ = folder_.entries;
+        if (search_deep_shown())
+            entries_ = search_.hits;
+        else
+        {
+            entries_.clear();
+            for (const FsEntry &e : folder_.entries)
+            {
+                if (fs_name_matches(search_q_, e.name) ||
+                    (!e.title.empty() && fs_name_matches(search_q_, e.title)))
+                    entries_.push_back(e);
+            }
+        }
         const int order = sort_;
         // a folder counts with the size it was measured at, when it was ("Alle Größen messen")
         const auto size_of = [this](const FsEntry &e) -> std::uint64_t
         {
             if (e.type != "dir")
                 return e.size;
-            const auto it = sizes_.find(join(folder_.path, e.name));
+            const auto it = sizes_.find(path_of(e));
             return it != sizes_.end() && !it->second.failed ? it->second.bytes : 0;
         };
         std::stable_sort(entries_.begin(), entries_.end(),
@@ -1738,7 +1899,8 @@ class FilesPage final : public Page
             const FsEntry &e = entries_[i];
             ui::ListItem item;
             const bool folder = e.type == "dir" || e.type == "dirlink";
-            item.title = e.name;
+            // the game of a folder or image named after a title ID next to the name: "PPSA01325" alone says nothing
+            item.title = e.title.empty() ? e.name : e.name + " \xC2\xB7 " + e.title;
             std::string sub = std::string(folder ? "Ordner · " : "") + play_date(e.mtime, tz_) +
                               ", " + play_clock(e.mtime, tz_) + " Uhr";
             if (e.type == "dirlink")
@@ -1747,8 +1909,10 @@ class FilesPage final : public Page
                 sub += " · Verknüpfung";
             else if (e.type == "other")
                 sub += " · Gerät oder Sonderdatei";
+            if (!e.full.empty())
+                sub = "in " + fs_parent_of(e.full) + " \xC2\xB7 " + sub;
             item.subtitle = sub;
-            const std::string full = join(folder_.path, e.name);
+            const std::string full = path_of(e);
             auto s = sizes_.find(full);
             if (e.type == "file")
                 item.value = format_bytes(e.size);
@@ -1757,7 +1921,7 @@ class FilesPage final : public Page
                                  ? "?"
                                  : format_bytes(s->second.bytes) + (s->second.partial ? "+" : "");
             // picked: the sign turns into a check (glyph_of), no badge
-            if (picked_.count(e.name) == 0 && !clip_paths_.empty() &&
+            if (picked_.count(key_of(e)) == 0 && !clip_paths_.empty() &&
                 std::find(clip_paths_.begin(), clip_paths_.end(), full) != clip_paths_.end())
                 item.badge = clip_move_ ? "AUSGESCHNITTEN" : "KOPIERT";
             item.tag = kEntryTag + static_cast<int>(i);
@@ -1766,12 +1930,15 @@ class FilesPage final : public Page
         if (entries_.empty())
         {
             ui::ListItem n;
-            n.title = "Der Ordner ist leer";
+            n.title = search_q_.empty()      ? "Der Ordner ist leer"
+                      : !search_deep_        ? "Kein Eintrag in diesem Ordner passt zur Suche."
+                      : search_deep_shown() && search_.state != "running" ? "Kein Treffer."
+                                                                          : "Noch kein Treffer …";
             n.disabled = true;
             n.tag = -1;
             out.push_back(n);
         }
-        if (folder_.truncated)
+        if (folder_.truncated && !search_deep_shown())
         {
             ui::ListItem n;
             n.title = "Nur die ersten " + std::to_string(entries_.size()) + " von " +
@@ -1831,7 +1998,7 @@ class FilesPage final : public Page
             const int tag = rows[i].tag;
             std::string path;
             if (tag >= kEntryTag && tag - kEntryTag < static_cast<int>(entries_.size()))
-                path = join(folder_.path, entries_[static_cast<std::size_t>(tag - kEntryTag)].name);
+                path = path_of(entries_[static_cast<std::size_t>(tag - kEntryTag)]);
             else if (tag >= kPlaceTag && tag < kEntryTag &&
                      tag - kPlaceTag < static_cast<int>(places_.size()))
                 path = places_[static_cast<std::size_t>(tag - kPlaceTag)].path;
@@ -1857,7 +2024,11 @@ class FilesPage final : public Page
                                : e->type == "other"   ? "Gerät oder Sonderdatei"
                                                       : "Datei";
             rows.push_back({"Art", kind});
-            const std::string full = join(folder_.path, e->name);
+            if (!e->title.empty())
+                rows.push_back({"Spiel", e->title});
+            const std::string full = path_of(*e);
+            if (!e->full.empty())
+                rows.push_back({"Liegt in", fs_parent_of(e->full)});
             auto s = sizes_.find(full);
             if (e->type == "file")
                 rows.push_back({"Größe", format_bytes(e->size)});
@@ -1869,7 +2040,7 @@ class FilesPage final : public Page
                 {"Geändert", play_date(e->mtime, tz_) + ", " + play_clock(e->mtime, tz_) + " Uhr"});
             // on an NTFS stick a file is never changed or renamed, only deleted; a stick Windows did
             // not close is read-only (audit 23.11.2026)
-            const bool ntfs = is_ntfs_path(folder_.path);
+            const bool ntfs = is_ntfs_path(full);
             rows.push_back({"Ändern", !e->writable  ? (ntfs ? "nur lesbar" : "nur ansehen")
                                       : ntfs && e->type == "file" ? "nur löschen"
                                                                   : "erlaubt"});
@@ -1921,7 +2092,7 @@ class FilesPage final : public Page
         if (i >= 0 && i < static_cast<int>(entries_.size()))
         {
             const FsEntry &e = entries_[static_cast<std::size_t>(i)];
-            if (picked_.count(e.name) != 0)
+            if (picked_.count(key_of(e)) != 0)
                 return Glyph::picked;
             return pick_mode_ && pickable(e) ? Glyph::unpicked : entry_glyph(e);
         }
@@ -1947,7 +2118,7 @@ class FilesPage final : public Page
     std::string card_subtitle(const FsEntry *e, const FsPlace *pl, const std::string &where) const
     {
         if (e != nullptr)
-            return join(folder_.path, e->name);
+            return path_of(*e);
         if (pl != nullptr)
             return pl->path;
         if (focused_tag() == kUpTag)
@@ -1972,7 +2143,8 @@ class FilesPage final : public Page
         // right: count · order, then the L2 R2 glyphs
         const char *order = sort_ == 1 ? "Größe" : sort_ == 2 ? "Datum" : "Name";
         const std::string right =
-            folder_.path.empty() ? std::to_string(places_.size()) + " Orte"
+            folder_.path.empty()  ? std::to_string(places_.size()) + " Orte"
+            : !search_q_.empty() ? std::to_string(entries_.size()) + " Treffer · nach " + order
                                  : std::to_string(entries_.size()) + " Einträge · nach " + order;
         const ui::GlyphStyle glyphs = ui::GlyphStyle::dark();
         const float r2w = ui::button_width(ui::Button::r2, 30.0f);
@@ -2179,8 +2351,15 @@ class FilesPage final : public Page
     std::map<std::string, FsSize> sizes_;
     int tz_ = 0;
     int sort_ = 0;                 // name, size, date
-    std::set<std::string> picked_; // names in this folder
+    std::set<std::string> picked_; // names in this folder (whole paths of search hits)
     bool pick_mode_ = false;       // the boxes are shown and X sets a check (user, 13.11.2026)
+
+    // The search (user, 25.11.2026): the term filters the open folder; with "Auch Unterordner" the
+    // console searches below it and its hits are the rows (entries_ with full paths).
+    std::string search_q_;
+    bool search_deep_ = false;
+    FsSearch search_;
+    std::uint64_t search_seq_ = 0;
 
     // "Alle Größen messen": the folders still to do, the one the app counts now
     std::vector<std::string> measure_queue_;

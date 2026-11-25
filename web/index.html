@@ -1973,6 +1973,17 @@
               <span class="fm-ro" id="fm-ro" hidden>Nur ansehen – hier darf nichts geändert werden</span>
               <span class="fm-free muted" id="fm-free"></span>
             </div>
+            <!-- Suche (25.11.2026): filtert den Ordner beim Tippen; mit „Auch Unterordner“ sucht die Konsole darunter (app.js fmSearch*) -->
+            <div class="fm-search" id="fm-search" role="search">
+              <div class="fm-q">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+                <input type="search" id="fm-q" autocomplete="off" spellcheck="false" maxlength="127"
+                  placeholder="Suchen (Teil des Namens; * und ? als Platzhalter)" aria-label="Im Ordner suchen">
+                <button class="fm-qx" id="fm-qx" type="button" title="Suche leeren" aria-label="Suche leeren" hidden>✕</button>
+              </div>
+              <label class="fm-deep" title="Sucht auch in allen Ordnern darunter. Vom Laufwerk aus: auf dem ganzen Laufwerk."><input type="checkbox" id="fm-deep"> <span>Auch Unterordner</span></label>
+              <span class="fm-hits muted" id="fm-hits" hidden></span>
+            </div>
             <div class="fm-sortbar">
               <label class="fm-selall"><input type="checkbox" id="fm-selall"> <span>Alle auswählen</span></label>
               <span class="fm-sortgrp">
@@ -2002,6 +2013,7 @@
             </div>
             <div class="fm-job" id="fm-job" hidden></div>
             <div class="fm-job" id="fm-uploads" hidden></div>
+            <div class="fm-searchjob" id="fm-searchjob" hidden></div>
             <div class="fm-list" id="fm-list" role="list"></div>
           </article>
         </section>

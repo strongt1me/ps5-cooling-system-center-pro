@@ -6,6 +6,7 @@
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
 #include "ps5cc/files_edit.hpp"
+#include "ps5cc/files_search.hpp"
 #include "ps5cc/i18n.hpp"
 #include "ps5cc/plans.hpp"
 #include "third_party/cjson/cJSON.h"
@@ -1531,8 +1532,8 @@ class MockSource final : public Source
         {
             k.running = true;
             k.starting = false;
-            k.version = "0.3.2";
-            msg = "Kraken Mount 0.3.2 wird gestartet. Das dauert einige Sekunden.";
+            k.version = "0.4.0";
+            msg = "Kraken Mount 0.4.0 wird gestartet. Das dauert einige Sekunden.";
         }
         else if (has("\"stop\""))
         {
@@ -2037,6 +2038,48 @@ class MockSource final : public Source
         s.bytes = static_cast<std::uint64_t>(41.7e9);
         s.files = 1284;
         data_.fs_sizes[path] = s;
+        changed();
+    }
+
+    // The search below a folder: the made-up tree walked as the console walks it.
+    void files_search(const std::string &path, const std::string &term) override
+    {
+        FsSearch s;
+        s.seq = data_.fs_search.seq + 1;
+        s.path = path;
+        s.q = term;
+        if (term.empty())
+        {
+            s.state = "cancelled";
+            data_.fs_search = std::move(s);
+            changed();
+            return;
+        }
+        s.state = "done";
+        std::vector<std::string> todo{path};
+        while (!todo.empty())
+        {
+            const std::string dir = todo.back();
+            todo.pop_back();
+            const auto it = fs_tree_.find(dir);
+            if (it == fs_tree_.end())
+                continue;
+            for (const FsEntry &e : it->second)
+            {
+                ++s.scanned;
+                const std::string full = (dir == "/" ? "" : dir) + "/" + e.name;
+                if (fs_name_matches(term, e.name) ||
+                    (!e.title.empty() && fs_name_matches(term, e.title)))
+                {
+                    FsEntry hit = e;
+                    hit.full = full;
+                    s.hits.push_back(std::move(hit));
+                }
+                if (e.type == "dir")
+                    todo.push_back(full);
+            }
+        }
+        data_.fs_search = std::move(s);
         changed();
     }
 
@@ -3145,8 +3188,8 @@ class MockSource final : public Source
     {
         KrakenState &k = data_.kraken;
         k.loaded = k.running = true;
-        k.version = "0.3.2";
-        k.embedded_version = "0.3.2";
+        k.version = "0.4.0";
+        k.embedded_version = "0.4.0";
         struct Seed
         {
             const char *id, *name, *version, *kind, *packing, *drive, *status;
@@ -3293,13 +3336,19 @@ class MockSource final : public Source
                                  entry("Lantern Pass.ffpfsc", "file", 31200, 6, true),
                                  entry("notes.txt", "file", 0.004, 12, true)};
         fs_tree_["/mnt/usb0/homebrew"] = {entry("PPSA01325", "dir", 0, 2, true),
-                                          entry("CUSA05041", "dir", 0, 4, true)};
+                                          entry("CUSA05041", "dir", 0, 4, true),
+                                          entry("PPSA08455.exfat", "file", 55200, 6, true)};
+        // the games of folders and images named after a title ID, as the console reads them from param.json
+        fs_tree_["/mnt/usb0/homebrew"][0].title = "ASTRO BOT";
+        fs_tree_["/mnt/usb0/homebrew"][1].title = "Two Point Hospital";
+        fs_tree_["/mnt/usb0/homebrew"][2].title = "Iron Tide";
         fs_tree_["/ntfs0"] = {entry("Filme", "dir", 0, 14, true),
                               entry("Spiele-Backup", "dir", 0, 3, true),
                               entry("System Volume Information", "dir", 0, 40, false),
                               entry("liesmich.txt", "file", 0.001, 40, true)};
         fs_tree_["/ntfs0/Spiele-Backup"] = {entry("PPSA01325", "dir", 0, 3, true),
                                             entry("Lantern Pass.ffpfsc", "file", 31200, 3, true)};
+        fs_tree_["/ntfs0/Spiele-Backup"][0].title = "ASTRO BOT";
         fs_tree_["/ntfs1"] = {entry("Fotos", "dir", 0, 60, false),
                               entry("Urlaub 2026.zip", "file", 2140, 61, false)};
         fs_tree_["/data"] = {entry("homebrew", "dir", 0, 1, true),
