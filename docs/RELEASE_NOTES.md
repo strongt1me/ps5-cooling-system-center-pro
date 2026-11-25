@@ -23,9 +23,8 @@
 - New on Kraken Mount's own page (port 8097): install FPKG games with patches and DLC, backports (`backports/<title ID>`) for installed games too, light and dark design with colour schemes and a language choice, tile music that stays after a game.
 
 ## Notes
-- **Tried on the console:** This build runs on the Pro and the Slim (version 1.95.1 in the name, same code). The search and the game titles were tried in the browser on the Pro; Kraken Mount 0.4.0 runs on both, and both leave installed games out of the tab.
+- **Tried on the console:** This build runs on the Pro and the Slim (version 1.95.1 in the name, same code). The search was tried in the browser and in the fullscreen app, the game titles in the browser on the Pro; Kraken Mount 0.4.0 runs on both, and both leave installed games out of the tab.
 - **Backports next to ShadowMountPlus:** On the Slim, Kraken Mount 0.4.0 and ShadowMountPlus 1.7beta12 applied the same test backport of an installed game at the same time: the game started and ran, both released their redirect at exit, no crash.
-- **Not tried by hand on a console:** the search in the fullscreen app with the controller (PC pictures only).
 - All 46 host tests, 396 tests of the fullscreen app and the dictionary check pass. Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that). A Kraken Mount that is running keeps its old version until it is switched off and on once.
 
 ## Downloads

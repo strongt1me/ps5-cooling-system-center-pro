@@ -23,9 +23,8 @@
 - Neu auf der eigenen Seite von Kraken Mount (Port 8097): FPKG-Spiele samt Patches und DLC installieren, Backports (`backports/<Titel-ID>`) auch für installierte Spiele, helles und dunkles Design mit Farbschemata und Sprachwahl, Titelmusik der Kacheln bleibt nach einem Spiel.
 
 ## Hinweise
-- **An der Konsole erprobt:** Dieser Stand läuft auf der Pro und der Slim (mit der Versionsnummer 1.95.1, gleicher Code). Suche und Spieltitel wurden im Browser an der Pro ausprobiert; Kraken Mount 0.4.0 läuft auf beiden, und beide lassen installierte Spiele aus dem Reiter.
+- **An der Konsole erprobt:** Dieser Stand läuft auf der Pro und der Slim (mit der Versionsnummer 1.95.1, gleicher Code). Die Suche wurde im Browser und in der Vollbild-App ausprobiert, die Spieltitel im Browser an der Pro; Kraken Mount 0.4.0 läuft auf beiden, und beide lassen installierte Spiele aus dem Reiter.
 - **Backports neben ShadowMountPlus:** An der Slim haben Kraken Mount 0.4.0 und ShadowMountPlus 1.7beta12 denselben Test-Backport eines installierten Spiels gleichzeitig angewendet: Das Spiel startete und lief, beide gaben ihre Umleitung beim Schließen frei, kein Absturz.
-- **Nicht von Hand an einer Konsole ausprobiert:** die Suche in der Vollbild-App mit dem Controller (nur PC-Bilder).
 - Alle 46 Host-Tests, 396 Tests der Vollbild-App und die Wörterbuchprüfung bestehen. Die neue ELF an Port 9021 senden und die Kacheln FAKE86921 und FAKE86922 aus diesem Release neu kopieren (die Vollbild-App muss dafür geschlossen sein). Ein laufendes Kraken Mount behält seine alte Fassung, bis es einmal aus- und eingeschaltet wird.
 
 ## Downloads
