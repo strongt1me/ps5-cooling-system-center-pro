@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.96.0 – 25.11.2026
 
 ### Dateimanager: Suche (Wunsch des Users, 25.11.2026)
 - **Im Ordner suchen:** Über der Liste steht ein Suchfeld. Es zeigt sofort nur die Einträge des offenen Ordners, deren Name den Suchbegriff enthält (Groß-/Kleinschreibung egal, auch bei Ä/Ö/Ü). Mit `*` und `?` als Platzhalter muss der ganze Name passen (`*.pkg`, `PPSA?????`).
