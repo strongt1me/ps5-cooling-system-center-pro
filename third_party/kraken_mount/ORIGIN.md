@@ -41,7 +41,14 @@ gibt es unter der oben genannten Adresse (Tag `v0.4.0`).
   NSFS-Umleitungen in das `/app0` des Spiels gelegt (Port von ShadowMountPlus 1.7 `sm_pkg_backport.c`, neu `src/launch/nsfs.rs`); die Installation
   selbst bleibt unverändert. Mit `ampr_installed` aus (Standard) läuft bei einem installierten Spiel die `libSceAmpr.sprx` des Systems.
   **Wichtig für diese App:** Weil die App Kraken Mount neben ShadowMountPlus laufen lässt (siehe „Änderung durch diese App“), könnten beide denselben
-  Backport eines installierten Spiels anwenden. Ob sich das stört, ist an der Konsole noch nicht geprüft.
+  Backport eines installierten Spiels anwenden. **An der Slim geprüft (25.11.2026, ASTRO's PLAYROOM, echt installiert, ShadowMountPlus
+  1.7beta12 und Kraken Mount 0.4.0, Test-Backport `/data/homebrew/backports/PPSA01325` mit einer Textdatei):** Beide legen ihre NSFS-Umleitung
+  auf dieselbe Datei an, ohne Fehler (ShadowMountPlus `[BKP][NSFS] … redirects=1`, Kraken Mount `backport redirects ACTIVE: 1 … before exec`);
+  die Konsole nimmt die zweite Umleitung an. Das Spiel startet und läuft normal, es gibt keine Fehlermeldung und keinen doppelten
+  Fakelib-Überbau (bei einem fremden unionfs auf `common/lib` weichen beide aus; laut Quelltext wertet ShellCore die Antwort von
+  ShadowMountPlus ohnehin nicht aus). Beim Schließen geben beide ihre Umleitung mit dem Namensraum frei, der Kernel entfernt beide
+  (`nsfs_unmount_rdct: remaining rdct …` zweimal); kein Absturz, kein Coredump. Auf der Pro gibt es kein echt installiertes Spiel
+  (keine `/user/app/<ID>/app.pkg` außer YouTube), dort tritt der Fall nicht auf.
 - **Installieren auf die Konsole:** Ein FPKG-Spiel lässt sich auf seiner Seite installieren (`/api/install`, Reiter „Install“ mit Patches und DLC; die
   Konsole lädt die Datei über `http://127.0.0.1:8097/pkg/…`). Solange eine Installation läuft oder wartet, lehnt `POST /api/quit` mit 409 ab („an install
   is running“); die App nennt das beim Ausschalten.
