@@ -121,6 +121,13 @@
           <div><b>Keine Verbindung zur Konsole</b>
             <small>Die App fragt jede Sekunde neu nach. Läuft die App noch und ist die PS5 im Netz?</small></div>
         </div>
+        <!-- Die App meldet eine andere Version als beim Öffnen dieser Seite: eine neue ELF kam, während die Seite offen war (app.js pageVersionCheck, 25.11.2026) -->
+        <div class="update-note" id="update-note" role="status" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+          <div><b id="update-title">Neue Version läuft</b>
+            <small id="update-text">Diese Seite stammt noch von einer älteren Version. Neu laden, damit alle neuen Funktionen da sind.</small></div>
+          <button type="button" class="btn" id="update-reload">Seite neu laden</button>
+        </div>
         <!-- ══════════════════════ PROFIL ══════════════════════
              Neu am 19.09.2026: alles rund um das Konto an dieser Konsole.
              Name und Profilbild stammen aus der alten Karte „Benutzerprofil"

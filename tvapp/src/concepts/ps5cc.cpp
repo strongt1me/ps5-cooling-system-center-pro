@@ -10,6 +10,7 @@
 #include "concepts/concepts.hpp"
 
 #include "core/tween.hpp"
+#include "ps5cc/app_update.hpp"
 #include "ps5cc/backdrops.hpp"
 #include "ps5cc/covers.hpp"
 #include "ps5cc/data.hpp"
@@ -1867,8 +1868,22 @@ class Ps5cc final : public app::Concept
         return 0;
     }
 
+    // The tile carries an older app than the one running: copied the new ELF but not the new tile.
+    // Its pages then lack what the app can do (a user missed the file search in 1.96.0, 25.11.2026).
+    bool tile_older() const
+    {
+        return !data_.tile_version.empty() && !data_.app_version.empty() &&
+               ps5cc::compare_versions(data_.tile_version, data_.app_version) == -1;
+    }
+
     void absorb()
     {
+        if (tile_older() && told_tile_ != data_.tile_version + "/" + data_.app_version)
+        {
+            told_tile_ = data_.tile_version + "/" + data_.app_version;
+            toasts_.push(ui::StatusKind::warning, "Kachel aus dem Release neu kopieren",
+                         "Kachel " + data_.tile_version + " \xC2\xB7 App " + data_.app_version);
+        }
         if (data_.disc.loaded && data_.disc.has_drive != disc_tab_)
         {
             const bool here = nav_.current() == kAreaGames;
@@ -2832,6 +2847,11 @@ class Ps5cc final : public app::Concept
         {
             ver = 12.0f + ui::text(list, fonts.regular, "v" + data_.app_version,
                                    kMargin + brand + 14.0f + pro + 12.0f, 53.0f, 18.0f, kMuted);
+            // the tile is older than the app: its pages lack what the app has (25.11.2026)
+            if (tile_older())
+                ver += 8.0f + ui::text(list, fonts.semibold, "Kachel " + data_.tile_version,
+                                       kMargin + brand + 14.0f + pro + ver + 12.0f, 53.0f, 18.0f,
+                                       kWarning);
         }
         const int area = nav_.current();
         if (area >= 0 && area < static_cast<int>(nav_.entries().size()))
@@ -3234,6 +3254,7 @@ class Ps5cc final : public app::Concept
     std::string orig_status_json_; // what became of the originals, as last parsed
     ps5cc::OrigStatus orig_status_;
     std::uint64_t seen_ = 0;
+    std::string told_tile_; // the tile/app pair the "copy the tile again" toast was shown for
     Link shown_link_ = Link::online;
     float age_ = 0.0f;
     float clock_ = 0.0f;

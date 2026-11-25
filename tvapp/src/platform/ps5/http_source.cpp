@@ -3036,9 +3036,13 @@ void HttpSource::poll_language()
                 }
                 cJSON_Delete(root);
             }
+            const std::size_t elf_size = reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf_end) -
+                                         reinterpret_cast<std::uintptr_t>(ps5cc_payload_elf);
+            const std::string tile_version = embedded_version(ps5cc_payload_elf, elf_size);
             std::lock_guard<std::mutex> lock(mutex_);
             data_.console_language = console_language_;
             data_.app_version = app_version;
+            data_.tile_version = tile_version;
             if (console_tz_known_)
                 data_.config.tz_offset_min = console_tz_min_;
             ++data_.serial;

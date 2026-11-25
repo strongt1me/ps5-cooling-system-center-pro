@@ -1978,6 +1978,12 @@ und ihre Kacheln danach löschen.
   - Kacheln aus 1.77.0 oder älter können das noch nicht: einmal die neue ELF an Port 9021 senden (sie beendet die
     ältere Instanz selbst) oder die Konsole neu starten und dann die Kachel öffnen. Geprüft wurde die Vergleichslogik
     am PC, das Ersetzen an der Konsole noch nicht.
+- **Alte Seite, neue App (seit 25.11.2026).** Kommt eine neue ELF, während die Weboberfläche offen ist, bleibt die Seite
+  die alte: Nur die Versionsanzeige (aus `GET /api/v1/system`, alle 10 s) ist neu, neue Knöpfe und Felder fehlen (so suchte ein
+  User in 1.96.0 vergeblich die Suche im Dateimanager). Die Seite merkt sich die Version beim ersten Abruf; meldet die App eine
+  andere, steht oben „Neue Version … läuft“ mit dem Knopf **Seite neu laden** (selbst lädt sie nicht neu, eine Eingabe ginge
+  verloren). Die Vollbild-App liest die Version ihrer eingebauten ELF (`PS5CC-VERSION`); ist sie älter als die laufende App,
+  steht oben in Gelb „Kachel …“ neben der Version, und einmal kommt „Kachel aus dem Release neu kopieren“.
 
 ## Die Vollbild-App (seit 1.75.0)
 

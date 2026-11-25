@@ -337,6 +337,19 @@ body.offline .offline-note { display: flex; }
 .offline-note b { display: block; font-size: 15px; }
 .offline-note small { display: block; color: var(--ink-2); font-size: 12.5px; }
 
+/* Neue Version läuft, die Seite ist noch die alte (25.11.2026): wie der Hinweis darüber, in der Akzentfarbe, mit Knopf */
+.update-note { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; padding: 14px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.update-note[hidden] { display: none; }
+.update-note svg { width: 34px; height: 34px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; }
+.update-note > div { flex: 1 1 auto; min-width: 0; }
+.update-note b { display: block; font-size: 15px; }
+.update-note small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.update-note .btn { flex: none; }
+@media (max-width: 720px) { .update-note { flex-wrap: wrap; } .update-note .btn { width: 100%; } }
+
 /* Schnellwahl in der Zieltemperatur-Karte: dieselben Werte wie in der Übersicht */
 .co-quick { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
 .co-quick-head { display: flex; align-items: baseline; justify-content: space-between;

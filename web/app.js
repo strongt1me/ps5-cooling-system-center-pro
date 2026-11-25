@@ -4198,6 +4198,20 @@
   /* Laufnummer: Nur der neueste Aufruf zeichnet. Die direkten Aufrufe nach dem Auswerfen und nach dem Seriennummer-Knopf überholen sonst einen
      älteren 10-s-Lauf, der danach seinen alten Stand zeichnet (Durchsicht 21.11.2026). */
   let sysSeq = 0;
+  /* Die Version der App beim ersten Abruf dieser Seite. Meldet die App später eine andere, kam eine neue ELF, während die Seite offen war:
+     Knöpfe und Felder sind noch die alten, nur die Versionsanzeige ist neu (Meldung eines Users 25.11.2026: „keine Suche in 1.96.0“ –
+     die Seite war die von 1.95.x). Der Hinweis bleibt, bis neu geladen wird; selbst lädt die Seite nicht neu (eine Eingabe ginge verloren). */
+  let pageVersion = "";
+  const pageVersionCheck = (v) => {
+    if (!v) return;
+    if (!pageVersion) { pageVersion = v; return; }
+    const note = $("#update-note");
+    if (!note || v === pageVersion) return;
+    txt("#update-title", `Neue Version ${v} läuft`);
+    txt("#update-text", `Diese Seite stammt noch von Version ${pageVersion}. Neu laden, damit alle neuen Funktionen da sind.`);
+    note.hidden = false;
+  };
+  $("#update-reload").addEventListener("click", () => location.reload());
   const loadSystem = async () => {
     if (bdOn && state.page === "system" && !bd.once) bdLoad();
     let sys;
@@ -4243,6 +4257,7 @@
     /* txt() setzt textContent, kein innerHTML — hier gehört also das echte
        Zeichen hin und nicht &amp;, sonst stünde die Entity wörtlich da. */
     txt("#side-version", sys.app_version ? `Version ${sys.app_version}` : "");
+    pageVersionCheck(sys.app_version);
 
     /* Banner der Systemseite */
     txt("#sy-model", sys.model || "--");

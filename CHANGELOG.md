@@ -2,6 +2,13 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
+## Unveröffentlicht
+
+### Hinweis bei alter Seite oder alter Kachel (Meldung eines Users, 25.11.2026)
+- **Browser:** Kam eine neue ELF, während die Weboberfläche offen war, blieb die Seite die alte – nur die Versionsanzeige war schon neu. So fand ein User in 1.96.0 die Suche im Dateimanager nicht. Die Seite merkt sich jetzt die Version beim ersten Abruf und zeigt bei einer anderen oben „Neue Version … läuft“ mit dem Knopf „Seite neu laden“ (sie lädt nicht selbst neu, damit keine Eingabe verloren geht).
+- **Vollbild-App:** Ist die Kachel älter als die laufende App, steht oben in Gelb „Kachel …“ neben der Version, und einmal kommt die Meldung „Kachel aus dem Release neu kopieren“. Ist die Kachel neuer, ersetzt sie die App wie bisher selbst.
+- Wörterbücher (Browser und Vollbild, je sechs Sprachen), Handbuch ×7 und `docs/HANDBUCH.md`.
+
 ## v1.96.0 – 25.11.2026
 
 ### Dateimanager: Suche (Wunsch des Users, 25.11.2026)

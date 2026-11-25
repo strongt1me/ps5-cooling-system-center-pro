@@ -295,6 +295,7 @@ class MockSource final : public Source
         refresh_status();
         data_.console_language = 4; // German, as the owner's console
         data_.app_version = "1.76.6";
+        data_.tile_version = "1.76.6";
         load_language();
     }
 

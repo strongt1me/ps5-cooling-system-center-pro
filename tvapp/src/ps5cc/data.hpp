@@ -1299,6 +1299,9 @@ struct Snapshot
     int console_language = -1; // locale.language of /api/v1/system; -1 until it was read
     std::string
         app_version; // app_version of /api/v1/system, shown after the title; "" until it was read
+    // The version of the app this tile carries (its embedded ELF's mark); "" when unknown. Older than
+    // app_version: the tile's own pages lack what the running app has (25.11.2026).
+    std::string tile_version;
     Status status;
     std::vector<Game> games;
     bool games_loaded = false;
