@@ -54,6 +54,11 @@ static int               g_count = -1; /* -1: not reachable at last ask */
 static uint64_t          g_games_ms;
 static char              g_version[32];
 static char              g_caps[512];  /* ",cap1,cap2," */
+/* 1: the last ask of /version on 127.0.0.1:10101 was answered by Kraken Mount, not by ShadowMountPlus. Kraken Mount v0.4.1 and later answer a part of
+   ShadowMountPlus's API on that address (for apps that only know ShadowMountPlus); a copy started by the app has that moved away (patch_kraken.py,
+   kraken.c), a copy started otherwise has not. Its games are not ShadowMountPlus's, and it knows none of the routes the app sends there (eject,
+   mount, move ...), so the app takes ShadowMountPlus as not reachable and sends it nothing (26.11.2026). */
+static int               g_not_smp;
 
 
 /* Waits for fd until events or the deadline; 1 ready, 0 timeout, -1 error. */
@@ -186,6 +191,12 @@ status_ok(const cJSON *j) {
   return cJSON_IsNumber(s) && s->valueint == 0;
 }
 
+/* An answer of /version from Kraken Mount ("kraken_mount_version") rather than from ShadowMountPlus ("shadowmount_version"). */
+static int
+answer_is_kraken(const cJSON *ver) {
+  return ver && cJSON_GetObjectItem(ver, "kraken_mount_version") != NULL && cJSON_GetObjectItem(ver, "shadowmount_version") == NULL;
+}
+
 static int
 copy_str(const cJSON *j, const char *key, char *out, size_t out_len) {
   const cJSON *v = cJSON_GetObjectItem(j, key);
@@ -223,7 +234,8 @@ refresh_locked(void) {
   int count = -1;
 
   cJSON *ver = post("/version", "{}", 1500);
-  if(status_ok(ver)) {
+  const int kraken = answer_is_kraken(ver);
+  if(status_ok(ver) && !kraken) {
     copy_str(ver, "shadowmount_version", version, sizeof(version));
     const cJSON *capl = cJSON_GetObjectItem(ver, "capabilities");
     const cJSON *c;
@@ -279,6 +291,10 @@ refresh_locked(void) {
     g_caps[0] = 0;
   }
   g_count = count;
+  if(kraken != g_not_smp)                       /* said once when it changes, under the lock: no other ask runs now */
+    PS5TM_WARN("smp_port_kraken", kraken ? "Auf 127.0.0.1:10101 antwortet Kraken Mount statt ShadowMountPlus. Die App schickt dorthin keine Aufträge für ShadowMountPlus."
+                                         : "Auf 127.0.0.1:10101 antwortet wieder ShadowMountPlus.");
+  g_not_smp = kraken;
   g_refreshing = 0;
   pthread_cond_broadcast(&g_refresh_cv);
 }
@@ -353,6 +369,23 @@ ps5tm_smp_forget(void) {
 cJSON *
 ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms,
                char *err, size_t err_len) {
+  /* Kraken Mount answered on ShadowMountPlus's port at the last ask: asked again (it may have gone meanwhile); while it is there, nothing is sent */
+  pthread_mutex_lock(&g_lock);
+  const int was_kraken = g_not_smp;
+  pthread_mutex_unlock(&g_lock);
+  if(was_kraken) {
+    cJSON *ver = post("/version", "{}", 1500);
+    const int still = answer_is_kraken(ver);
+    cJSON_Delete(ver);
+    if(still) {
+      snprintf(err, err_len, "ShadowMountPlus ist nicht erreichbar: Auf seinem Port antwortet Kraken Mount.");
+      return NULL;
+    }
+    pthread_mutex_lock(&g_lock);
+    g_not_smp = 0;
+    g_games_ms = 0;                             /* the list is asked again with ShadowMountPlus */
+    pthread_mutex_unlock(&g_lock);
+  }
   char *txt = body ? cJSON_PrintUnformatted(body) : NULL;
   cJSON *ans = post(route, txt ? txt : "{}", timeout_ms);
   free(txt);

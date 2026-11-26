@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.4.0 (25.11.2026)
+**Version:** v0.4.1 (26.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.4.0`, Commit `6e51ef197feb7ad3487dee91e88392a468b38d08`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.4.1`, Commit `54b1f9d8697bc4607e860a2223e4df610d38200d`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.4.0.elf` (PS5-ELF, 7 077 216 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `6c778613b796039230f6690a16e4c04a76069a6b7b6c8030e292f54e904cc401` (gleich `SHA256SUMS` der Veröffentlichung; am 25.11.2026 mit `gh release download v0.4.0` geladen, ELF-Kopf und Kennung `kraken-mount/0.4.0` geprüft)
+**Datei:** `kraken-mount_v0.4.1.elf` (PS5-ELF, 7 273 824 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `88d39545728f4202421616a299467545afe7f9b295b636f7bd49b1f2fe1aad1d` (gleich `SHA256SUMS` der Veröffentlichung; am 26.11.2026 mit `gh release download v0.4.1` geladen, ELF-Kopf und Kennung `kraken-mount/0.4.0` geprüft)
 
 ## Verwendung
 
@@ -26,7 +26,24 @@ Datei, und es entsteht keine Kachel (nur eine Zeile „not registered“ im Prot
 löscht die Markierung (`keep_tile_away` in `src/kraken.c`, `src/tilekeep.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.4.0`).
+gibt es unter der oben genannten Adresse (Tag `v0.4.1`).
+
+## Neu in v0.4.1 (26.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.4.0…v0.4.1)
+
+- **Schnittstelle von ShadowMountPlus auf `127.0.0.1:10101`** (`src/web.rs` `serve_smp`, Hinweis des Users 26.11.2026): Kraken Mount beantwortet dort
+  einen Teil der API von ShadowMountPlus (`/api/v1/version`, `games`, `scan`, `manual/add|remove`, `games/uninstall`, `games/fakelib`; alles andere 404),
+  damit Programme, die nur ShadowMountPlus kennen (Playden, RecompStore), es finden. Solange der Port belegt ist, bindet es alle 2 s neu. ShadowMountPlus
+  bindet `0.0.0.0:10101`; Rust bindet mit `SO_REUSEADDR`, und auf einem BSD-Kern darf der genauere `127.0.0.1:10101` daneben gebunden werden und bekommt
+  dann jede Verbindung an 127.0.0.1 – genau so spricht diese App mit ShadowMountPlus. Beide laufen hier absichtlich nebeneinander, deshalb verlegt die App
+  diesen einen Port (Änderung 3 unten). Zusätzlich erkennt `src/smp.c` Kraken Mount auf dem Port (Antwort mit `kraken_mount_version`) und hält es nicht für
+  ShadowMountPlus (für eine eigenständig gestartete Fassung).
+- **Installierte Spiele über ampr-emu-ng** (Einstellung `ampr_installed`, ab Werk **aus**; je Spiel `ampr_installed_on/off`, `POST /api/ng/<ID>`): ein
+  installiertes Debug-FPKG startet dann aus seiner `app.pkg`, ein installiertes Spiel aus dem Handel mit `/data/krakenmount/ampr/*` im `fakelib`. Ab Werk
+  ändert sich an installierten Spielen nichts; die App zeigt sie weiter nicht im Reiter (`kind: "installed"`, jetzt auch für eine `.pkg`, die die
+  eigene Installation der Konsole ist).
+- **Spiel schließen** (`POST /api/close/<ID>`), Duplikate mit Größe (`POST /api/sizes/<ID>`), QR-Code der Adresse (`GET /api/qr`), neun Farbschemata,
+  größere Schrift auf seiner Seite. Von der App nicht benutzt.
+- Mitgeliefert weiter ampr-emu-ng 0.5.1, dlc_emu 0.3 und pgo_stub 0.6.
 
 ## Neu in v0.4.0 (25.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.3.2…v0.4.0)
 
@@ -154,20 +171,25 @@ null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount
 
 **Änderung durch diese App (modifizierte Kopie, GPL-3.0):** Die App betreibt Kraken Mount absichtlich neben ShadowMountPlus (getrennte Suchordner, wie
 mit v0.0.1-beta). Deshalb ändert sie in der eingebetteten ELF beim Bau (`tools/patch_kraken.py`, `Makefile`) und in einer von GitHub geladenen
-Fassung beim Speichern (`patch_smp_wait` und `patch_self_update`, `src/kraken.c`) zwei Zeichenketten, jede an einem Byte und an zwei Stellen (das Programm
-trägt sich für seine Selbstkopie zweimal in der Datei):
+Fassung beim Speichern (`patch_smp_wait`, `patch_self_update` und `patch_smp_port`, `src/kraken.c`) zwei Zeichenketten, jede an einem Byte, und ab v0.4.1
+eine Portnummer, jede Änderung an zwei Stellen (das Programm trägt sich für seine Selbstkopie zweimal in der Datei):
 
 1. `shadowmountplus.elf` (die Konstante `SMP_PROCESS` in `src/main.rs`) wird zu `shadowmountplus.elX`: Kein Prozess hat diesen Namen, das Warten auf
    ShadowMountPlus endet sofort. Das Warten auf kstuff bleibt.
 2. Ab v0.3.2: `https://api.github.com/repos/quer3q/kraken-mount/releases/latest` (die Konstante `RELEASE_URL` in `src/update.rs`) wird zu
    `xttps://…`: Die HTTP-Bibliothek der Konsole lehnt das unbekannte Schema sofort ab, keine Anfrage verlässt die Konsole, das Programm findet keine
    neuere Fassung und bietet auf seiner Seite kein „Update“ an. Sonst käme über diesen Knopf eine ungeänderte Fassung, die die laufende ablöst und
-   dann auf das Ende von ShadowMountPlus wartet. Neue Fassungen kommen über den Knopf der App, der beide Änderungen macht. Die Abfrage für
+   dann auf das Ende von ShadowMountPlus wartet. Neue Fassungen kommen über den Knopf der App, der alle Änderungen macht. Die Abfrage für
    ampr-emu-ng hat eine eigene Adresse und bleibt.
+3. Ab v0.4.1: Der Port seiner Schnittstelle für Programme, die nur ShadowMountPlus kennen (`SMP_PORT` = 10101 in `src/web.rs`), wird 18097. Er steht
+   als 16-Bit-Wert in einem Befehl vor dem Binden (`movw $0x2775, 0x70(%rsp)`, Bytes `66 C7 44 24 70 75 27`, je Stufe einmal) und wird zu
+   `66 C7 44 24 70 B1 46`. Die Schnittstelle bleibt, aber auf einem Port, den niemand fragt; ShadowMountPlus bleibt für diese App auf 127.0.0.1:10101
+   erreichbar. Seine eigene Schnittstelle auf 8097 bleibt unverändert. Eine spätere Fassung, in der der Befehl anders aussieht, wird nicht geändert
+   (das Bauprotokoll und die Meldung `kraken_patch` nennen dann 0 Stellen); `src/smp.c` erkennt Kraken Mount auf 10101 dann trotzdem.
 
-Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.4.0.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
-oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderungen sind die beiden Werte
-`SMP_PROCESS` (`src/main.rs`) und `RELEASE_URL` (`src/update.rs`) im Quellprojekt, Tag `v0.4.0`.
+Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.4.1.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
+oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderungen sind die drei Werte
+`SMP_PROCESS` (`src/main.rs`), `RELEASE_URL` (`src/update.rs`) und `SMP_PORT` (`src/web.rs`) im Quellprojekt, Tag `v0.4.1`.
 
 ## Hinweise des Autors
 

@@ -36,7 +36,7 @@
 #include "upd_http.h"
 
 #define KR_PORT              8097
-#define KR_EMBEDDED_VERSION  "0.4.0"
+#define KR_EMBEDDED_VERSION  "0.4.1"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"
@@ -235,6 +235,20 @@ patch_self_update(unsigned char *d, size_t n) {
   int changed = 0;
   for(size_t i = 0; i + l <= n; i++)
     if(d[i] == 'h' && !memcmp(d + i, url, l)) { d[i] = 'x'; changed++; i += l - 1; }
+  return changed;
+}
+
+/* Kraken Mount v0.4.1 and later also answer ShadowMountPlus's API on 127.0.0.1:10101. ShadowMountPlus binds 0.0.0.0:10101, and the more precise
+   binding takes every connection to 127.0.0.1:10101 - the way the app talks to ShadowMountPlus (smp.c). The port of that listener is the immediate
+   of one instruction ("movw $0x2775, 0x70(%rsp)", 66 C7 44 24 70 75 27, once per stage); it becomes 18097, a port nothing asks, as
+   tools/patch_kraken.py does for the embedded copy (26.11.2026). A later version built otherwise is not found here: smp.c then still recognises
+   Kraken Mount on that port and does not take it for ShadowMountPlus. Number of places changed. */
+static int
+patch_smp_port(unsigned char *d, size_t n) {
+  static const unsigned char old[] = { 0x66, 0xC7, 0x44, 0x24, 0x70, 0x75, 0x27 };
+  int changed = 0;
+  for(size_t i = 0; i + sizeof old <= n; i++)
+    if(d[i] == 0x66 && !memcmp(d + i, old, sizeof old)) { d[i + 5] = 0xB1; d[i + 6] = 0x46; changed++; i += sizeof old - 1; }
   return changed;
 }
 
@@ -862,6 +876,8 @@ fetch_release(char *msg, size_t n) {
   if(smp_places) PS5TM_INFO("kraken_patch", "Kraken Mount %s: Prozessname von ShadowMountPlus an %d Stelle(n) geändert (kein Warten auf ShadowMountPlus).", ver, smp_places);
   int upd_places = patch_self_update((unsigned char *)elf, elf_n);
   if(upd_places) PS5TM_INFO("kraken_patch", "Kraken Mount %s: eigene Update-Abfrage an %d Stelle(n) abgeschaltet (neue Fassungen nur über die App).", ver, upd_places);
+  int port_places = patch_smp_port((unsigned char *)elf, elf_n);
+  if(port_places) PS5TM_INFO("kraken_patch", "Kraken Mount %s: Schnittstelle auf dem Port von ShadowMountPlus an %d Stelle(n) auf 18097 verlegt.", ver, port_places);
   int e = ps5tm_put_lib_file(KR_ELF, (const unsigned char *)elf, elf_n);
   if(e) { snprintf(why, sizeof why, "Die Datei ließ sich nicht ablegen: %s", strerror(e)); goto done; }
   unlink(KR_BAD);                                  /* a newer release gets its chance */
