@@ -2,7 +2,12 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.97.0 – 26.11.2026
+
+### Fremdbaustein: Kraken Mount v0.4.1 (quer3q, 26.11.2026; Hinweis des Users, 26.11.2026)
+- **Kraken Mount 0.4.0 → 0.4.1** eingebettet (7.273.824 Bytes, SHA-256 gleich `SHA256SUMS`). Neu laut Veröffentlichung: installierte Spiele über ampr-emu-ng (ab Werk aus), Spiel schließen, QR-Code, neun Farbschemata.
+- **Port von ShadowMountPlus:** 0.4.1 beantwortet auch die Schnittstelle von ShadowMountPlus auf `127.0.0.1:10101`. ShadowMountPlus bindet `0.0.0.0:10101`; der genauere Platz bekommt auf der Konsole jede Verbindung an 127.0.0.1 – so spricht die App mit ShadowMountPlus (Spieleliste, Auswerfen, Einhängen, Verschieben). Da die App beide nebeneinander betreibt, verlegt sie diese eine Schnittstelle in ihrer Fassung auf 18097 (`tools/patch_kraken.py`, für eine geladene Fassung `src/kraken.c`: die Portnummer im Befehl vor dem Binden, je Stufe eine Stelle). Antwortet trotzdem Kraken Mount auf 10101 (eine eigenständig gestartete Fassung), erkennt die App es an der Antwort auf `/version`, hält es nicht für ShadowMountPlus und schickt ihm keine Aufträge (`src/smp.c`, Protokoll `smp_port_kraken`).
+- `third_party/kraken_mount/ORIGIN.md`, `THIRD_PARTY_NOTICES.md`, Handbuch ×7 und `docs/HANDBUCH.md`, `tools/upstream.json`.
 
 ### Fremdbaustein: Dump Forge v0.6.0 (quer3q, 26.11.2026; Hinweis des Users, 26.11.2026)
 - **Dump Forge 0.5.7 → 0.6.0**, eingebaut in die App (Browser-App und Vollbild-App benutzen dieselbe eingebaute Fassung): `third_party/dump_forge/ps5-dump-forge-0.6.0-ps5.elf.zst` (zstd-Rahmen 8.558.651 Bytes; die ELF darin 18.877.632 Bytes, SHA-256 gleich der `SHA256SUMS` der Veröffentlichung), `tools/fetch-dumpforge.sh`, `Makefile` (`DF_ZST`). Mitgeliefert ist darin jetzt ampr-emu-ng 0.5.1 (vorher 0.4.1).
