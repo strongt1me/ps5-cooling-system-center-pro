@@ -339,8 +339,13 @@ body.offline .offline-note { display: flex; }
 
 /* Neue Version läuft, die Seite ist noch die alte (25.11.2026): wie der Hinweis darüber, in der Akzentfarbe, mit Knopf */
 .update-note { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; padding: 14px 20px;
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: var(--r-lg);
-  background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  border: 1px solid rgba(59,130,246,.55); border-radius: var(--r-lg);
+  background: rgba(59,130,246,.10); }
+/* the accent of each design where the browser knows color-mix(); the PS5's own browser keeps the fixed blue above (audit 26.11.2026: without a
+   fallback the note had neither frame nor background there) */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .update-note { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+}
 .update-note[hidden] { display: none; }
 .update-note svg { width: 34px; height: 34px; flex: none; fill: none; stroke: var(--accent); stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round; }
@@ -1566,6 +1571,7 @@ a.cr-login.cr-off { color: var(--ink-muted); cursor: default; text-decoration: n
 .fm-del-warn { margin: 8px 0 0; font-size: 13px; color: #ffb0b0; }
 .fm-del-warn + .fm-del-warn { margin-top: 2px; }
 :root[data-theme="hell"] .fm-del-warn { color: #8e0b0b; }
+:root[data-theme="hell"] .fm-game { color: #1f55b8; }          /* the accent blue had 4.1:1 on the light row; this has about 6:1 (audit 26.11.2026) */
 
 .acc-list { display: grid; gap: 8px; margin: 10px 0 0; }
 .acc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px;
@@ -1640,7 +1646,7 @@ a.tab { text-decoration: none; color: inherit; }
   font-size: 13px; color: var(--ink-2); }
 .fm-searchjob > span:first-child { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
 .fm-searchjob .fm-sbar { flex: 1 1 120px; height: 4px; border-radius: 2px; background: var(--hairline); overflow: hidden; position: relative; }
-.fm-searchjob .fm-sbar i { position: absolute; inset: 0 auto 0 0; width: 35%; border-radius: 2px;
+.fm-searchjob .fm-sbar i { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; border-radius: 2px;   /* no inset: the PS5 browser does not know it */
   background: linear-gradient(90deg, #2c72d2, #7154e6); animation: fm-sweep 1.4s ease-in-out infinite; }
 @keyframes fm-sweep { 0% { left: -35%; } 100% { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .fm-searchjob .fm-sbar i { animation: none; left: 0; } }

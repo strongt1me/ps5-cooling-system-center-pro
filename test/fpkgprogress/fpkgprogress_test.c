@@ -162,6 +162,17 @@ main(void) {
     CHECK(d == 0 && d <= t, "measure: count went down");
   }
 
+  /* Dump Forge 0.6.0 tells the stage's own bytes: taken as they are, never past the end; without them (an older version) the guess does it */
+  {
+    uint64_t d = 7, t = 7;
+    CHECK(ps5tm_fpkgprog_stage(0, 0, &d, &t) == 0 && d == 7 && t == 7, "stage: nothing told, nothing changed");
+    CHECK(ps5tm_fpkgprog_stage(500, 0, &d, &t) == 0, "stage: a count without a total is not a bar");
+    CHECK(ps5tm_fpkgprog_stage(0, 4000, &d, &t) == 1 && d == 0 && t == 4000, "stage: start");
+    CHECK(ps5tm_fpkgprog_stage(1000, 4000, &d, &t) == 1 && d == 1000 && t == 4000, "stage: a quarter");
+    CHECK(ps5tm_fpkgprog_stage(4000, 4000, &d, &t) == 1 && d == t, "stage: end");
+    CHECK(ps5tm_fpkgprog_stage(4100, 4000, &d, &t) == 1 && d == 4000 && t == 4000, "stage: never past the end");
+  }
+
   printf(fails ? "%d FAILED\n" : "all passed\n", fails);
   return fails != 0;
 }

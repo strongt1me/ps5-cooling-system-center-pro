@@ -32,11 +32,14 @@
 
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #ifndef PS5TM_HOST_TEST
 #include <sys/sysctl.h>
 #endif
@@ -187,11 +190,27 @@ ps5tm_msgbuf_read(size_t *len_out) {
 }
 
 
+/* Opens a title's metadata file for reading, and only a regular file. Since 25.11.2026 the file manager asks for the title of any folder whose name begins
+   with a title ID (fm_title.inc), so the path can lie in a folder somebody else filled (a mounted image, a drive): opening a named pipe there would never
+   return and hold the listing's thread and the drive for good, a link to a device node would run its driver (audit 26.11.2026; the file manager's own
+   viewer and download check the same way). */
+static FILE *
+fopen_meta(const char *path, const char *mode) {
+  struct stat st;
+  if(stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return NULL;
+  int fd = open(path, O_RDONLY | O_NONBLOCK);                     /* non-blocking: the file may have been swapped for a pipe since the stat */
+  if(fd < 0) return NULL;
+  if(fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) { close(fd); return NULL; }
+  FILE *f = fdopen(fd, mode);
+  if(!f) close(fd);
+  return f;
+}
+
 /* Reads the title's display name and version out of one param.json. */
 static int
 read_title_meta(const char *path, char *name, size_t name_len,
                 char *ver, size_t ver_len) {
-  FILE *f = fopen(path, "r");
+  FILE *f = fopen_meta(path, "r");
   if(!f) return -1;
 
   fseek(f, 0, SEEK_END);
@@ -277,7 +296,7 @@ sfo_copy(char *dst, size_t dst_len, const unsigned char *src, size_t len) {
 static int
 read_title_sfo(const char *path, char *name, size_t name_len,
                char *ver, size_t ver_len) {
-  FILE *f = fopen(path, "rb");
+  FILE *f = fopen_meta(path, "rb");
   if(!f) return -1;
 
   fseek(f, 0, SEEK_END);

@@ -102,6 +102,7 @@ static atomic_int       g_started = 0;
 /* Threshold the user pinned by hand; 0 = never pinned, so observe mode
    leaves the fan alone. */
 static atomic_int g_manual_threshold_c = 0;
+static atomic_int g_release_req = 0;      /* the settings took the fixed threshold away: the loop gives the fan back to the console */
 /* 1 once this run has written the threshold at all (the seed of ps5tm_fan_init() included). At SIGTERM the loop's own bookkeeping
    (last_applied) is not enough: it is 0 while the guard holds, before the first pass and while no temperature was ever valid, and
    the fan was then left at whatever was written last (audit 24.11.2026, test/sim A_stop_guard_hot, A_stop_nowrite). */
@@ -724,6 +725,22 @@ ps5tm_fan_snapshot(ps5tm_snapshot_t *out) {
   pthread_mutex_unlock(&g_snapshot_lock);
 }
 
+/* The settings were written as a whole (PUT, import): the fixed threshold of observe mode follows them. Until 26.11.2026 a threshold once set by hand
+   stayed in force until the app was started again, also when an import had taken it away or changed it (audit). The loop writes a changed value itself
+   on its next pass; a pin that is gone is given back to the console there. */
+void
+ps5tm_fan_pin_from_config(void) {
+  ps5tm_config_lock();
+  const int pinned = g_config.fan_threshold_pinned != 0;
+  int c = (int)g_config.fan_threshold_c;
+  ps5tm_config_unlock();
+  if(c < PS5TM_THRESHOLD_MIN_C) c = PS5TM_THRESHOLD_MIN_C;
+  if(c > PS5TM_THRESHOLD_MAX_C) c = PS5TM_THRESHOLD_MAX_C;
+  const int want = pinned ? c : 0;
+  const int was = atomic_exchange(&g_manual_threshold_c, want);
+  if(was > 0 && want == 0) atomic_store(&g_release_req, 1);
+}
+
 int
 ps5tm_fan_apply_manual(int temp_c, int *errno_out) {
   if(temp_c < PS5TM_THRESHOLD_MIN_C) temp_c = PS5TM_THRESHOLD_MIN_C;
@@ -1121,6 +1138,7 @@ fan_worker(void *arg) {
   int      single_logged     = 0;
   int      last_good_c       = -1;  /* the last hottest reading taken (-1 = none: after a gap the first one is always taken) */
   int      glitch_held       = 0;   /* the previous pass held a far-off reading back */
+  int      release_owed      = 0;   /* the console is owed its own threshold back: after the guard held the fan, or after a hand-back that failed */
   int      duty_dead_passes  = 0;   /* passes in a row without a duty reading */
   int      duty_lost_logged  = 0;
 
@@ -1166,10 +1184,16 @@ fan_worker(void *arg) {
     if(atomic_load(&g_stop_req)) {
       /* SIGTERM/SIGINT (main.c): hand the fan back to the console the way switching the automatic off does, then end. */
       int eno = 0;
-      if(last_applied > 0 || atomic_load(&g_manual_threshold_c) > 0 || atomic_load(&g_wrote_any))
-        ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
+      /* The guard is silenced first: while it holds the fan it writes its threshold again every few seconds, and such a write after the hand-back
+         would stay when the process is gone. A write of the guard that was already on its way is covered by the second hand-back just before the end
+         (the log lines in between take up to half a second; audit 26.11.2026). */
+      const int guard_held = ps5tm_fanguard_holding();
+      ps5tm_fanguard_quiet();
+      const int hand_back = last_applied > 0 || atomic_load(&g_manual_threshold_c) > 0 || atomic_load(&g_wrote_any) || guard_held || release_owed;
+      if(hand_back) ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
       PS5TM_INFO("fan_stop", "Beenden angefordert – die Lüftereinstellung geht an die Konsole zurück.");
       ps5tm_log_file_end("vom System beendet (SIGTERM/SIGINT)");
+      if(hand_back) ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
       _exit(0);
     }
 
@@ -1214,15 +1238,23 @@ fan_worker(void *arg) {
       last_servo_ms = 0;
       last_good_c   = -1;                        /* the glitch gate starts afresh once the loop has the fan again */
       glitch_held   = 0;
+      release_owed  = 1;                         /* what the guard wrote stays in the register when it lets go (see below) */
       /* The status must not freeze while the guard holds: the readings go on, the threshold shown is the guard's
          (full cooling, or the console's own after a dead-man release, both report what the sensors say). */
       ps5tm_sensors_t hs;
-      if(ps5tm_platform_read_sensors(&hs) == 0) {
-        pthread_mutex_lock(&g_snapshot_lock);
+      const int hs_ok = ps5tm_platform_read_sensors(&hs) == 0;
+      const int guard_c = ps5tm_fanguard_held_c();
+      pthread_mutex_lock(&g_snapshot_lock);
+      if(hs_ok) {
         g_snapshot.sensors       = hs;
         g_snapshot.sampled_at_ms = wall;
-        pthread_mutex_unlock(&g_snapshot_lock);
       }
+      if(guard_c > 0) {                          /* what is in force now, not the loop's value from before the guard stepped in (audit 26.11.2026) */
+        g_snapshot.applied_threshold_c  = guard_c;
+        g_snapshot.observed_threshold_c = -1;
+        g_snapshot.target_duty_pct      = ps5tm_fan_threshold_to_duty(guard_c);
+      }
+      pthread_mutex_unlock(&g_snapshot_lock);
       sleep(1);
       continue;
     }
@@ -1480,9 +1512,11 @@ fan_worker(void *arg) {
     /* Handing control back has to be an action, not just an omission: the
        last threshold we wrote stays in the register until something
        overwrites it. */
-    if(was_automatic == 1 && !automatic &&
-       atomic_load(&g_manual_threshold_c) <= 0) {
+    /* The settings decide, not what a fixed threshold of an earlier stretch in observe mode left in g_manual_threshold_c (audit 26.11.2026: with such a
+       leftover the whole block was passed over, the clean-up below with it, and an import that had taken the pin away kept the old value in force). */
+    if(was_automatic == 1 && !automatic) {
       int eno = 0;
+      if(!cfg.fan_threshold_pinned) atomic_store(&g_manual_threshold_c, 0);
       if(cfg.fan_threshold_pinned) {
         /* The person's own fixed threshold (set in observe mode, kept in the settings) holds again, as at a start in observe
            mode: the observe branch below writes it and keeps it there. */
@@ -1503,6 +1537,7 @@ fan_worker(void *arg) {
                    "Automatik aus, die eigene Lüftereinstellung der Konsole "
                    "konnte aber nicht zurückgegeben werden: %s",
                    ps5tm_platform_fan_message());
+        release_owed = 1;                        /* tried again every pass (below) */
       }
       /* Forget our own setting so nothing is refreshed from here on. */
       last_applied = 0;
@@ -1517,6 +1552,25 @@ fan_worker(void *arg) {
       safety_logged = 0;
     }
     was_automatic = automatic;
+
+    /* The console is still owed its own threshold (audit 26.11.2026). Either the guard held the fan and has let go: what it wrote (full cooling) stays in
+       the register, and in observe mode without a fixed threshold nothing wrote over it, so the fan stayed loud until the console next changed its state.
+       Or a hand-back failed: the fan device refuses while a tile install or a save mount has the process under another identity, and the single try was
+       all there was. It is tried again on every pass until it goes through. With Automatic or a fixed threshold the loop writes its own value below, and
+       nothing is owed; a running fan test holds its own threshold and gives the fan back itself when it ends. */
+    if(atomic_exchange(&g_release_req, 0)) release_owed = 1;      /* the settings took the fixed threshold away (ps5tm_fan_pin_from_config) */
+    if(release_owed) {
+      if(automatic || atomic_load(&g_manual_threshold_c) > 0) release_owed = 0;
+      else if(!st_running && !ps5tm_fanguard_holding()) {
+        int eno = 0;
+        if(ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno) == 0) {
+          release_owed = 0;
+          last_applied = 0;
+          PS5TM_INFO("fan_released_late", "Die Konsole hat ihre eigene Lüftereinstellung (%d °C) zurück und regelt den Lüfter wieder selbst.",
+                     PS5TM_NEUTRAL_THRESHOLD_C);
+        }
+      }
+    }
 
     /* ---- fan self-test (ps5tm_fan_selftest_start) ----
        While it runs the threshold below is forced; the regulation itself goes on unchanged behind it and takes over
@@ -1598,7 +1652,7 @@ fan_worker(void *arg) {
             last_servo_ms = 0;
           } else if(atomic_load(&g_manual_threshold_c) <= 0) {
             int eno = 0;
-            ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno);
+            if(ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno) != 0) release_owed = 1;   /* tried again on the next passes */
           }
           last_applied = 0;
         }

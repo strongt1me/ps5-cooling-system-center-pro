@@ -621,18 +621,18 @@ TEST(Ps5ccPlans, ThePackingBodiesCarryTheWayTheLevelAndTheRuntime)
         hui::ps5cc::check_body(p, c),
         R"({"id":"PPSA13001","op":"exfat","target":"/mnt/ext0","mode":"homebrew","name":"","pack":"lz4","pack_level":9,"pack_runtime":"ng"})");
     c.pack_level = 1;
-    c.pack_runtime = hui::ps5cc::kRuntimeOriginal;
     c.op = 1; // ffpkg
     const std::string lz4 = hui::ps5cc::start_body(p, c);
     EXPECT_NE(lz4.find(R"("op":"ffpkg")"), std::string::npos);
     EXPECT_NE(lz4.find(R"("pack_level":3)"), std::string::npos);
-    EXPECT_NE(lz4.find(R"("pack_runtime":"ampr_emu")"), std::string::npos);
+    // the runtime is always AMPR EMU NG (Dump Forge 0.6.0 no longer carries the original APR-EMU)
+    EXPECT_NE(lz4.find(R"("pack_runtime":"ng")"), std::string::npos);
+    EXPECT_EQ(lz4.find("ampr_emu"), std::string::npos);
     c.pack_level = 2;
     EXPECT_NE(hui::ps5cc::start_body(p, c).find(R"("pack_level":12)"), std::string::npos);
 
     // zstd: its own four levels, no runtime to choose (AMPR EMU NG only)
     c.pack = hui::ps5cc::kPackZstd;
-    c.pack_runtime = hui::ps5cc::kRuntimeOriginal;
     const int zstd_levels[] = {5, 1, 9, 19};
     for (int l = 0; l < hui::ps5cc::kZstdLevels; ++l)
     {

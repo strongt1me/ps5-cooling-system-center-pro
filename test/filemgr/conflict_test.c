@@ -428,10 +428,22 @@ main(void) {
     put("/data/s/Spiele/PPSA04933/sce_sys/param.json", "Lantern Pass");   /* a dump: its own param.json names the game */
     put("/data/s/Spiele/PPSA06240.exfat", "8");                           /* an image: only the installed game names it */
     put("/data/s/Spiele/PPSA012345.txt", "9");                            /* ten digits: no title ID */
+    /* audit 26.11.2026: a star in a name (possible on the console's own drives) used up the pattern's star as a character */
+    put("/data/s/Spiele/*x.pkg", "10");
+    /* ... and a folder named after a game that has no sce_sys (a save backup), walked first, hid the dump of the same game beside it for a minute */
+    put("/data/s/Spiele/0leer/PPSA07777/liesmich.txt", "11");
+    put("/data/s/Spiele/zdump/PPSA07777/sce_sys/param.json", "Second Folder Game");
+    /* the folder without sce_sys is asked for its game first (its list): "not known" is remembered for the title ID. The search must still read the dump's
+       own param.json (it finds the dump; the other folder of the same ID may or may not be a hit, by the order of the walk) */
+    callq("/api/v1/files/list", "path=%2Fdata%2Fs%2FSpiele%2F0leer");
+    CHECK(g_status == 200 && strstr(g_body, "PPSA07777") != NULL && strstr(g_body, "\"title\"") == NULL, "a folder without sce_sys has no title: %s", g_body);
+    call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"second\"}");
+    for(int k = 0; k < 300; k++) { call("GET", "/api/v1/files/search", NULL); if(!strstr(g_body, "\"state\":\"running\"")) break; usleep(10000); }
+    CHECK(strstr(g_body, "\"path\":\"/data/s/Spiele/zdump/PPSA07777\"") != NULL, "the dump is found by its own title after a miss for the same ID: %s", g_body);
     struct { const char *q; int hits; const char *must; } cases[] = {
       { "notiz", 3, "/data/s/a/b/c/tief-notiz.md" },          /* part of the name, all levels, case ignored; the link to a is not followed */
-      { "*.pkg", 1, "/data/s/Spiele/spiel.pkg" },              /* a wildcard matches the whole name: not spiel.pkg.bak */
-      { "PPSA?????", 1, "/data/s/Spiele/PPSA04933" },          /* a folder is a hit too */
+      { "*.pkg", 2, "/data/s/Spiele/*x.pkg" },                 /* a wildcard matches the whole name: not spiel.pkg.bak; a name with a star in it too */
+      { "PPSA?????", 3, "/data/s/Spiele/PPSA04933" },          /* a folder is a hit too */
       { "äpfel", 1, "/data/s/Äpfel-Übersicht.txt" },           /* umlauts without case */
       { "lantern", 1, "/data/s/Spiele/PPSA04933" },            /* found by its game (25.11.2026) */
       { "IRON", 1, "/data/s/Spiele/PPSA06240.exfat" },         /* an image by the installed game's title */
@@ -480,7 +492,24 @@ main(void) {
     g_eject_mount = "/data/s";
     call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"notiz\"}");
     CHECK(g_status == 409, "no search on a drive being ejected: %d", g_status);
+    CHECK(!ps5tm_filemgr_reading(), "the refused search left no reader count");
     g_eject_mount = NULL;
+    /* audit 26.11.2026: a hit below a folder whose name is no UTF-8 cannot be addressed by the page, so it is not offered for changing */
+    put("/data/s/caf\xE9/notiz3.txt", "12");
+    call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"notiz\"}");
+    for(int k = 0; k < 300; k++) { call("GET", "/api/v1/files/search", NULL); if(!strstr(g_body, "\"state\":\"running\"")) break; usleep(10000); }
+    CHECK(strstr(g_body, "notiz3.txt\",\"type\":\"file\",\"writable\":false") != NULL, "a hit below a folder with a broken name is read-only: %s", g_body);
+    CHECK(strstr(g_body, "tief-notiz.md\",\"type\":\"file\",\"writable\":true") != NULL, "a hit with a clean path stays writable: %s", g_body);
+    /* ... and a folder that cannot be read is named in the search's last word instead of being passed over silently (root reads everything: not as root) */
+    if(geteuid() != 0) {
+      snprintf(cmd, sizeof(cmd), "mkdir -p '%s/data/s/zu' && chmod 000 '%s/data/s/zu'", ROOT, ROOT);
+      if(system(cmd) != 0) exit(2);
+      call("POST", "/api/v1/files/search", "{\"path\":\"/data/s\",\"q\":\"notiz\"}");
+      for(int k = 0; k < 300; k++) { call("GET", "/api/v1/files/search", NULL); if(!strstr(g_body, "\"state\":\"running\"")) break; usleep(10000); }
+      CHECK(strstr(g_body, "\"state\":\"done\"") != NULL && strstr(g_body, "Nicht lesbare Ordner: 1.") != NULL, "an unreadable folder is counted and said: %s", g_body);
+      snprintf(cmd, sizeof(cmd), "chmod 755 '%s/data/s/zu'", ROOT);
+      if(system(cmd) != 0) exit(2);
+    }
   }
 
   printf("%d checks passed, %d failed\n", g_ok, g_fail);

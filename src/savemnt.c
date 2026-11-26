@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -334,6 +335,35 @@ unseal(const char *image, const uint8_t *sealed, uint8_t key32[32], char *err, s
   return 0;
 }
 
+/* The console's own tools leave SIGPIPE at its default action for the mount, the unmount and the formatting (the handshake with the save-data service may use
+   the signal), and that is how these calls were tried on the console. A signal's action belongs to the whole process, though: while it stood at "default", any
+   other thread that wrote to a connection its peer had closed (an HTTP answer to a page that went away, the log's mirror to the loader) would have ended the app,
+   with a save mounted (audit 26.11.2026). main() therefore blocks SIGPIPE in every thread; only the thread that makes the call takes the block off, for the call.
+   A SIGPIPE raised for another thread meanwhile stays pending there (its write returns EPIPE as always) and is dropped when the action goes back to "ignore".
+   The end sets "ignore" itself, not what stood before: two calls that overlap could otherwise put "default" back last and leave it there. */
+typedef struct { sigset_t mask; } pipe_dfl_t;
+
+static void
+pipe_dfl_begin(pipe_dfl_t *p) {
+  struct sigaction dfl;
+  sigset_t one;
+  memset(&dfl, 0, sizeof(dfl));
+  dfl.sa_handler = SIG_DFL;
+  sigemptyset(&one);
+  sigaddset(&one, SIGPIPE);
+  sigaction(SIGPIPE, &dfl, NULL);
+  pthread_sigmask(SIG_UNBLOCK, &one, &p->mask);
+}
+
+static void
+pipe_dfl_end(const pipe_dfl_t *p) {
+  struct sigaction ign;
+  memset(&ign, 0, sizeof(ign));
+  ign.sa_handler = SIG_IGN;
+  pthread_sigmask(SIG_SETMASK, &p->mask, NULL);                   /* blocked in this thread again first */
+  sigaction(SIGPIPE, &ign, NULL);
+}
+
 static int
 open_impl(const char *image, const uint8_t *sealed, const char *mount_dir, savemnt_t *m, char *err, size_t err_len) {
   memset(m, 0, sizeof(*m));
@@ -371,12 +401,10 @@ open_impl(const char *image, const uint8_t *sealed, const char *mount_dir, savem
   memset(&opt, 0, sizeof(opt));
   fn_init_mount(&opt);
   opt.budgetid = budget;
-  struct sigaction ign, old;
-  memset(&ign, 0, sizeof(ign));
-  ign.sa_handler = SIG_DFL;                                      /* as the console's own tools do for the mount: the handshake may use the signal */
-  sigaction(SIGPIPE, &ign, &old);
+  pipe_dfl_t pd;
+  pipe_dfl_begin(&pd);                                            /* as the console's own tools do for the mount: the handshake may use the signal */
   const int h = fn_mount(&opt, image, mount_dir, key);
-  sigaction(SIGPIPE, &old, NULL);
+  pipe_dfl_end(&pd);
   memset(key, 0, sizeof(key));
   if(h < 0) {
     snprintf(err, err_len, "Die Konsole hat den Spielstand nicht eingehängt (Antwort 0x%x).", (unsigned)h);
@@ -424,12 +452,10 @@ savemnt_close(savemnt_t *m, char *err, size_t err_len) {
   umount_opt_t uopt;
   memset(&uopt, 0, sizeof(uopt));
   fn_init_umount(&uopt);
-  struct sigaction ign, old;
-  memset(&ign, 0, sizeof(ign));
-  ign.sa_handler = SIG_DFL;
-  sigaction(SIGPIPE, &ign, &old);
+  pipe_dfl_t pd;
+  pipe_dfl_begin(&pd);
   const int r = fn_umount(&uopt, m->mount, 0, 0);
-  sigaction(SIGPIPE, &old, NULL);
+  pipe_dfl_end(&pd);
   if(r < 0) {
     snprintf(err, err_len, "Die Konsole hat den Spielstand nicht sauber ausgehängt (Antwort 0x%x).", (unsigned)r);
     rc = -1;
@@ -455,12 +481,10 @@ savemnt_umount_path(const char *mount_dir, char *err, size_t err_len) {
   umount_opt_t uopt;
   memset(&uopt, 0, sizeof(uopt));
   fn_init_umount(&uopt);
-  struct sigaction ign, old;
-  memset(&ign, 0, sizeof(ign));
-  ign.sa_handler = SIG_DFL;
-  sigaction(SIGPIPE, &ign, &old);
+  pipe_dfl_t pd;
+  pipe_dfl_begin(&pd);
   const int r = fn_umount(&uopt, mount_dir, 0, 0);
-  sigaction(SIGPIPE, &old, NULL);
+  pipe_dfl_end(&pd);
   ps5tm_platform_escalate();
   ps5tm_sony_api_unlock();
   if(r < 0) {
@@ -514,12 +538,10 @@ savemnt_create(const char *path, uint64_t size, uint32_t block_size, char *err, 
       init(&opt);
       opt.blockSize = (int)block_size;
       opt.flags[1] = 0;
-      struct sigaction ign, old;
-      memset(&ign, 0, sizeof(ign));
-      ign.sa_handler = SIG_DFL;
-      sigaction(SIGPIPE, &ign, &old);
+      pipe_dfl_t pd;
+      pipe_dfl_begin(&pd);
       const int r = create(&opt, path, 0, size);
-      sigaction(SIGPIPE, &old, NULL);
+      pipe_dfl_end(&pd);
       if(r != 0) {
         snprintf(err, err_len, "Die Konsole konnte das neue Abbild nicht formatieren (Antwort 0x%x).", (unsigned)r);
         unlink(path);
@@ -599,12 +621,10 @@ savemnt_create_ps4(const char *path, uint64_t size, uint8_t sealed_out[96], char
             create_opt_t opt;
             memset(&opt, 0, sizeof(opt));
             init(&opt);
-            struct sigaction ign, old;
-            memset(&ign, 0, sizeof(ign));
-            ign.sa_handler = SIG_DFL;
-            sigaction(SIGPIPE, &ign, &old);
+            pipe_dfl_t pd;
+            pipe_dfl_begin(&pd);
             const int r = create(&opt, path, 0, size, key);
-            sigaction(SIGPIPE, &old, NULL);
+            pipe_dfl_end(&pd);
             if(r != 0) {
               snprintf(err, err_len, "Die Konsole konnte das neue Abbild nicht formatieren (Antwort 0x%x).", (unsigned)r);
               unlink(path);

@@ -67,10 +67,10 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   pgo_stub 0.6 von drakmor (GPL-3.0; Quelltext: <https://github.com/drakmor/dlc_emu/tree/0.3>, <https://github.com/drakmor/pgo_stub/tree/0.6>)
   sowie die Fremdbausteine, die Kraken Mount in seiner Datei `THIRD_PARTY_NOTICES` nennt (unter anderem SQLite, gemeinfrei). Eine neuere Veröffentlichung lädt die
   App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
-- **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.5.7, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.5.7`): Motor des
-  Konvertierformats „FPKG (Debug-.pkg)“ und des Packens beim Konvertieren in exFAT/ffpkg. Das PS5-Programm `ps5-dump-forge-0.5.7-ps5.elf` (18 582 608 Bytes, SHA-256
-  `83a7e82a9070a671953d96e4acfc909697505281e4a023a2c6411316c2c1ce6c`, gleich der `SHA256SUMS` der Veröffentlichung) ist seit dem 21.11.2026 **unverändert** in der App
-  eingebettet, als zstd-Rahmen (Stufe 19, 8 429 589 Bytes: `third_party/dump_forge/ps5-dump-forge-0.5.7-ps5.elf.zst`, `tools/gen_zstd_blob.py`,
+- **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.6.0, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.6.0`): Motor des
+  Konvertierformats „FPKG (Debug-.pkg)“ und des Packens beim Konvertieren in exFAT/ffpkg. Das PS5-Programm `ps5-dump-forge-0.6.0-ps5.elf` (18 877 632 Bytes, SHA-256
+  `420265c626d517ed433ecf360092dc28e1061fd0ac29346de488c41cde3ac0d2`, gleich der `SHA256SUMS` der Veröffentlichung) ist seit dem 21.11.2026 **unverändert** in der App
+  eingebettet, als zstd-Rahmen (Stufe 19, 8 558 651 Bytes: `third_party/dump_forge/ps5-dump-forge-0.6.0-ps5.elf.zst`, `tools/gen_zstd_blob.py`,
   `tools/pack-dumpforge.sh`). Die App entpackt es für jeden Auftrag im Speicher, vergleicht Größe und SHA-256, startet es über den ELF-Lader und gibt ihm die
   Aufträge über seine Schnittstelle (Port 8095; `src/dumpforge.c`, `src/gameconvert.c`); eine neuere Datei im Ordner `/data/PS5-Cooling-Center/dumpforge/` (auf
   Knopfdruck von der Veröffentlichung auf GitHub geladen, HTTPS, Prüfsumme aus `SHA256SUMS`) hat Vorrang. Aus seinem Quelltext (Rust) ist nichts übernommen:

@@ -38,7 +38,13 @@ ps5tm_cvpack_parse(const cJSON *body, ps5tm_cvpack_t *p, char *err, size_t err_l
     }
     if(!strcmp(jr->valuestring, "ampr_emu")) {
       if(p->kind == 2) { p->kind = 0; snprintf(err, err_len, "zstd-Packs liest nur AMPR EMU NG."); return 400; }
-      p->runtime = 1;
+      /* Dump Forge 0.6.0 no longer carries the ampr_emu release build and refuses it for LZ4 packs: the pages do not offer it any more (26.11.2026),
+         an old page or an old queue entry that still asks for it is told why */
+      if(p->kind == 1) {
+        p->kind = 0;
+        snprintf(err, err_len, "Dump Forge packt LZ4 seit Version 0.6.0 nur noch mit AMPR EMU NG; die Laufzeit APR-EMU Original gibt es dort nicht mehr.");
+        return 400;
+      }
     }
   }
   return 0;

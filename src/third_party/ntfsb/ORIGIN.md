@@ -129,5 +129,17 @@ in the code; the full list:
     files (`ntfs_wopen` is not used); PRs #13, #14, #18, #19, #20 concern the upstream web server, jobs and vfs, which the app does not
     carry; the app's own code was checked for the same faults (`src/fm_ntfs.inc`, `src/filemgr.c`, `src/http.c`, see CHANGELOG).
 
+- **Audit of 26.11.2026** (`ntfs_write.c`, `ntfs_priv.h`):
+  - `prepare_once_locked` checks `$MFTMirr` before the drive is written to: its data must be one run that begins at VCN 0 where the
+    boot sector says (`mftmirr_lcn`), at least one record and at most four records or one cluster long (what Windows and mkntfs make).
+    Before, the number of mirrored records came unchecked from the record's data size and the write address from the boot sector: a
+    size damaged upwards made `write_record` copy every new record into the clusters behind the mirror, silently. A drive that does
+    not pass is read-only ("the copy of the file table ($MFTMirr) does not match the boot sector"; chkdsk on Windows repairs it).
+  - `ntfs_unlink`: when the second name of a file (the long one and its 8.3 partner) cannot be removed from the folder after the first
+    already was, the drive keeps its "to be checked" flag (`needs_check`: `ntfs_sync`, `ntfs_unmark_for_umount` and
+    `ntfs_disable_write` leave it set), so that Windows repairs the half-removed entry instead of trusting the drive.
+  - In the app (`src/fm_ntfs.inc`): the delete job asks the sync for its result, as copying and uploading do (a write error at the end
+    of a delete ended as "done").
+
 Not changed: three leaks in `ntfs_write.c` that happen only when memory runs out; calloc sizes from the disk in the MFT growth
 (a refused allocation is handled).

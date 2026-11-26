@@ -637,10 +637,27 @@ resolve(const char *source, const char *mount, const char *dir, const char *name
   return 0;
 }
 
+static int open_payload_file(const char *path, int *status, uint64_t *size, ps5tm_payload_result_t *r);
+
 /* Opens the file for reading and checks it is a payload. fd >= 0 and 0 on
-   success; otherwise -1 and an HTTP status in *status. */
+   success; otherwise -1 and an HTTP status in *status.
+   A file on a USB drive is opened through the drive gate (audit 26.11.2026): resolve() asked once whether the drive is being ejected, but an eject that
+   began after that saw nobody on the drive until the file was open. Counted first and asked afterwards, either the eject waits for this open or the open is
+   refused. Once the file is open the gate is left again: the open file itself holds an eject back (driveholders.c), for a copy of any length. */
 static int
 open_payload(const char *path, int *status, uint64_t *size, ps5tm_payload_result_t *r) {
+  int gate = ps5tm_drive_enter(path);
+  if(!gate) {
+    *status = fail(r, 409, "drive_ejecting", "Das Laufwerk wird gerade ausgeworfen. Danach geht es wieder.");
+    return -1;
+  }
+  int fd = open_payload_file(path, status, size, r);
+  ps5tm_drive_leave(gate);
+  return fd;
+}
+
+static int
+open_payload_file(const char *path, int *status, uint64_t *size, ps5tm_payload_result_t *r) {
   struct stat st;
   if(lstat(path, &st) != 0) {
     *status = fail(r, 404, "file_not_found", "Die Datei gibt es nicht (mehr).");

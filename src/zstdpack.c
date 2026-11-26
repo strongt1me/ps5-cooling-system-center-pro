@@ -935,6 +935,9 @@ zvol_open(const char *dir, const zidx_t *x, unsigned id, zvol_t *v, char *err, s
   v->fd = open(p, O_RDONLY);
   struct stat st;
   if(v->fd < 0 || fstat(v->fd, &st) != 0) { say(err, en, "Eine Paketdatei fehlt oder ließ sich nicht öffnen: %s", vn); zvol_close(v); return -1; }
+  /* The walk over the packs (check and unpack) reads from the drive: the comparison that follows decides whether the other copy is deleted, and what was
+     written a moment ago still sits in the page cache (audit 26.11.2026; as ps5tm_drop_cache in checkfile.c, which this file is also built without). */
+  (void)posix_fadvise(v->fd, 0, 0, POSIX_FADV_DONTNEED);
   uint64_t want = g64(x->vols, 8ull * id);
   uint8_t h[VOLUME_HEADER];
   if((uint64_t)st.st_size != want || want < VOLUME_HEADER) { say(err, en, "Die Paketdatei %s hat nicht die Größe, die der Index nennt.", vn); zvol_close(v); return -1; }
@@ -1096,6 +1099,7 @@ v_begin(void *c, size_t fi, const char *rel, uint64_t size, char *err, size_t en
   v->sfd = open(p, O_RDONLY);
   struct stat st;
   if(v->sfd < 0 || fstat(v->sfd, &st) != 0) { say(err, en, "Die Datei fehlt oder ließ sich nicht lesen: %s", rel); return -1; }
+  (void)posix_fadvise(v->sfd, 0, 0, POSIX_FADV_DONTNEED);        /* after an unpack this is the file just written: read from the drive */
   if((uint64_t)st.st_size != size) { say(err, en, "Die Datei hat nicht die Größe, die das Paket nennt: %s", rel); return -1; }
   snprintf(v->rel, sizeof(v->rel), "%s", rel);
   return 0;

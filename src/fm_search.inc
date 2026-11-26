@@ -84,8 +84,9 @@ static int
 fs_glob(const unsigned *p, size_t pn, const unsigned *s, size_t sn) {
   size_t pi = 0, si = 0, star = (size_t)-1, mark = 0;
   while(si < sn) {
-    if(pi < pn && (p[pi] == '?' || p[pi] == s[si])) { pi++; si++; continue; }
+    /* the star first: compared as a character it would be used up by a '*' in the name ("*.pkg" did not find "*x.pkg"; audit 26.11.2026) */
     if(pi < pn && p[pi] == '*') { star = pi++; mark = si; continue; }
+    if(pi < pn && (p[pi] == '?' || p[pi] == s[si])) { pi++; si++; continue; }
     if(star != (size_t)-1) { pi = star + 1; si = ++mark; continue; }
     return 0;
   }
@@ -118,7 +119,8 @@ typedef struct {
   char           *v;                     /* the page path of the folder walked (FM_PATH + FM_NAME) */
   size_t          vl;
   unsigned        gen;
-  int             stop;                  /* ECANCELED, ENODEV (the drive goes), E2BIG */
+  int             stop;                  /* ECANCELED, ENODEV (the drive goes), E2BIG, EIO (the folder searched could not be read) */
+  unsigned        unread;                /* folders below that could not be read: the search says so at its end */
 } fs_walk_t;
 
 static void
@@ -139,8 +141,10 @@ fs_hit(fs_walk_t *w, const char *name, const fmn_st_t *st, const char *title) {
   char p[FM_PATH + FM_NAME + 2];
   int root = w->vl == 1 && w->v[0] == '/';
   snprintf(p, sizeof(p), "%s%s%s", w->v, root ? "" : "/", name);
-  char shown[FM_NAME + 8];
-  const int bad_name = name_for_json(shown, sizeof(shown), name);
+  /* the whole path, not only the name: a hit below a folder whose name is no UTF-8 cannot be addressed by the page either (the path it would send holds
+     the replacement character), so it is shown but not offered for changing (audit 26.11.2026) */
+  char shown[sizeof(p) + 8];
+  const int bad_name = name_for_json(shown, sizeof(shown), p);
   const int wr = !bad_name && st->type != 'o' &&
                  (w->ntfs ? w->drive_w && !(st->attrs & NTFS_FA_SYSTEM) : writable(p));
   char *dup = strdup(p);
@@ -169,14 +173,27 @@ fs_hit(fs_walk_t *w, const char *name, const fmn_st_t *st, const char *title) {
 static void
 fs_walk(fmn_node_t *n, fs_walk_t *w, int depth) {
   if(w->stop) return;
-  if(__atomic_load_n(&g_search_cancel, __ATOMIC_ACQUIRE)) { w->stop = ECANCELED; return; }
+  {
+    /* 2: stopped by an eject (ps5tm_filemgr_search_stop): it ends as "the drive goes", with the sentence that says so, not as a bare "cancelled" */
+    const int c = __atomic_load_n(&g_search_cancel, __ATOMIC_ACQUIRE);
+    if(c) { w->stop = c == 2 ? ENODEV : ECANCELED; return; }
+  }
   if(ps5tm_usbeject_settling(w->v) || (!w->ntfs && ps5tm_usbeject_settling(n->p))) { w->stop = ENODEV; return; }
   if(depth > FM_DEPTH) return;
   fmn_dir_t d;
   memset(&d, 0, sizeof(d));
   int rc = fmn_list(n, &d);
   fs_note(w, d.total, 1);
-  if(rc) { fmn_dir_free(&d); if(rc == ENODEV) w->stop = ENODEV; return; }   /* a folder that cannot be read is passed by */
+  if(rc) {
+    /* A folder that cannot be read is passed by, but not silently (audit 26.11.2026: a stick pulled in the middle left every further folder unread, and
+       the search ended as complete). ENXIO is what the console answers once the device is gone: the search ends there. The folder searched itself must
+       be readable; other folders are counted and named at the end. */
+    fmn_dir_free(&d);
+    if(rc == ENODEV || rc == ENXIO) w->stop = ENODEV;
+    else if(depth == 0) w->stop = EIO;
+    else w->unread++;
+    return;
+  }
   pthread_mutex_lock(&g_lock);
   int too_many = g_search.scanned > FM_COUNT_MAX;
   pthread_mutex_unlock(&g_lock);
@@ -236,6 +253,11 @@ fs_thread(void *arg) {
   size_t tn = 0;
   int wild = 0;
   fs_compile(a->q, t, FM_SEARCH_TERM, &tn, &wild);
+  if(ps5tm_usbeject_settling(a->root)) {                                     /* an eject began since the start asked: the drive is not touched at all */
+    fs_finish(a->gen, FS_CANCELLED, "Das Laufwerk wird ausgeworfen oder ist nicht mehr da; die Suche wurde beendet.");
+    free(a);
+    return NULL;
+  }
   fmn_node_t n;
   int rc = fmn_make(a->root, &n);
   fmn_st_t st;
@@ -250,17 +272,22 @@ fs_thread(void *arg) {
   if(!v) { fmn_unmake(&n); fs_finish(a->gen, FS_FAILED, "Kein Speicher."); free(a); return NULL; }
   snprintf(v, FM_PATH, "%s", a->root);
   char why[PS5TM_NTFS_WHY];
-  fs_walk_t w = { t, tn, wild, n.ntfs, n.ntfs && ps5tm_ntfs_writable(n.vol, why, sizeof(why)), st.dev, v, strlen(v), a->gen, 0 };
+  fs_walk_t w = { t, tn, wild, n.ntfs, n.ntfs && ps5tm_ntfs_writable(n.vol, why, sizeof(why)), st.dev, v, strlen(v), a->gen, 0, 0 };
   fs_walk(&n, &w, 0);
   fmn_unmake(&n);
   free(v);
   if(w.stop == ECANCELED) fs_finish(a->gen, FS_CANCELLED, NULL);
   else if(w.stop == ENODEV) fs_finish(a->gen, FS_CANCELLED, "Das Laufwerk wird ausgeworfen oder ist nicht mehr da; die Suche wurde beendet.");
+  else if(w.stop == EIO) fs_finish(a->gen, FS_FAILED, "Der Ordner ließ sich nicht lesen.");
   else if(w.stop == E2BIG) {
     pthread_mutex_lock(&g_lock);
     if(g_search.gen == a->gen) g_search.truncated = 1;
     pthread_mutex_unlock(&g_lock);
     fs_finish(a->gen, FS_DONE, "Nach einer Million Einträgen beendet; bitte in einem Unterordner weitersuchen.");
+  } else if(w.unread) {
+    char note[96];
+    snprintf(note, sizeof(note), "Nicht lesbare Ordner: %u. Sie fehlen in der Suche.", w.unread);
+    fs_finish(a->gen, FS_DONE, note);
   } else fs_finish(a->gen, FS_DONE, NULL);
   free(a);
   return NULL;
@@ -297,16 +324,18 @@ ps5tm_filemgr_search_stop(const char *mount) {
     hit = (!strncmp(g_search.root, mount, ml) && (g_search.root[ml] == '/' || !g_search.root[ml])) ||
           (real_path(g_search.root, real, sizeof(real)) == 0 && !strncmp(real, mount, ml) && (real[ml] == '/' || !real[ml]));
   }
-  if(hit) __atomic_store_n(&g_search_cancel, 1, __ATOMIC_RELEASE);
+  if(hit) __atomic_store_n(&g_search_cancel, mount ? 2 : 1, __ATOMIC_RELEASE);   /* 2: the drive goes (fs_walk says so in the search's last word) */
   pthread_mutex_unlock(&g_lock);
   if(hit) fs_wait_idle(3000);
 }
+
+static void fs_start_entered(int fd, const char *root, const char *term);
 
 static void
 fs_start(int fd, const ps5tm_request_t *req) {
   cJSON *b = parse_body(req);
   const char *p = jstr(b, "path"), *q = jstr(b, "q");
-  char root[FM_PATH], term[FM_SEARCH_TERM], real[FM_PATH + 64];
+  char root[FM_PATH], term[FM_SEARCH_TERM];
   int whole = p && !strcmp(p, "/");
   int bad_path = !p || !path_plain(p) || strlen(p) >= sizeof(root) || whole;
   int bad_term = !q || !q[0] || strlen(q) >= sizeof(term);
@@ -328,12 +357,36 @@ fs_start(int fd, const ps5tm_request_t *req) {
     for(size_t i = 0; i < tn; i++) if(t[i] != '*') only_stars = 0;
     if(only_stars) { ps5tm_http_send_error(fd, 400, "bad_term", "Ein Suchbegriff nur aus * findet alles; bitte genauer suchen."); return; }
   }
-  if(!ps5tm_ntfs_path(root) && (real_path(root, real, sizeof(real)) != 0 || special_fs(root))) {
+  /* Entered as a read first, asked about an eject afterwards, and the drive is touched only after that (as with_read does; audit 26.11.2026: the start
+     looked at the drive with statfs before it asked, and counted itself only once the search was set up, so an eject that began beside it saw no reader).
+     The request stays entered until it returns; the search itself is entered below, under the same lock, before this count goes. */
+  pthread_mutex_lock(&g_lock);
+  g_reads++;
+  pthread_mutex_unlock(&g_lock);
+  fs_start_entered(fd, root, term);
+  pthread_mutex_lock(&g_lock);
+  g_reads--;
+  pthread_mutex_unlock(&g_lock);
+}
+
+static void
+fs_start_entered(int fd, const char *root, const char *term) {
+  char real[FM_PATH + 64];
+  const int ntfs = ps5tm_ntfs_path(root);
+  if(ps5tm_usbeject_settling(root)) {
+    ps5tm_http_send_error(fd, 409, "drive_ejecting", "Das Laufwerk wird gerade ausgeworfen. Danach geht es wieder.");
+    return;
+  }
+  if(!ntfs && real_path(root, real, sizeof(real)) != 0) {
     ps5tm_http_send_error(fd, 400, "bad_path", "Dieser Ordner wird nicht durchsucht.");
     return;
   }
-  if(ps5tm_usbeject_settling(root) || (!ps5tm_ntfs_path(root) && ps5tm_usbeject_settling(real))) {
+  if(!ntfs && ps5tm_usbeject_settling(real)) {                              /* a link may lead onto the drive */
     ps5tm_http_send_error(fd, 409, "drive_ejecting", "Das Laufwerk wird gerade ausgeworfen. Danach geht es wieder.");
+    return;
+  }
+  if(!ntfs && special_fs(root)) {
+    ps5tm_http_send_error(fd, 400, "bad_path", "Dieser Ordner wird nicht durchsucht.");
     return;
   }
   /* a running search is stopped first (the page starts a new one when the term changes) */

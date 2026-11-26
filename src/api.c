@@ -3388,6 +3388,7 @@ handle_config_put(int fd, const ps5tm_request_t *req) {
   ps5tm_profile_t after_profile = g_config.profile;
   unsigned after_target = g_config.target_temp_c;
   ps5tm_config_unlock();
+  ps5tm_fan_pin_from_config();            /* the fixed threshold of observe mode follows the settings (fan.c) */
   int saved = (ps5tm_config_save() == 0);
   if(before_profile != after_profile)
     PS5TM_INFO("profile_changed", "Profil gewechselt: %s → %s.", profile_name(before_profile), profile_name(after_profile));
@@ -3647,6 +3648,7 @@ handle_config_import(int fd, const ps5tm_request_t *req) {
   unsigned after_cache = g_config.library_cache;
   ps5tm_config_unlock();
   cJSON_Delete(root);
+  ps5tm_fan_pin_from_config();            /* an import may take the fixed threshold of observe mode away or change it (fan.c) */
   int saved = (ps5tm_config_save() == 0);
   if(before_cache != after_cache) ps5tm_library_forget();   /* as PUT does: the switch takes effect now */
 

@@ -1533,6 +1533,10 @@ copy_file(const char *rs, const char *rt, const char *vs) {
   if(replace) {
     if(!rc && rename(tmp, rt) != 0) rc = errno ? errno : EIO;
     if(rc) unlink(tmp);
+  } else if(rc) {
+    /* made above with O_EXCL, so the half file is this job's: it goes again here. The clean-up of the job only removes a top folder it made itself; a
+       folder merged into one that was there keeps what is in it, and a file cut short under its real name must not stay there (audit 26.11.2026). */
+    unlink(dst);
   }
   if(!rc) job_add(0, 1);
   return rc;
@@ -1749,6 +1753,7 @@ run_copy(fm_args_t *a, int move) {
     }
     struct stat ts;
     int replacing = 0;
+    int merged = 0;                             /* a folder that went into one that was there: what is done of it stays in the target */
     if(lstat(rt, &ts) == 0) {
       if(a->conflict == FM_C_SKIP || (a->conflict == FM_C_REPLACE && ts.st_dev == ss.st_dev && ts.st_ino == ss.st_ino)) {
         conflict_skipped++;                     /* left out, or already the very same entry */
@@ -1800,6 +1805,7 @@ run_copy(fm_args_t *a, int move) {
         /* A replaced file is not ours either: the copy went to a temporary file beside it (copy_file), so the name still holds
            the old file, and the clean-up deleted it (review 24.11.2026: "Ersetzen" and a source that could not be read). */
         int ours = S_ISDIR(ss.st_mode) ? g_made_top : (!replacing && rc != EEXIST);
+        merged = S_ISDIR(ss.st_mode) && !g_made_top;
         if(ours && lstat(rt, &ps) == 0) delete_tree(rt, t, ps.st_dev, 0, 0);
       } else if(move && skipped_some) {
         snprintf(err, sizeof(err), "%.250s wurde kopiert, aber Verknüpfungen oder Gerätedateien darin ließen sich nicht "
@@ -1822,7 +1828,11 @@ run_copy(fm_args_t *a, int move) {
     if(rc) {
       if(rc == ECANCELED) {
         char note[400];
-        snprintf(note, sizeof(note), "Abgebrochen. %u von %u Einträgen sind fertig; der angefangene wurde im Ziel wieder entfernt.",
+        /* a folder merged into one that was there is not taken out again (what lay there before is not this job's): the note says so instead of
+           claiming it was removed (audit 26.11.2026); the file that was being written is gone either way (copy_file) */
+        snprintf(note, sizeof(note), merged
+                 ? "Abgebrochen. %u von %u Einträgen sind fertig; der angefangene Ordner wurde mit dem vorhandenen zusammengeführt und ist im Ziel unvollständig."
+                 : "Abgebrochen. %u von %u Einträgen sind fertig; der angefangene wurde im Ziel wieder entfernt.",
                  i, a->n);
         job_finish(FM_CANCELLED, NULL, note);
         PS5TM_INFO("files_copy_cancelled", "Dateien: %s abgebrochen bei %.120s", move ? "Verschieben" : "Kopieren", a->src[i]);

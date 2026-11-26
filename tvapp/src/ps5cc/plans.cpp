@@ -115,9 +115,9 @@ void add_pack(cJSON *root, const Plan &p, const PlanChoice &c)
         return;
     cJSON_AddStringToObject(root, "pack", pack_key(c.pack));
     cJSON_AddNumberToObject(root, "pack_level", pack_level_value(c));
+    // LZ4 packs get AMPR EMU NG: Dump Forge 0.6.0 no longer carries the original APR-EMU
     if (c.pack == kPackLz4)
-        cJSON_AddStringToObject(root, "pack_runtime",
-                                c.pack_runtime == kRuntimeOriginal ? "ampr_emu" : "ng");
+        cJSON_AddStringToObject(root, "pack_runtime", "ng");
 }
 
 // Spaces at both ends and slashes at the end are not part of a folder.

@@ -98,6 +98,18 @@ ps5tm_fpkgprog_packwrite(ps5tm_fpkgprog_t *p, int full, uint64_t jdone, uint64_t
   *done = d;
 }
 
+/* Dump Forge 0.6.0 and newer tell the bytes of the stage itself beside the job-wide ones (jobs.rs Ctx::progress: stage_done, stage_total; the Queue of its own
+ * page draws one bar per stage from them). For the measure pass and the write pass of an image with packs that is exactly what the two guesses above stand
+ * in for, so the page takes them when they are there: 1 with the bar in done/total, 0 when Dump Forge does not say (an older version, or a stage that moves
+ * nothing) and the guess has to do. The count never goes past the end. (0.6.0 also counts the zstd measure pass once, no longer twice.) */
+static inline int
+ps5tm_fpkgprog_stage(uint64_t sdone, uint64_t stotal, uint64_t *done, uint64_t *total) {
+  if(!stotal) return 0;
+  *total = stotal;
+  *done = sdone < stotal ? sdone : stotal;
+  return 1;
+}
+
 /* The bar of reading back. */
 static inline void
 ps5tm_fpkgprog_check(ps5tm_fpkgprog_t *p, uint64_t jdone, uint64_t jtotal, uint64_t *done, uint64_t *total) {

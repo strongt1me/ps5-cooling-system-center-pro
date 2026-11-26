@@ -1088,6 +1088,11 @@ ps5tm_http_run(int srv, unsigned port) {
 
     int nodelay = 1;
     setsockopt(cl_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+#ifdef SO_NOSIGPIPE
+    /* a peer that hangs up in the middle of an answer costs EPIPE, never a signal: SIGPIPE is ignored and blocked anyway (main.c), this holds even where
+       neither applies (the save-data mount takes the default action for its calls, savemnt.c) */
+    setsockopt(cl_fd, SOL_SOCKET, SO_NOSIGPIPE, &nodelay, sizeof(nodelay));
+#endif
 
     /* Over the cap: say so and hang up, rather than add another thread. The console itself (127.x: the full-screen app, the console's browser) has
        LOOPBACK_RESERVE places above it, so that clients of the network cannot lock it out (review of 21.11.2026, S3). */

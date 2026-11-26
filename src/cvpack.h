@@ -9,7 +9,8 @@
 
 struct cJSON;
 
-/* kind 0 = none, 1 = LZ4, 2 = zstd (only with AMPR EMU NG); level LZ4 0 or 3..12, zstd 1..22; runtime (LZ4 only) 0 = AMPR EMU NG, 1 = the ampr_emu release build. */
+/* kind 0 = none, 1 = LZ4, 2 = zstd (only with AMPR EMU NG); level LZ4 0 or 3..12, zstd 1..22; runtime 0 = AMPR EMU NG (the only one since Dump Forge 0.6.0, which
+   no longer carries the ampr_emu release build: "pack_runtime":"ampr_emu" is refused with 400; 1 was that build). */
 typedef struct { int kind, level, runtime; } ps5tm_cvpack_t;
 
 /* Reads "pack" ("lz4", "zstd", "none" or absent), "pack_level" (a whole number; absent = 9 for LZ4 and 5 for zstd, the pages' middle choice) and "pack_runtime"

@@ -1019,7 +1019,8 @@ typedef struct {
   int      state;             /* 0 running, 1 done, 2 failed; -1 not found */
   char     stage[24];         /* scan, preflight, check, plan, compress, write, verify, finalize */
   int      stage_index, stage_count;
-  uint64_t done, total;       /* of the stage */
+  uint64_t done, total;       /* of the whole job, every pass included (fpkgprogress.h) */
+  uint64_t stage_done, stage_total;   /* of this stage alone (Dump Forge 0.6.0 and newer; 0 when it does not say) */
   uint64_t bytes;             /* the package, when done */
   unsigned files;
   char     output[320];
@@ -2186,6 +2187,7 @@ void ps5tm_fan_active_rule(char *out, size_t n);
 void ps5tm_fan_snapshot(ps5tm_snapshot_t *out);
 /* Applies `temp_c` immediately and pins it. Returns 0 on success. */
 int  ps5tm_fan_apply_manual(int temp_c, int *errno_out);
+void ps5tm_fan_pin_from_config(void);   /* after the settings were written as a whole: the fixed threshold of observe mode follows them */
 /* Maps a curve duty (0..100) onto an ICC threshold and back. */
 int  ps5tm_fan_duty_to_threshold(int duty_pct);
 int  ps5tm_fan_threshold_to_duty(int threshold_c);
@@ -2225,6 +2227,8 @@ void ps5tm_fanguard_beat(void);              /* once per fan-loop pass */
 void ps5tm_fanguard_publish(int safety_c);   /* the safety limit the loop has in force */
 int  ps5tm_fanguard_state(void);
 int  ps5tm_fanguard_holding(void);           /* 1: the guard owns the fan, the loop writes nothing */
+int  ps5tm_fanguard_held_c(void);            /* the threshold the guard holds (45: full cooling, 91: the console's own), 0 when it holds nothing */
+void ps5tm_fanguard_quiet(void);             /* the app ends: the guard writes nothing any more */
 
 
 /* ------------------------------------------------------------------ tile */

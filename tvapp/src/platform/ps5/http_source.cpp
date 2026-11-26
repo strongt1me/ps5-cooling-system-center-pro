@@ -1288,6 +1288,10 @@ void HttpSource::run()
                 online_ = true;
                 orig_status_missing_ = false;
                 status_failures_ = 0;
+                // the app may be another one now (a newer ELF was sent while the tile stayed open): its
+                // version is read again, so that "Kachel x" shows without a restart of the tile (audit 26.11.2026)
+                console_language_read_ = false;
+                system_retry_us_ = 0;
                 set_link(Link::online, {});
                 library_wanted = true;
                 config_wanted_ = true;
@@ -2823,6 +2827,19 @@ void HttpSource::handle(const Request &request)
             data_.fs_search = std::move(s);
             ++data_.serial;
             break;
+        }
+        {
+            // accepted: "running" at once, so that the page and the polling every 0.7 s know of it even
+            // when the first question for its state below fails (audit 26.11.2026: the page then waited
+            // for an answer that never came, and its next search after a reload was held back)
+            std::lock_guard<std::mutex> lock(mutex_);
+            FsSearch s;
+            s.seq = data_.fs_search.seq + 1;
+            s.state = "running";
+            s.path = request.id;
+            s.q = request.text;
+            data_.fs_search = std::move(s);
+            ++data_.serial;
         }
         poll_fs_search();
         break;

@@ -44,6 +44,7 @@ typedef struct {
   int    broken;             /* the loop's writes are ignored (threshold stuck) */
   int    fan_full;           /* the firmware runs the fan at >= 95 % whatever */
   int    floor_idle, floor_game;   /* the console's own minimum speed (percent); 0 = the Pro's 20 / 34 */
+  int    observe;            /* mode "Beobachten" without a fixed threshold: the app writes nothing, only the guard may */
 } scen_t;
 
 static scen_t S;
@@ -99,6 +100,9 @@ static const scen_t SCEN[] = {
   { BASE("G_broken_fanfull", 66, 5), .dur = 600, .guard = 1, .broken = 1, .fan_full = 1 },
   { BASE("G_normal_t66", 66, 4), .t1 = 60, .dur = 1200, .guard = 1 },
   { BASE("G_normal_t91", 91, 1), .dur = 1200, .guard = 1 },
+  /* observe mode without a fixed threshold, a game that gets too hot at the console's own setting: the guard holds full cooling until it is cool enough,
+     and the console must have its own threshold (91) back after that - until 26.11.2026 nobody wrote it back and the fan stayed at full cooling */
+  { BASE("G_observe_hot", 66, 5), .dur = 900, .guard = 1, .observe = 1 },
 };
 
 /* --------------------------------------------------------------------- plant */
@@ -319,7 +323,19 @@ report(void) {
            ev_deadman, ev_deadman_left, ev_hot, hot_events, ev_hot_left, fan_writes_in_hold,
            guard_thr_seen[45] ? " 45" : "", guard_thr_seen[91] ? " 91" : "");
   if(ev_safety >= 0) printf(" safety_mode@%d", ev_safety);
+  int observe_bad = 0;
+  if(S.observe) {
+    /* five seconds after the guard let go the console has its own threshold again */
+    const int at = ev_hot_left >= 0 && ev_hot_left + 5 < n ? ev_hot_left + 5 : -1;
+    printf(" thr_after_release=%d", at >= 0 ? m_thr[at] : -1);
+    observe_bad = at < 0 || m_thr[at] != PS5TM_NEUTRAL_THRESHOLD_C;
+  }
   printf("\n");
+  if(observe_bad) {
+    fprintf(stderr, "%s: the console did not get its threshold back after the guard let go\n", S.name);
+    fflush(stdout);
+    _exit(1);
+  }
   if(getenv("SIMTRACE")) {
     FILE *f = fopen(getenv("SIMTRACE"), "w");
     if(f) {
@@ -458,6 +474,7 @@ main(int argc, char **argv) {
   g_config.profile = S.profile;
   if(S.load_kind == 1 && S.t2) g_config.safety_temp_c = (unsigned)S.t2;   /* step scenarios: t2 = a safety limit set by hand */
   if(safety_by_hand) g_config.safety_temp_c = (unsigned)safety_by_hand;
+  if(S.observe) { g_config.mode = PS5TM_MODE_OBSERVE; g_config.fan_threshold_pinned = 0; }
   ps5tm_config_clamp(&g_config);
 
   plant_init();

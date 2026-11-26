@@ -55,8 +55,6 @@ constexpr int kLz4Levels = 3;
 constexpr int kLz4LevelValues[kLz4Levels] = {9, 3, 12};
 constexpr int kZstdLevels = 4;
 constexpr int kZstdLevelValues[kZstdLevels] = {5, 1, 9, 19};
-constexpr int kRuntimeNg = 0;       // AMPR EMU NG
-constexpr int kRuntimeOriginal = 1; // the original APR-EMU (LZ4 only)
 
 // "Original danach" (18.11.2026): what becomes of the game's original once a copy, a conversion or
 // an unpack has been written and checked. The console app does it after the check, never before.
@@ -181,11 +179,10 @@ struct PlanChoice
     int level = 0; // convert, format fpkg: index into kLevelOps
     // convert, formats exFAT and ffpkg: pack the game into LZ4 or zstd packs while the image is
     // written (kPackNone, kPackLz4, kPackZstd), with the level (an index into kLz4LevelValues or
-    // kZstdLevelValues) and, for LZ4, the runtime (kRuntimeNg, kRuntimeOriginal). Only counts
-    // where packing() says so.
+    // kZstdLevelValues). The runtime is AMPR EMU NG (Dump Forge 0.6.0 no longer carries the
+    // original APR-EMU). Only counts where packing() says so.
     int pack = kPackNone;
     int pack_level = 0;
-    int pack_runtime = kRuntimeNg;
     int drive = -1; // index into Plan::drives
     bool ampr = false;
     bool quick =

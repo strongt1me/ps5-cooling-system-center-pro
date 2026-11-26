@@ -44,7 +44,9 @@ main(void) {
   CHECK(parse("{\"pack\":\"lz4\",\"pack_level\":\"9\"}", &p, err, sizeof(err)) == 400, "text");
   CHECK(parse("{\"pack\":\"lz4\",\"pack_level\":1e300}", &p, err, sizeof(err)) == 400 && p.kind == 0, "huge");
   CHECK(parse("{\"pack\":\"lz4\",\"pack_runtime\":\"ng\"}", &p, err, sizeof(err)) == 0 && p.runtime == 0, "ng");
-  CHECK(parse("{\"pack\":\"lz4\",\"pack_runtime\":\"ampr_emu\"}", &p, err, sizeof(err)) == 0 && p.kind == 1 && p.runtime == 1, "ampr_emu with LZ4");
+  /* Dump Forge 0.6.0 packs LZ4 with AMPR EMU NG only: the old choice is refused with the reason (26.11.2026) */
+  CHECK(parse("{\"pack\":\"lz4\",\"pack_runtime\":\"ampr_emu\"}", &p, err, sizeof(err)) == 400 && p.kind == 0 && p.runtime == 0 && strstr(err, "0.6.0"),
+        "ampr_emu with LZ4 is refused");
   CHECK(parse("{\"pack\":\"lz4\",\"pack_runtime\":\"other\"}", &p, err, sizeof(err)) == 400 && p.kind == 0, "unknown runtime");
   CHECK(parse("{\"pack\":\"lz4\",\"pack_runtime\":3}", &p, err, sizeof(err)) == 400, "runtime as number");
   CHECK(parse("{\"pack\":\"lz4\",\"pack_runtime\":null,\"pack_level\":null}", &p, err, sizeof(err)) == 0 && p.level == 9 && p.runtime == 0, "null fields are absent");

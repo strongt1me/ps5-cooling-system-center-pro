@@ -258,6 +258,7 @@ why_words(const char *w, char *out, size_t n) {
     { "the $UpCase", "Dem Laufwerk fehlt ein Teil von NTFS ($UpCase); die PS5 kann es nur lesen. Am Windows-PC mit chkdsk prüfen." },
     { "the drive can't be opened", "Die PS5 lässt das Laufwerk nicht zum Schreiben öffnen. Abziehen, wieder einstecken und noch einmal versuchen." },
     { "the drive could not be prepared", "Das Laufwerk ließ sich nicht zum Schreiben vorbereiten (Schreibfehler). Am Windows-PC mit chkdsk prüfen." },
+    { "the copy of the file table", "Die Kopie der Dateitabelle auf dem Laufwerk ($MFTMirr) passt nicht zu seinen Angaben; die PS5 kann es nur lesen. Am Windows-PC mit chkdsk prüfen." },
     { "the drive is smaller than", "Das Laufwerk meldet weniger Platz, als sein NTFS angibt (manche USB-Gehäuse und Adapter tun das); die PS5 kann es nur lesen. An einem anderen Adapter oder direkt am PC prüfen." },
   };
   for(size_t i = 0; i < sizeof(t) / sizeof(t[0]); i++)

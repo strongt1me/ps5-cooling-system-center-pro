@@ -333,6 +333,15 @@ main(int argc, char **argv) {
    * it was delivered. Writes to a dead stdout then fail quietly with EPIPE,
    * and the log file keeps everything anyway. */
   signal(SIGPIPE, SIG_IGN);
+  {
+    /* And blocked, here before the first thread exists, so every thread inherits the block: the save-data mount needs the signal's default action for the
+       length of its calls (savemnt.c), and the action is one for the whole process. With the block, a write of another thread to a closed connection in that
+       moment returns EPIPE as always instead of ending the app (audit 26.11.2026). */
+    sigset_t pipe_only;
+    sigemptyset(&pipe_only);
+    sigaddset(&pipe_only, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &pipe_only, NULL);
+  }
   signal(SIGCHLD, SIG_IGN);
 
   /* SIGHUP too: when the sending connection goes away the loader hangs up on

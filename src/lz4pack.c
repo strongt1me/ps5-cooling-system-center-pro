@@ -519,6 +519,14 @@ typedef struct {
   uint64_t  *begin, *end;        /* payload range of each */
 } vols_t;
 
+/* The comparison that decides whether the other copy is deleted (packing: the originals; unpacking: the packs) must read from the drive. What was written
+   a moment ago still sits in the page cache, and a drive that wrote it wrongly would pass (audit 26.11.2026; every other read-back of the app drops the cache
+   first, ps5tm_drop_cache in checkfile.c - not called here, this file is also built without it). A system that does not know the call changes nothing. */
+static void
+drop_cache(int fd) {
+  if(fd >= 0) (void)posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+}
+
 static void
 vols_close(vols_t *v) {
   for(unsigned i = 0; i < v->n; i++) if(v->fd && v->fd[i] >= 0) close(v->fd[i]);

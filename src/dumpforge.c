@@ -395,12 +395,18 @@ ps5tm_dumpforge_stop(int force) {
    LZ4 / zstd packs are decoded into the logical files first ("lz4":"unpack" / "zstd_unpack":true of Dump Forge's request; the two cannot be asked for
    together), as Kraken Mount takes no package with packs in it. 0 and the job's number, else -1 with a sentence.
    pack != NULL with pack->kind 1 / 2 (19.11.2026): not a package but the image `format` ("exfat" or "ffpkg") written straight with the game packed into LZ4 / zstd
-   packs ("lz4":"pack" + "lz4_level" + "lz4_runtime", or "zstd_pack":true + "zstd_level"; Dump Forge measures the game first and reads it twice). */
+   packs ("lz4":"pack" + "lz4_level" + "lz4_runtime", or "zstd_pack":true + "zstd_level"; Dump Forge measures the game first and reads it twice).
+   Since Dump Forge 0.6.0 LZ4 packs get AMPR EMU NG only: it no longer carries the ampr_emu release build and refuses "lz4_runtime":"ampr_emu" in its
+   preflight ("ampr_emu is no longer bundled"), so a request for it is refused here with a sentence instead (cvpack.c refuses new ones already). */
 int
 ps5tm_dumpforge_job_start(const char *source, const char *output, const char *format, const char *level, int full_verify, int unpack,
                           const ps5tm_cvpack_t *pack, int *job, char *err, size_t n) {
   *job = 0;
   const int packing = pack && (pack->kind == 1 || pack->kind == 2);
+  if(packing && pack->kind == 1 && pack->runtime == 1) {
+    snprintf(err, n, "Dump Forge packt LZ4 seit Version 0.6.0 nur noch mit AMPR EMU NG; die Laufzeit APR-EMU Original gibt es dort nicht mehr.");
+    return -1;
+  }
   cJSON *req = cJSON_CreateObject();
   cJSON_AddStringToObject(req, "source", source);
   cJSON_AddStringToObject(req, "format", format && *format ? format : "pkg");
@@ -416,7 +422,7 @@ ps5tm_dumpforge_job_start(const char *source, const char *output, const char *fo
     } else {
       cJSON_AddStringToObject(req, "lz4", "pack");
       cJSON_AddNumberToObject(req, "lz4_level", pack->level);
-      cJSON_AddStringToObject(req, "lz4_runtime", pack->runtime == 1 ? "ampr_emu" : "ng");
+      cJSON_AddStringToObject(req, "lz4_runtime", "ng");
     }
   } else {
     if(unpack == 2) cJSON_AddBoolToObject(req, "zstd_unpack", 1);
@@ -473,6 +479,10 @@ ps5tm_dumpforge_job_poll(int job, ps5tm_dumpforge_job_t *out) {
       if(cJSON_IsString(s)) snprintf(out->stage, sizeof out->stage, "%s", s->valuestring);
       if(cJSON_IsNumber(d)) out->done = (uint64_t)d->valuedouble;
       if(cJSON_IsNumber(t)) out->total = (uint64_t)t->valuedouble;
+      /* since 0.6.0 also the stage's own bytes (jobs.rs Ctx::progress: stage_done, stage_total): exact where the app had to guess */
+      const cJSON *sd = cJSON_GetObjectItem(pr, "stage_done"), *stt = cJSON_GetObjectItem(pr, "stage_total");
+      if(cJSON_IsNumber(sd) && sd->valuedouble > 0) out->stage_done = (uint64_t)sd->valuedouble;
+      if(cJSON_IsNumber(stt) && stt->valuedouble > 0) out->stage_total = (uint64_t)stt->valuedouble;
     }
     if(cJSON_IsArray(stages)) {
       out->stage_count = cJSON_GetArraySize(stages);

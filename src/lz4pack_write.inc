@@ -546,7 +546,13 @@ layout_writer(layout_t *l, unsigned g, unsigned lane, uint32_t stored, int strip
   if(!v) v = layout_new_volume(l, g, lane, flags, err, en);
   if(!v) return NULL;
   if(!vol_can_fit(v, stored, streaming, extent_start)) {
-    if(v->f) { fclose(v->f); v->f = NULL; }                 /* full: closed, finished at the end */
+    if(v->f) {                                              /* full: closed, finished at the end */
+      /* the last megabyte still sits in the stream's buffer: a drive that runs full here must say so now, not as "the check against the originals failed"
+         later, when the missing end reads as zeros (audit 26.11.2026) */
+      const int ce = fclose(v->f);
+      v->f = NULL;
+      if(ce != 0) { say(err, en, "Schreiben in eine Paketdatei schlug fehl (%s).", strerror(errno)); return NULL; }
+    }
     v = layout_new_volume(l, g, lane, flags, err, en);
     if(!v) return NULL;
     if(!vol_can_fit(v, stored, streaming, 1)) { say(err, en, "Ein Block passt nicht in die größte erlaubte Paketdatei."); return NULL; }

@@ -812,6 +812,11 @@ cv_thread(void *arg) {
   int st = g_job.state;
   char name[128], detail[96], error[640], title[12], target[320];
   const int quick = g_job.quick;
+  /* A cancel that was taken but came when the result was already complete (Dump Forge had finished, its last answer was "done"; the own writer honours a
+     late cancel itself, before the result gets its name): the result is whole and stays, the job counts as done, but "Original danach" does not run. The
+     person asked to stop, and deleting or moving the original after that would be the opposite (audit 26.11.2026). */
+  const int late_cancel = st == CV_DONE && __atomic_load_n(&g_cancel, __ATOMIC_ACQUIRE);
+  if(late_cancel) snprintf(g_job.note, sizeof(g_job.note), "Abbrechen kam zu spät: Das Ergebnis war schon fertig. Das Original bleibt liegen.");
   const uint64_t began = g_job.started_ms;
   snprintf(title, sizeof(title), "%s", g_job.title_id);
   snprintf(target, sizeof(target), "%s", g_job.target);
@@ -824,7 +829,8 @@ cv_thread(void *arg) {
   if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED)
     ps5tm_hist_add("convert", name, detail, st == CV_DONE ? "done" : st == CV_FAILED ? "failed" : "cancelled", error, bytes, dur);
   /* "Original danach" (origafter.c): still before the place is given up below, so that the next entry of the queue cannot start in between */
-  if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED) ps5tm_orig_job_done("convert", title, st == CV_DONE ? (quick ? 2 : 1) : 0, target, began);   /* 2: ended well, but the result was only spot-checked ("Schnell") */
+  if(late_cancel) PS5TM_INFO("game_convert_late_cancel", "Konvertieren von %s: Abbrechen kam, als das Ergebnis schon fertig war; „Original danach“ läuft nicht.", title);
+  if(st == CV_DONE || st == CV_FAILED || st == CV_CANCELLED) ps5tm_orig_job_done("convert", title, st == CV_DONE && !late_cancel ? (quick ? 2 : 1) : 0, target, began);   /* 2: ended well, but the result was only spot-checked ("Schnell") */
   pthread_mutex_lock(&g_lock);
   g_thread_live = 0;                                 /* only now may the next job (the queue's, a page's) take the place */
   pthread_mutex_unlock(&g_lock);
@@ -944,7 +950,8 @@ cv_run_dumpforge(const cv_args_t *a) {
     int measuring = packing && !strcmp(jb.stage, "measure");
     if(g_job.state == CV_SCANNING && measuring && jb.total) {
       /* the measure pass of an image with packs: the page shows a bar and a time to go for it (it took nearly three minutes on a 6 GB game with only a text) */
-      ps5tm_fpkgprog_measure(&prog, !a->quick, a->pack.kind == 2, a->pack_src, jb.done, jb.total, &g_job.meas_done, &g_job.meas_total);
+      if(!ps5tm_fpkgprog_stage(jb.stage_done, jb.stage_total, &g_job.meas_done, &g_job.meas_total))   /* 0.6.0 tells the pass itself; older: a guess */
+        ps5tm_fpkgprog_measure(&prog, !a->quick, a->pack.kind == 2, a->pack_src, jb.done, jb.total, &g_job.meas_done, &g_job.meas_total);
       if(!mlast_ms) {
         mlast_ms = now;
         mlast_done = jb.done;
@@ -968,7 +975,10 @@ cv_run_dumpforge(const cv_args_t *a) {
     if(g_job.state == CV_VERIFYING && !strcmp(jb.stage, "finalize") && !g_job.t_rename_ms) g_job.t_rename_ms = now;
     if(g_job.state == CV_WRITING && jb.total) {
       /* the game's own bytes, not the job-wide count (fpkgprogress.h): "17.5 of 70.1 GB" and a time to go four times too long otherwise */
-      if(packing) ps5tm_fpkgprog_packwrite(&prog, !a->quick, jb.done, jb.total, &g_job.done_bytes, &g_job.total_bytes);
+      if(packing) {
+        if(!ps5tm_fpkgprog_stage(jb.stage_done, jb.stage_total, &g_job.done_bytes, &g_job.total_bytes))  /* 0.6.0 tells the write pass itself; older: a share of the rest */
+          ps5tm_fpkgprog_packwrite(&prog, !a->quick, jb.done, jb.total, &g_job.done_bytes, &g_job.total_bytes);
+      }
       else ps5tm_fpkgprog_write(&prog, !strcmp(jb.stage, "compress"), jb.done, jb.total, &g_job.done_bytes, &g_job.total_bytes);
       if(now > last_ms + 1500 && jb.done >= last_done) {
         double r = (double)(jb.done - last_done) * 1000.0 / (double)(now - last_ms);

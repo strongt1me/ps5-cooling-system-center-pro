@@ -1833,7 +1833,8 @@
        Regelmodus und erkennbare Clamp-Lage. */
     const clampText = (() => {
       if (C.guard_state === 1) return "Wächter hält volle Kühlung (Übertemperatur)";
-      if (C.guard_state === 2) return "Wächter: Regelung reagiert nicht, Lüfter bei der Konsole";
+      if (C.guard_state === 2) return F.threshold_c > 0 && F.threshold_c < 91 ? "Wächter: Regelung reagiert nicht, volle Kühlung"
+                                                                              : "Wächter: Regelung reagiert nicht, Lüfter bei der Konsole";
       if (C.safety_active) return "Notfallmodus aktiv (Sicherheitsgrenze)";
       if (!F.automatic) return F.threshold_c > 0
         ? `manueller Wert ${F.threshold_c} °C`
@@ -6311,7 +6312,6 @@
         if (n === "cv-pk") cv.pack = e.target.value;
         if (n === "cv-pl") cv.pl = Number(e.target.value);
         if (n === "cv-pz") cv.pz = Number(e.target.value);
-        if (n === "cv-prt") cv.prt = e.target.value === "ampr_emu" ? "ampr_emu" : "ng";
         if (n === "cv-op") {
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value === "fpkg" ? (cv.fl || "fpkg") : e.target.value;   /* the format "FPKG" carries the level chosen last */
@@ -6850,7 +6850,7 @@
    * homebrew eines Laufwerks oder PS5-Sicherung/Spiele. */
   const cv = { id: "", plan: null, op: "", fl: "fpkg", drive: "", mode: "", job: null, timer: 0, ampr: false,
                name: "", check: null, cseq: 0, ctimer: 0, queue: null, qtimer: 0, guide: false, fresh: false,
-               pack: "", pl: 9, pz: 5, prt: "ng" };       /* Packen beim Konvertieren: "" | "lz4" | "zstd", Stufe LZ4, Stufe zstd, Laufzeit "ng" | "ampr_emu" */
+               pack: "", pl: 9, pz: 5 };                  /* Packen beim Konvertieren: "" | "lz4" | "zstd", Stufe LZ4, Stufe zstd (die Laufzeit ist seit Dump Forge 0.6.0 immer AMPR EMU NG) */
 
   const CV_OPS = {
     ffpfsc: {
@@ -6897,7 +6897,7 @@
   /* the fields of the three requests (check, start, queue) */
   const cvPackFields = () => {
     const k = cvPackKind();
-    return k ? { pack: k, pack_level: k === "zstd" ? cv.pz : cv.pl, pack_runtime: k === "lz4" ? cv.prt : "ng" } : {};
+    return k ? { pack: k, pack_level: k === "zstd" ? cv.pz : cv.pl, pack_runtime: "ng" } : {};
   };
   const cvPackName = (k) => (k === "zstd" ? "zstd-Packs" : "LZ4-Packs");
   /* Squeezing of a job as the server reports it: also an image written with packs */
@@ -7034,14 +7034,14 @@
       <ol>
         <li>Besorge dir die ELF-Datei von Dump Forge vom PC (GitHub-Projekt quer3q/ps5-dump-forge).</li>
         <li>Kopiere sie per FTP (Port 2121) oder mit dem Dateimanager der App in diesen Ordner der Konsole:<br><code>/data/PS5-Cooling-Center/dumpforge/</code><br><span class="muted">Die App legt diesen Ordner bei jedem Start selbst an.</span></li>
-        <li>Der Name muss stimmen (die Version nur aus Ziffern und Punkten und neuer als die eingebaute 0.5.7, zum Beispiel 0.5.8):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code></li>
+        <li>Der Name muss stimmen (die Version nur aus Ziffern und Punkten und neuer als die eingebaute 0.6.0, zum Beispiel 0.6.1):<br><code>ps5-dump-forge-&lt;Version&gt;-ps5.elf</code></li>
         <li>Die Datei muss zwischen 1 und 40 MiB groß sein und eine echte ELF-Datei sein.</li>
         <li>Ein Neustart der App ist nicht nötig; sie nimmt die Datei beim nächsten Auftrag.</li>
       </ol>
       <h5>Hinweise</h5>
       <ul>
         <li>Liegen mehrere Fassungen da, nimmt die App die höchste Version. Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern.</li>
-        <li>Dump Forge 0.5.7 steckt in der App und damit auch in beiden Kacheln (FAKE86921, FAKE86922).</li>
+        <li>Dump Forge 0.6.0 steckt in der App und damit auch in beiden Kacheln (FAKE86921, FAKE86922).</li>
         <li>Die App startet Dump Forge bei Bedarf selbst und beendet es nach dem Auftrag wieder. Du musst es nicht von Hand starten.</li>
       </ul>
     </div>`;
@@ -7071,7 +7071,8 @@
           <code>${esc(df.folder || "/data/PS5-Cooling-Center/dumpforge")}</code>
           <button type="button" class="btn" data-cp="dfetch"${df.fetching ? " disabled" : ""}>Dump Forge laden</button></div>`;
   };
-  /* Under the format exFAT / ffpkg: pack the game while the image is written. One group of choices: whether, which level, which runtime (LZ4 only). */
+  /* Under the format exFAT / ffpkg: pack the game while the image is written. One group of choices: whether and which level. The runtime is AMPR EMU NG:
+     Dump Forge 0.6.0 no longer carries the original APR-EMU and refuses it for LZ4 packs, so the choice of 19.11.2026 is gone (26.11.2026). */
   const cvPackExtra = (p) => {
     const df = p.dumpforge || {};
     if (!p.pack_ok) {
@@ -7080,7 +7081,7 @@
     }
     const kinds = [
       ["", "Nicht packen", "Das Abbild enthält die Dateien des Spiels, wie sie sind."],
-      ["lz4", "LZ4-Packs", "Dump Forge packt das Spiel beim Schreiben in LZ4-Packs, ohne Zwischenordner. Das spart Platz; die APR-EMU im Spiel entpackt sie beim Spielen."],
+      ["lz4", "LZ4-Packs", "Dump Forge packt das Spiel beim Schreiben in LZ4-Packs, ohne Zwischenordner, und legt AMPR EMU NG ins Spiel. Das spart Platz; AMPR EMU NG entpackt die Packs beim Spielen."],
       ["zstd", "zstd-Packs (nur AMPR EMU NG)", "Dump Forge packt das Spiel beim Schreiben in zstd-Packs und legt AMPR EMU NG ins Spiel, die einzige Fassung, die zstd liest."]
     ];
     const kind = cvPackKind();
@@ -7092,9 +7093,6 @@
     return `<div class="cp-sub cv-pack"><h5>Packen (AMPR-Packs)</h5>
       <div class="cp-list">${radios("cv-pk", rows, kind)}</div>
       ${kind ? `<h5>Stufe</h5><div class="cp-list">${radios(kind === "zstd" ? "cv-pz" : "cv-pl", lv, kind === "zstd" ? cv.pz : cv.pl)}</div>` : ""}
-      ${kind === "lz4" ? `<h5>Laufzeit im Spiel</h5><div class="cp-list">${radios("cv-prt", [
-        ["ng", "AMPR EMU NG (Vorgabe)", ""],
-        ["ampr_emu", "APR-EMU Original", "Nur für Spiele, die libSceAmpr laden. Dump Forge lehnt es ab, wenn das Spiel sie nicht braucht."]], cv.prt)}</div>` : ""}
       ${kind ? `<p class="muted cv-engine">Die Quelle wird zweimal gelesen (erst messen, dann schreiben): Das dauert länger. Das Original bleibt unverändert. Eine Prüfsummen-Datei (.sha256) entsteht dabei nicht.</p>` : ""}
       ${kind || !df.installed ? cvEngineHtml(df) : ""}</div>`;
   };
@@ -10344,7 +10342,8 @@
     const inside = mount && fm.path && (fm.path === mount || fm.path.startsWith(`${mount}/`));
     if (inside) {
       fm.sel.clear();
-      fm.clip = fm.clip && fm.clip.from && (fm.clip.from === mount || fm.clip.from.startsWith(`${mount}/`)) ? null : fm.clip;
+      const clipAt = fm.clip ? (fm.clip.root || fm.clip.from) : "";   /* Treffer aus mehreren Ordnern haben kein „from“, aber den Ordner, in dem gesucht wurde */
+      fm.clip = clipAt && (clipAt === mount || clipAt.startsWith(`${mount}/`)) ? null : fm.clip;
       await fmLoad("/data");
     } else {
       fmRender();
@@ -10365,7 +10364,7 @@
     const inDrive = (path) => !!path && (path === p.path || path.startsWith(`${p.path}/`));
     if (inDrive(fm.path)) {
       fm.sel.clear();
-      if (fm.clip && inDrive(fm.clip.from)) fm.clip = null;
+      if (fm.clip && inDrive(fm.clip.root || fm.clip.from)) fm.clip = null;
       /* erst den Stick verlassen, dann auswerfen (Prüfung 23.11.2026): sonst blieb seine Liste bis zu 60 s anklickbar, und Öffnen oder
          Herunterladen liefen in „wird gerade benutzt“ */
       await fmLoad("/data");
@@ -10394,7 +10393,7 @@
     fmSeq++;                                      /* answers and the loop of folder sizes that are under way fall away */
     if (inDrive(fm.path)) {
       fm.sel.clear();
-      if (fm.clip && inDrive(fm.clip.from)) fm.clip = null;
+      if (fm.clip && inDrive(fm.clip.root || fm.clip.from)) fm.clip = null;
       fm.path = "/data";                          /* back on this page it opens the internal storage, not the drive */
     }
     const tab = document.querySelector('.tab[data-page="system"]');
@@ -10410,21 +10409,26 @@
   let fmSeq = 0;
   const fmLoad = async (path, keepSearch) => {
     const seq = ++fmSeq;
-    if (!keepSearch && (fm.q || fm.search)) {        /* ein anderer Ordner: die Suche endet, das Feld wird leer */
-      fmSearchStop();
-      fm.q = "";
-      fm.search = null;
-      const q = $("#fm-q");
-      if (q) q.value = "";
-    }
     txt("#fm-sub", "wird geladen …");
     try {
       const d = await api(`/api/v1/files/list?path=${encodeURIComponent(path)}`, { timeoutMs: 30000 });
       if (seq !== fmSeq) return;
       if (fm.path !== d.path) fm.sel.clear();
+      /* Ein anderer Ordner: die Suche endet, das Feld wird leer – aber erst jetzt, wo der Ordner da ist (ließ er sich nicht lesen, bleiben die Treffer,
+         wie sie sind; Prüfung 26.11.2026). Dasselbe Verzeichnis neu gelesen (nach Umbenennen, Löschen, Hochladen, „Aktualisieren“) behält die Suche. */
+      const same = !!keepSearch && d.path === fm.path;
+      if (!same && (fm.q || fm.search)) {
+        fmSearchStop();
+        fm.q = "";
+        fm.search = null;
+        const q = $("#fm-q");
+        if (q) q.value = "";
+      }
       fm.path = d.path;
       fm.list = d;
       fm.sizes = new Map();                          /* berechnete Ordnergrößen gelten nur für diesen Stand */
+      /* die Treffer der Unterordner-Suche stammen vom Stand davor: neu suchen (läuft gerade eine, ist sie neu genug) */
+      if (same && fmDeepOn() && fm.q && !fm.searching && !(fm.search && fm.search.state === "cancelled")) { fmSearchStart(); return; }
     } catch (e) {
       if (seq !== fmSeq) return;
       txt("#fm-sub", `Nicht lesbar: ${e.message}`);
@@ -10519,10 +10523,12 @@
         : `<span class="fm-name">${label}</span>`;
       // the game a folder or image named after a title ID belongs to (from its param.json/param.sfo or the installed
       // titles; 25.11.2026): "PPSA01325" alone says nothing
-      const game = e.title ? `<span class="fm-game" title="Spiel">${fm.q ? fmMark(fm.q, e.title) : esc(e.title)}</span>` : "";
-      const where = e.full ? `<span class="fm-where">in ${esc(fmParent(e.full))}</span>` : "";
+      // the title is data, not interface: it is not run through the translation ("Update", "System" and the pieces around a mark were; audit 26.11.2026)
+      const game = e.title ? `<span class="fm-game" title="Spiel"><span data-no-i18n>${fm.q ? fmMark(fm.q, e.title) : esc(e.title)}</span></span>` : "";
+      // "Ordner: …" has an entry in every language; "in …" had none and stayed German
+      const where = e.full ? `<span class="fm-where">${esc(`Ordner: ${fmParent(e.full)}`)}</span>` : "";
       const kind = e.type === "dirlink" ? "Verknüpfung zu einem Ordner" : e.type === "link" ? "Verknüpfung" : e.type === "other" ? "Gerät oder Sonderdatei" : "";
-      const sz = e.type === "dir" ? fm.sizes.get(fmJoin(d.path, e.name)) : null;
+      const sz = e.type === "dir" ? fm.sizes.get(fmFull(e)) : null;   /* a hit's own path, not a folder of the same name beside the search */
       const sizeText = e.type === "file" ? (e.size === 0 ? "0 B" : bytes(e.size))
         : sz ? `${bytes(sz.bytes) === "--" ? "0 B" : bytes(sz.bytes)}${sz.partial ? "+" : ""} · ${num(sz.files)} ${sz.files === 1 ? "Datei" : "Dateien"}${sz.partial ? " (mindestens)" : ""}` : "";
       const selected = fm.sel.has(fmKey(e));
@@ -10565,7 +10571,10 @@
     return `${esc(s.slice(0, i))}<mark>${esc(s.slice(i, i + q.length))}</mark>${esc(s.slice(i + q.length))}`;
   };
   const fmParent = (p) => { const i = p.lastIndexOf("/"); return i > 0 ? p.slice(0, i) : "/"; };
-  const fmSearchDeepShown = () => !!(fm.deep && fm.q && fm.search && fm.search.path === fm.path);
+  /* „Auch Unterordner“ zählt nur, wo die Konsole auch sucht: in „/“ nie. Dort bleibt der Haken gemerkt, die Liste wird aber nur gefiltert
+     (vorher stand dort für immer „Die Suche beginnt …“; Prüfung 26.11.2026). */
+  const fmDeepOn = () => !!(fm.deep && fm.list && fm.list.path !== "/");
+  const fmSearchDeepShown = () => !!(fmDeepOn() && fm.q && fm.search && fm.search.path === fm.path);
   const fmSearchEntries = () => ((fm.search && fm.search.hits) || []).map((h) => {
     const p = String(h.path || "");
     return { name: p.slice(p.lastIndexOf("/") + 1), full: p, type: h.type === "other" ? "other" : h.type, size: h.size || 0,
@@ -10584,7 +10593,7 @@
     const job = $("#fm-searchjob");
     if (!fm.q) { hits.hidden = true; job.hidden = true; return; }
     hits.hidden = false;
-    if (!fm.deep) {
+    if (!fmDeepOn()) {
       job.hidden = true;
       txt("#fm-hits", n === 1 ? `${num(fm.sorted.length)} von 1 Eintrag in diesem Ordner` : `${num(fm.sorted.length)} von ${num(n)} Einträgen in diesem Ordner`);
       return;
@@ -10607,36 +10616,65 @@
       s.state === "cancelled" ? "Abgebrochen." : "", s.error || "", `${num(s.scanned || 0)} Einträge geprüft`].filter(Boolean).join(" · "));
   };
   /* Die Konsole sucht; die Seite fragt alle 700 ms nach, solange sie läuft. Ein neuer Begriff startet eine neue Suche (die alte endet dabei). */
+  const fmSearchCancel = () => api("/api/v1/files/search/cancel", { method: "POST", body: "{}" }).catch(() => {});
   const fmSearchPoll = async (seq) => {
+    let fails = 0, shown = "";
     while (seq === fm.searchSeq && state.page === "files") {
       let r;
-      try { r = await api("/api/v1/files/search", { timeoutMs: 15000 }); } catch (e) { break; }
+      try {
+        r = await api("/api/v1/files/search", { timeoutMs: 15000 });
+        fails = 0;
+      } catch (e) {
+        /* eine verlorene Antwort ist kein Ende: noch zweimal fragen, dann sagen, dass es nicht ging (vorher blieb „Sucht in …“ für immer stehen) */
+        if (seq !== fm.searchSeq) return;
+        if (++fails < 3) { await new Promise((res) => setTimeout(res, 1500)); continue; }
+        fm.searching = false;
+        fm.search = { ...(fm.search || { path: fm.path, hits: [] }), state: "failed", error: e.message };
+        fmRender();
+        return;
+      }
       if (seq !== fm.searchSeq) return;
       fm.search = r;
-      fmRender();
-      if (r.state !== "running") return;
+      /* Die Liste wird nur neu gebaut, wenn sich etwas an ihr geändert hat (Stand oder Zahl der Treffer); sonst nur die Zeile darüber. Vorher entstand
+         alle 700 ms alles neu: Ein Klick oder Haken, der so einen Neuaufbau überspannte, ging verloren, und der Tastaturfokus sprang weg. */
+      const key = `${r.state}|${(r.hits || []).length}|${r.path}`;
+      if (key !== shown) { shown = key; fmRender(); }
+      else fmSearchRenderHead(fm.list ? fm.list.entries.length : 0);
+      if (r.state !== "running") { fm.searching = false; return; }
       await new Promise((res) => setTimeout(res, 700));
     }
+    /* die Seite wurde verlassen: Niemand fragt mehr nach, also gilt die Suche hier nicht mehr als unterwegs (beim Wiederkommen sucht fmLoad neu) */
+    if (seq === fm.searchSeq) fm.searching = false;
   };
   const fmSearchStart = async () => {
     const seq = ++fm.searchSeq;
     fm.sel.clear();
     fm.search = null;
     fmRender();
-    if (!fm.deep || !fm.q || !fm.list || fm.list.path === "/") return;
+    if (!fmDeepOn() || !fm.q) return;
+    fm.searching = true;                             /* ab jetzt sucht die Konsole: Ein Ende vor ihrer ersten Antwort bricht dort auch ab (fmSearchStop) */
     try {
       await api("/api/v1/files/search", { method: "POST", body: JSON.stringify({ path: fm.list.path, q: fm.q }), timeoutMs: 15000 });
     } catch (e) {
       if (seq !== fm.searchSeq) return;
+      fm.searching = false;
       fm.search = { state: "failed", path: fm.list.path, error: e.message, hits: [] };
       fmRender();
       return;
     }
+    if (seq !== fm.searchSeq) {
+      /* inzwischen beendet, und keine neue Suche unterwegs: Das Abbrechen von vorhin kam vielleicht vor dem Start an – noch einmal */
+      if (!fm.searching) fmSearchCancel();
+      return;
+    }
     fmSearchPoll(seq);
   };
+  /* Die Seite fragt nicht mehr nach und sagt deshalb selbst, wie die Suche endete: „Abbrechen“ zeigte vorher weiter „Sucht in …“ (Prüfung 26.11.2026). */
   const fmSearchStop = () => {
     fm.searchSeq++;
-    if (fm.search && fm.search.state === "running") api("/api/v1/files/search/cancel", { method: "POST", body: "{}" }).catch(() => {});
+    if (fm.searching || (fm.search && fm.search.state === "running")) fmSearchCancel();
+    fm.searching = false;
+    if (fm.search && fm.search.state === "running") fm.search = { ...fm.search, state: "cancelled", current: "" };
   };
   /* Feld leeren: der Ordner steht wieder ganz da; eine laufende Suche endet */
   const fmSearchClear = () => {
@@ -10651,7 +10689,7 @@
   const fmSearchInput = () => {
     fm.q = $("#fm-q").value.trim();
     clearTimeout(fm.searchTimer);
-    if (!fm.deep) { fm.sel.clear(); fmRender(); return; }
+    if (!fmDeepOn()) { fm.sel.clear(); fmRender(); return; }
     /* auf der Konsole erst, wenn eine halbe Sekunde nichts mehr getippt wurde */
     fm.searchTimer = setTimeout(() => { if (fm.q) fmSearchStart(); else fmSearchClear(); }, 500);
     if (!fm.q) fmRender();
@@ -10679,7 +10717,10 @@
     const c = fm.clip;
     $("#fm-clipbar").hidden = !c;
     if (c) {
-      txt("#fm-cliptext", `${c.paths.length} ${c.paths.length === 1 ? "Eintrag" : "Einträge"} zum ${c.move ? "Verschieben" : "Kopieren"} gemerkt (aus ${c.from})`);
+      const cn = c.paths.length;                     /* zwei ganze Sätze: jeder hat seinen Eintrag im Wörterbuch */
+      txt("#fm-cliptext", c.from
+        ? `${cn} ${cn === 1 ? "Eintrag" : "Einträge"} zum ${c.move ? "Verschieben" : "Kopieren"} gemerkt (aus ${c.from})`
+        : `${cn} ${cn === 1 ? "Eintrag" : "Einträge"} zum ${c.move ? "Verschieben" : "Kopieren"} gemerkt`);
       $("#fm-paste").disabled = !(fm.list && fm.list.writable) || c.from === fm.path;
       $("#fm-paste").title = c.from === fm.path ? "Erst in den Zielordner wechseln" : (fm.list && fm.list.writable ? "" : "Hierhin darf nichts kopiert werden");
     }
@@ -10872,7 +10913,7 @@
           const started = await fmTransfer(move, srcs, dest);
           fm.pick = null;
           fmClose();
-          if (started) { if (onStarted) onStarted(); fmFollow(); }
+          if (started) { fm.jobSeenAgo = Infinity; if (onStarted) onStarted(); fmFollow(); }
         });
       }
     };
@@ -10891,13 +10932,16 @@
     const o = fmShell();
     o.querySelector(".cp-dialog").classList.remove("fm-view");
     txt("#fm-dlg-title", rows.length > 1 ? `${rows.length} Einträge löschen?` : fmIsDir(rows[0]) ? "Ordner löschen?" : "Datei löschen?");
-    const names = rows.slice(0, FM_DEL_SHOWN).map((e) => `<li><code>${esc(e.name)}</code> <span class="muted">${esc(fmIsDir(e) ? "Ordner" : bytes(e.size))}</span></li>`).join("");
+    /* Treffer der Unterordner-Suche liegen nicht im offenen Ordner: Jeder steht mit seinem ganzen Pfad da, und die Zeile „Ordner: …“ entfällt
+       (vorher stand dort der durchsuchte Ordner, und gleichnamige Treffer waren nicht zu unterscheiden; Prüfung 26.11.2026). */
+    const deepRows = rows.some((e) => e.full);
+    const names = rows.slice(0, FM_DEL_SHOWN).map((e) => `<li><code>${esc(deepRows ? fmFull(e) : e.name)}</code> <span class="muted">${esc(fmIsDir(e) ? "Ordner" : bytes(e.size))}</span></li>`).join("");
     const more = rows.length > FM_DEL_SHOWN ? `<li class="muted">${esc(`und ${rows.length - FM_DEL_SHOWN} weitere`)}</li>` : "";
     const hasDir = rows.some(fmIsDir);
     $("#fm-dlg-body").innerHTML = `
       <p>Das wird endgültig gelöscht:</p>
       <ul class="fm-conflict-list fm-del-list">${names}${more}</ul>
-      <p class="muted fm-del-in">${esc(`Ordner: ${fm.path}`)}</p>
+      ${deepRows ? "" : `<p class="muted fm-del-in">${esc(`Ordner: ${fm.path}`)}</p>`}
       <p class="muted fm-del-sum" id="fm-del-sum">${hasDir ? "Die Konsole zählt nach …" : ""}</p>
       <p class="fm-del-warn">Das lässt sich nicht rückgängig machen.</p>
       ${hasDir ? `<p class="fm-del-warn">Ordner werden mit allem gelöscht, was darin liegt.</p>` : ""}
@@ -10936,6 +10980,7 @@
         if (mine !== fm.viewSeq) return;
         fmClose();
         if (fromSelection) fm.sel.clear();
+        fm.jobSeenAgo = Infinity;
         fmFollow();
       } catch (er) { fail(er); }
     });
@@ -11033,7 +11078,7 @@
           txt("#fm-edit-note", "Gespeichert ✓");
           btn.textContent = "Gespeichert";
           setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "Speichern"; } }, 2000);
-          fmLoad(fm.path);
+          fmLoad(fm.path, true);
         } catch (ex) {
           err.textContent = ex.message; err.hidden = false;
           btn.disabled = false; btn.textContent = "Speichern";
@@ -11071,7 +11116,7 @@
     try {
       await fmNameAct(v);
       fmClose();
-      fmLoad(fm.path);
+      fmLoad(fm.path, true);
     } catch (e) { err.textContent = e.message; err.hidden = false; }
   };
 
@@ -11095,6 +11140,7 @@
     box.hidden = false;
     const what = FM_KIND[j.kind] || "Vorgang";
     if (j.active) {
+      fm.jobSeenAgo = Infinity;
       const pc = Math.max(0, Math.min(100, Math.floor(Number(j.percent) || 0)));
       const amount = j.bytes_total > 0 ? `${j.bytes_done > 0 ? esc(bytes(j.bytes_done)) : "0 B"} von ${esc(bytes(j.bytes_total))}` : `${num(j.files_done)} von ${num(j.files_total)} Dateien`;
       /* Geschwindigkeit und Restzeit, solange etwas kopiert oder verschoben wird (der Server misst sie) */
@@ -11122,7 +11168,11 @@
       ${j.error ? `<p class="cp-err">${esc(j.error)}</p>` : ""}${j.note ? `<p class="muted">${esc(j.note)}</p>` : ""}
       <div class="cp-actions"><button type="button" class="btn ghost" id="fm-jobhide">Ausblenden</button></div>`;
     if (j.state === "done" && j.kind === "move") fm.clip = null;
-    if (j.finished_ago_s >= 0 && j.finished_ago_s < 5) fmLoad(fm.path);
+    /* Einmal je fertigem Auftrag neu laden, nicht bei jeder Abfrage seiner letzten fünf Sekunden. Ein neues Ende zeigt sich an einem kleineren
+       „fertig seit“ als dem zuletzt gesehenen: Ein schneller Auftrag ist oft schon vorbei, bevor die Seite ihn je als laufend sieht. */
+    const seenAgo = fm.jobSeenAgo === undefined ? Infinity : fm.jobSeenAgo;
+    if (j.finished_ago_s >= 0 && j.finished_ago_s < 5 && j.finished_ago_s < seenAgo) fmLoad(fm.path, true);
+    if (j.finished_ago_s >= 0) fm.jobSeenAgo = j.finished_ago_s;
   };
 
   const fmPaste = async () => {
@@ -11133,6 +11183,7 @@
     if (!started) return;
     if (!c.move) fm.clip = null;
     fmRenderBars();
+    fm.jobSeenAgo = Infinity;
     fmFollow();
   };
 
@@ -11170,7 +11221,7 @@
         if (e.status !== 409) {
           box.innerHTML = `<p class="cp-err">Ordner „${esc(rel)}“: ${esc(e.message)}</p>
             <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
-          fmLoad(fm.path);
+          fmLoad(fm.path, true);
           return;
         }
       }
@@ -11183,7 +11234,7 @@
     if (!items.length) {
       box.innerHTML = `<p class="dl-done">${made} ${made === 1 ? "Ordner" : "Ordner"} angelegt, keine Dateien darin.</p>
         <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
-      fmLoad(fm.path);
+      fmLoad(fm.path, true);
       return;
     }
     if (!fm.xhr) { fm.upSkipped = 0; fmUpNext(0, fm.upQueue.length); }
@@ -11223,7 +11274,7 @@
       const up = done - sk;
       box.innerHTML = `<p class="dl-done">${up} ${up === 1 ? "Datei" : "Dateien"} hochgeladen.${sk ? ` ${sk} übersprungen, weil es sie am Ziel schon gibt.` : ""}</p>
         <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
-      fmLoad(fm.path);
+      fmLoad(fm.path, true);
       return;
     }
     box.hidden = false;
@@ -11248,7 +11299,7 @@
       fm.xhr = null;
       box.innerHTML = `<p class="cp-err">„${esc(it.f.name)}“: ${esc(m)}</p>
         <div class="cp-actions"><button type="button" class="btn ghost" id="fm-uphide">Ausblenden</button></div>`;
-      fmLoad(fm.path);
+      fmLoad(fm.path, true);
     };
     x.onload = async () => {
       let d = null;
@@ -11370,7 +11421,7 @@
     } else {
       fmPlacesRefresh();                             /* beim Wiederkommen auf die Seite: die Orte neu lesen, ohne zu warten */
     }
-    await fmLoad(fm.path);
+    await fmLoad(fm.path, true);
     fmFollow();
   };
 
@@ -11416,16 +11467,19 @@
       if (en) { fm.flash = en.full; fmLoad(fmParent(en.full)); }
     }
     else if (t.id === "fm-qx") fmSearchClear();
-    else if (t.id === "fm-scancel") fmSearchStop();
+    else if (t.id === "fm-scancel") { fmSearchStop(); fmRender(); }
     else if (d.fmView !== undefined) fmView(+d.fmView);
     else if (t.id === "fm-sizes") fmSizeAll();
     else if (t.id === "fm-dir") { fm.desc = !fm.desc; fmSaveSort(); fmRender(); }
     else if (t.id === "fm-up") { if (fm.list && fm.list.parent) fmLoad(fm.list.parent); }
-    else if (t.id === "fm-reload") { fmLoadPlaces().then(() => fmLoad(fm.path)); }
+    else if (t.id === "fm-reload") { fmLoadPlaces().then(() => fmLoad(fm.path, true)); }
     else if (t.id === "fm-mkdir") fmAskName("Neuer Ordner", "Name des Ordners", "Neuer Ordner", (v) => api("/api/v1/files/mkdir", { method: "POST", body: JSON.stringify({ path: fm.path, name: v }) }));
     else if (t.id === "fm-copy" || t.id === "fm-cut") {
       if (!fmSelected().length) return;
-      fm.clip ={ move: t.id === "fm-cut", from: fm.path, paths: fmSelected().map(fmFull) };
+      /* „aus …“ und die Sperre „erst in den Zielordner wechseln“ gelten dem Ordner, in dem die Einträge liegen: bei Treffern aus mehreren Ordnern keinem */
+      const clipPaths = fmSelected().map(fmFull);
+      const clipDirs = new Set(clipPaths.map(fmParent));
+      fm.clip = { move: t.id === "fm-cut", from: clipDirs.size === 1 ? [...clipDirs][0] : "", root: fm.path, paths: clipPaths };
       fm.sel.clear();
       fmRender();
       toast(fm.clip.move ? "Gemerkt. Jetzt den Zielordner öffnen und „Hier einfügen“." : "Gemerkt. Jetzt den Zielordner öffnen und „Hier einfügen“.");
@@ -11474,14 +11528,14 @@
     } else if (c.id === "fm-deep") {
       fm.deep = c.checked;
       try { localStorage.setItem("fmDeep", fm.deep ? "1" : "0"); } catch { /* egal */ }
-      if (fm.deep && fm.q) fmSearchStart();
+      if (fmDeepOn() && fm.q) fmSearchStart();
       else { fmSearchStop(); fm.search = null; fm.sel.clear(); fmRender(); }
     }
   });
   $("#fm-q").addEventListener("input", fmSearchInput);
   $("#fm-q").addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); fmSearchClear(); }
-    else if (e.key === "Enter" && fm.deep && fm.q) { e.preventDefault(); clearTimeout(fm.searchTimer); fmSearchStart(); }
+    else if (e.key === "Enter" && fmDeepOn() && fm.q) { e.preventDefault(); clearTimeout(fm.searchTimer); fmSearchStart(); }
   });
   try { fm.deep = localStorage.getItem("fmDeep") === "1"; $("#fm-deep").checked = fm.deep; } catch { /* ohne: nur der Ordner */ }
   const fmDrop = $("#fm-list");

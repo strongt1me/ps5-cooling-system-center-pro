@@ -106,11 +106,17 @@ static atomic_uint g_beat      = 0;
 static atomic_int  g_safety_c  = 0;   /* the loop's safety limit in force, 0 = not yet known */
 static atomic_int  g_state     = PS5TM_GUARD_IDLE;
 static atomic_int  g_started   = 0;
+static atomic_int  g_held_c    = 0;   /* the threshold the guard holds (for the status), 0 = none */
+static atomic_int  g_quiet     = 0;   /* the app ends: the guard writes nothing any more */
 
 void ps5tm_fanguard_beat(void)              { atomic_fetch_add(&g_beat, 1); }
 void ps5tm_fanguard_publish(int safety_c)   { atomic_store(&g_safety_c, safety_c); }
 int  ps5tm_fanguard_state(void)             { return atomic_load(&g_state); }
 int  ps5tm_fanguard_holding(void)           { return atomic_load(&g_state) != PS5TM_GUARD_IDLE; }
+int  ps5tm_fanguard_held_c(void)            { return atomic_load(&g_held_c); }
+/* The app ends and the fan loop gives the fan back to the console: from here on the guard writes nothing, or its rewrite every REWRITE_S seconds could
+   land after the hand-back and leave full cooling behind when the process is gone (audit 26.11.2026). */
+void ps5tm_fanguard_quiet(void)             { atomic_store(&g_quiet, 1); }
 
 static int
 hot_limit(void) {
@@ -122,6 +128,8 @@ hot_limit(void) {
 static void
 write_threshold(int c) {
   int eno = 0;
+  atomic_store(&g_held_c, c);
+  if(atomic_load(&g_quiet)) return;
   if(ps5tm_platform_set_fan_threshold(c, &eno) != 0)
     PS5TM_ERROR("fanguard_write_failed", "Wächter: Lüftereinstellung %d °C ließ sich nicht schreiben (Fehler %d).", c, eno);
 }
@@ -178,10 +186,13 @@ guard_worker(void *arg) {
     if(armed && silent_s >= DEADMAN_S && state != PS5TM_GUARD_DEADMAN) {
       int hot = (hottest >= 0 && hottest >= lim - HOT_RELEASE_C);
       held_c = hot ? PS5TM_THRESHOLD_MIN_C : PS5TM_NEUTRAL_THRESHOLD_C;
+      /* The state first, then the write: the loop and a threshold set from the page ask "is the guard holding?" before they write. With the write first,
+         one of them could still see "no" and put its own value over the guard's, which the guard only repeats REWRITE_S seconds later (audit 26.11.2026). */
+      atomic_store(&g_held_c, held_c);             /* before the state: whoever sees "holding" also sees what is held */
+      atomic_store(&g_state, PS5TM_GUARD_DEADMAN);
       write_threshold(held_c);
       last_write = now;
       hold_since = now;
-      atomic_store(&g_state, PS5TM_GUARD_DEADMAN);
       PS5TM_WARN("fanguard_deadman",
                  "Wächter: Die Lüfterregelung meldet sich seit %d s nicht mehr. %s (%d °C, heißester Sensor %d °C).",
                  silent_s, hot ? "Lüfter auf volle Kühlung" : "Lüfter zurück an die Konsole", held_c, hottest);
@@ -191,6 +202,7 @@ guard_worker(void *arg) {
       if(beat_since && now - beat_since >= (uint64_t)RESUME_BEATS_S * 1000) {
         atomic_store(&g_state, PS5TM_GUARD_IDLE);
         held_c = 0;
+        atomic_store(&g_held_c, 0);
         PS5TM_INFO("fanguard_deadman_left", "Wächter: Die Lüfterregelung läuft wieder und übernimmt.");
         continue;
       }
@@ -208,10 +220,11 @@ guard_worker(void *arg) {
     /* 2. Over-temperature while the loop runs. */
     if(state == PS5TM_GUARD_IDLE && hot_s >= HOT_SUSTAIN_S && (!fan_full || hot_s >= HOT_FULL_FAN_S)) {
       held_c = PS5TM_THRESHOLD_MIN_C;
+      atomic_store(&g_held_c, held_c);
+      atomic_store(&g_state, PS5TM_GUARD_HOT);     /* the state first, as above */
       write_threshold(held_c);
       last_write = now;
       hold_since = now;
-      atomic_store(&g_state, PS5TM_GUARD_HOT);
       PS5TM_WARN("fanguard_hot",
                  "Wächter: %d °C seit %d s über der Grenze von %d °C, der Lüfter läuft nur mit %d %%. "
                  "Volle Kühlung, bis die Konsole unter %d °C ist.",
@@ -222,6 +235,7 @@ guard_worker(void *arg) {
       if(hottest >= 0 && hottest < lim - HOT_RELEASE_C && now - hold_since >= (uint64_t)HOT_HOLD_MIN_S * 1000) {
         atomic_store(&g_state, PS5TM_GUARD_IDLE);
         held_c = 0;
+        atomic_store(&g_held_c, 0);
         PS5TM_INFO("fanguard_hot_left", "Wächter: Wieder %d °C, die Regelung übernimmt.", hottest);
         continue;
       }

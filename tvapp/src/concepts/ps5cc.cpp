@@ -1176,7 +1176,8 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "plan-packen-gepackt"},
             {0.3f, action_bit(Action::back)},
             // Arkanoid (a PS5 folder that is not in packs): exFAT can pack it while it is written;
-            // no packs, LZ4 with its level and runtime, zstd with its levels
+            // no packs, LZ4 with its level (the runtime is always AMPR EMU NG since Dump Forge
+            // 0.6.0, there is no row for it any more), zstd with its levels
             {0.3f, 0, Direction::down},
             {0.3f, 0, Direction::down},
             {0.4f, action_bit(Action::west)},
@@ -1189,17 +1190,10 @@ class Ps5cc final : public app::Concept
             {0.8f, 0, Direction::none, "plan-packen-aus"},
             {0.2f, 0, Direction::right},
             {0.8f, 0, Direction::none, "plan-packen-lz4"},
-            {0.2f, 0, Direction::down},
-            {0.2f, 0, Direction::down},
-            {0.2f, 0, Direction::right},
-            {0.8f, 0, Direction::none, "plan-packen-laufzeit"},
-            {0.2f, 0, Direction::up},
-            {0.2f, 0, Direction::up},
             {0.2f, 0, Direction::right},
             {0.8f, 0, Direction::none, "plan-packen-zstd"},
             // back to LZ4, the target "A": the check (the packing warns, Dump Forge is there)
             {0.2f, 0, Direction::left},
-            {0.15f, 0, Direction::down},
             {0.15f, 0, Direction::down},
             {0.15f, 0, Direction::down},
             {0.15f, 0, Direction::down},

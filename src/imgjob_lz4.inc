@@ -258,6 +258,7 @@ cp_file(cp_t *c, const char *src, const char *dst, const struct stat *st) {
   /* read back */
   int rb = open(dst, O_RDONLY);
   if(rb < 0) { snprintf(c->why, sizeof(c->why), "Eine Kopie ließ sich nicht zurücklesen: %s", dst + c->dstlen + 1); goto bad2; }
+  ps5tm_drop_cache(rb);                                  /* from the drive, not from memory (audit 26.11.2026) */
   uint32_t crc2 = 0;
   uint64_t got = 0;
   for(;;) {

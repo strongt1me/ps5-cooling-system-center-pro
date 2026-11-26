@@ -99,6 +99,7 @@ struct ntfs_vol {
   int      rw;             /* writes allowed */
   int      rw_ready;       /* device reopened read-write, bitmap loaded */
   int      vol_marked;     /* (app) the dirty flag is set on the disk until the next sync */
+  int      needs_check;    /* (app) a change stopped half way: the dirty flag stays set, so that Windows checks the drive */
   char     write_err[160]; /* why preparing for writes failed, if it did */
   attr_t   cbmp;           /* $Bitmap $DATA: cluster allocation bitmap */
   uint64_t alloc_hint;     /* next cluster to try when allocating */

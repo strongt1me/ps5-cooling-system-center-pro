@@ -1196,7 +1196,8 @@ fmn_run_delete(fm_args_t *a) {
       snprintf(vp, PATH_MAX, "%s", a->src[i]);
       rc = fmn_delete(&n, vp, strlen(vp), st.dev, 0, 1);
     }
-    if(n.ntfs) (void)ntfs_sync(nh(&n));
+    /* the deletes count only once they are on the stick: copying and uploading ask the sync too (audit 26.11.2026: a write error here ended as "done") */
+    if(n.ntfs) { const int s = ntfs_sync(nh(&n)); if(!rc && s) rc = EIO; }
     fmn_unmake(&n);
     if(rc == ECANCELED) {
       free(vp);

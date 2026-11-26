@@ -44,7 +44,6 @@ enum Row
     kRowGuide,
     kRowPack,        // packing the game while an exFAT or ffpkg image is written: no / LZ4 / zstd
     kRowPackLevel,   // ... its level
-    kRowPackRuntime, // ... for LZ4, the runtime in the game
     kRowStart,
     kRowCancel, // the delete question's "Abbrechen", where its focus opens
     kRowInfo = 20,
@@ -146,11 +145,13 @@ const char *pack_text(int pack)
     switch (pack)
     {
     case kPackLz4:
-        return "Dump Forge packt das Spiel beim Schreiben in LZ4-Packs, ohne Zwischenordner. Das "
-               "spart Platz; die APR-EMU im Spiel entpackt sie beim Spielen.";
+        // AMPR EMU NG only: Dump Forge 0.6.0 no longer carries the original APR-EMU (the choice of the
+        // runtime is gone, 26.11.2026)
+        // short enough for the row's one line: the long sentence of the web page was cut off before
+        // "AMPR EMU NG" (audit 26.11.2026)
+        return "LZ4-Packs beim Schreiben; AMPR EMU NG kommt ins Spiel.";
     case kPackZstd:
-        return "Dump Forge packt das Spiel beim Schreiben in zstd-Packs und legt AMPR EMU NG ins "
-               "Spiel, die einzige Fassung, die zstd liest.";
+        return "zstd-Packs beim Schreiben; AMPR EMU NG kommt ins Spiel (nur sie liest zstd).";
     default:
         return "Das Abbild enthält die Dateien des Spiels, wie sie sind.";
     }
@@ -650,13 +651,6 @@ void GameTools::build_form(int keep_focus)
                     .add_choice(kRowPackLevel, "Stufe", pack_level_options(kind),
                                 choice_.pack_level)
                     .description = pack_level_text(kind, choice_.pack_level);
-                if (kind == kPackLz4)
-                    form_
-                        .add_choice(kRowPackRuntime, "Laufzeit im Spiel",
-                                    {"AMPR EMU NG (Vorgabe)", "APR-EMU Original"},
-                                    choice_.pack_runtime)
-                        .description = "Nur für Spiele, die libSceAmpr laden. Dump Forge lehnt es "
-                                       "ab, wenn das Spiel sie nicht braucht.";
             }
         }
         // Dump Forge writes the debug FPKG. It is part of the app, so it is always there; the row
@@ -1195,8 +1189,6 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
         }
         else if (id == kRowPackLevel)
             choice_.pack_level = form_.choice_index(kRowPackLevel);
-        else if (id == kRowPackRuntime)
-            choice_.pack_runtime = form_.choice_index(kRowPackRuntime);
         else if (id == kRowName)
         {
             const int mode = form_.choice_index(kRowName);
@@ -1360,7 +1352,7 @@ void GameTools::open_guide(ui::Feedback &feedback)
         TextBlock::code("/data/PS5-Cooling-Center/dumpforge/"),
         TextBlock::paragraph("Die App legt diesen Ordner bei jedem Start selbst an."),
         TextBlock::numbered("Der Name muss stimmen (die Version nur aus Ziffern und Punkten und "
-                            "neuer als die eingebaute 0.5.7, zum Beispiel 0.5.8):",
+                            "neuer als die eingebaute 0.6.0, zum Beispiel 0.6.1):",
                             "3."),
         TextBlock::code("ps5-dump-forge-<Version>-ps5.elf"),
         TextBlock::numbered(
@@ -1372,7 +1364,7 @@ void GameTools::open_guide(ui::Feedback &feedback)
         TextBlock::bullet(
             "Liegen mehrere Fassungen da, nimmt die App die höchste Version. "
             "Bei gleicher Version gewinnt der Ordner der App vor den Kachel-Ordnern."),
-        TextBlock::bullet("Dump Forge 0.5.7 steckt in der App und damit auch in beiden Kacheln "
+        TextBlock::bullet("Dump Forge 0.6.0 steckt in der App und damit auch in beiden Kacheln "
                           "(FAKE86921, FAKE86922)."),
         TextBlock::bullet(
             "Die App startet Dump Forge bei Bedarf selbst und beendet es nach dem Auftrag wieder. "

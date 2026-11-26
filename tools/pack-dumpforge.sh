@@ -5,7 +5,7 @@
 #
 # 1. tools/fetch-dumpforge.sh downloads the pinned release file (ps5-dump-forge-<version>-ps5.elf) and checks its SHA-256 against the pin.
 # 2. zstd -19 packs it from the FILE (not through a pipe: the frame must carry the size of the program, gen_zstd_blob.py reads it from there)
-#    into third_party/dump_forge/ps5-dump-forge-<version>-ps5.elf.zst (17.7 MiB -> 8.0 MiB for 0.5.6 and 0.5.7).
+#    into third_party/dump_forge/ps5-dump-forge-<version>-ps5.elf.zst (17.7 MiB -> 8.0 MiB for 0.5.6 and 0.5.7, 18.0 MiB -> 8.2 MiB for 0.6.0).
 # 3. The frame is unpacked again and its SHA-256 compared with the pin; the pin goes into the .sha256 beside the frame.
 # 4. Frames of other versions in that folder are removed (the Makefile names exactly one: DF_ZST).
 # Needs the zstd tool (WSL: apt install zstd). Afterwards: change DF_ZST in the Makefile, third_party/dump_forge/ORIGIN.md, tools/upstream.json.

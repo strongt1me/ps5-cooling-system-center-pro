@@ -6,8 +6,8 @@
 # sha256 here, run tools/pack-dumpforge.sh, change DF_ZST in the Makefile, third_party/dump_forge/ORIGIN.md and tools/upstream.json.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version=0.5.7
-sha256=83a7e82a9070a671953d96e4acfc909697505281e4a023a2c6411316c2c1ce6c
+version=0.6.0
+sha256=420265c626d517ed433ecf360092dc28e1061fd0ac29346de488c41cde3ac0d2
 name="ps5-dump-forge-$version-ps5.elf"
 url="https://github.com/quer3q/ps5-dump-forge/releases/download/v$version/$name"
 cache="$root/gen/dumpforge"

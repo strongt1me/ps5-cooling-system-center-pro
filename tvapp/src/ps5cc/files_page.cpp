@@ -289,18 +289,26 @@ class FilesPage final : public Page
         }
         sizes_ = data.fs_sizes;
         tz_ = data.config.tz_offset_min;
+        // The entry under the cursor, by its path: when the rows move under it (hits that keep coming in,
+        // a folder read again) the cursor follows the entry, not the row number (audit 26.11.2026).
+        std::string focus_path;
+        if (const FsEntry *was = focused_entry())
+            focus_path = path_of(*was);
         if (data.fs_search.seq != search_seq_)
         {
             search_seq_ = data.fs_search.seq;
             search_ = data.fs_search;
+            if (search_.state != "running")
+                search_sent_ = false; // the console has answered: nothing is under way that this page does not know of
             if (search_deep_ && !search_q_.empty())
                 sort_entries();
         }
         if (data.fs_list.seq != list_seq_)
         {
             list_seq_ = data.fs_list.seq;
+            const bool same = data.fs_list.path == shown_path_;
             folder_ = data.fs_list;
-            if (folder_.path != shown_path_)
+            if (!same)
             {
                 shown_path_ = folder_.path;
                 end_search();
@@ -308,6 +316,15 @@ class FilesPage final : public Page
                 pick_mode_ = false;
                 stop_measure();
                 list_.set_focus(0);
+                focus_path.clear();
+            }
+            else if (deep_on() && !search_q_.empty() && search_.state != "running" &&
+                     search_.state != "cancelled" && !search_sent_) // a search the person stopped is not started again
+            {
+                // the same folder read again (a job ended, a rename, "Aktualisieren"): the hits are of the
+                // state before it, so the console searches again (the deleted hit stayed in the list)
+                search_sent_ = true;
+                source().files_search(folder_.path, search_q_);
             }
             sort_entries();
         }
@@ -367,6 +384,12 @@ class FilesPage final : public Page
         if (dialog_ != kViewer)
             view_seq_ = data.fs_view.seq;
         rebuild();
+        if (!focus_path.empty() && came_from_.empty())
+        {
+            const FsEntry *now = focused_entry();
+            if (now == nullptr || path_of(*now) != focus_path)
+                focus_entry_at(focus_path);
+        }
     }
 
     void enter() override
@@ -503,7 +526,7 @@ class FilesPage final : public Page
         {
             // the drive the page was in is gone: back to the places, and what was cut or copied
             // from it is gone with it
-            if (inside(clip_from_, gone_mount_))
+            if (inside(clip_root_, gone_mount_))
                 clip_paths_.clear();
             gone_mount_.clear();
             history_.clear();
@@ -569,7 +592,9 @@ class FilesPage final : public Page
                           std::string(clip_move_ ? "Ausgeschnitten: " : "Kopiert: ") +
                               std::to_string(clip_paths_.size()) +
                               (clip_paths_.size() == 1 ? " Eintrag" : " Einträge"),
-                          "aus " + clip_from_ + " · Mehr → Hier einfügen", kBlue);
+                          clip_from_.empty() ? std::string("Mehr → Hier einfügen")
+                                             : "aus " + clip_from_ + " · Mehr → Hier einfügen",
+                          kBlue);
         if (pick_mode_ || !picked_.empty())
             y = note_card(canvas, paint, card, y,
                           picked_.empty() ? std::string("Nichts ausgewählt")
@@ -702,7 +727,7 @@ class FilesPage final : public Page
                      ui::fit_label(paint,
                                    line_mode ? edit_path_
                                    : name_mode_ == kSearch
-                                       ? std::string(search_deep_ ? "In " + folder_.path + " und darunter"
+                                       ? std::string(deep_on() ? "In " + folder_.path + " und darunter"
                                                                   : "In " + folder_.path) +
                                              " \xC2\xB7 Teil des Namens; * und ? als Platzhalter"
                                        : "Ordner: " + folder_.path,
@@ -842,6 +867,8 @@ class FilesPage final : public Page
         {
             if (pick_mode_ && pickable(*e))
                 out[n++] = {ui::Button::cross, "Haken setzen"};
+            else if (!e->full.empty() && e->type != "dir")
+                out[n++] = {ui::Button::cross, "Ordner öffnen"}; // a hit: X opens its folder (activate)
             else if (e->type == "dir" || e->type == "dirlink")
                 out[n++] = {ui::Button::cross, "Öffnen"};
             else if (e->type == "file")
@@ -877,10 +904,17 @@ class FilesPage final : public Page
         return e.full.empty() ? e.name : e.full;
     }
 
+    // "Auch Unterordner" counts only where the console searches: never in "/" (the switch stays as
+    // chosen there, the list is only filtered; before, the card said "Die Suche beginnt …" for good).
+    bool deep_on() const
+    {
+        return search_deep_ && folder_.path != "/";
+    }
+
     // Are the rows the console's hits (and not the open folder filtered)?
     bool search_deep_shown() const
     {
-        return search_deep_ && !search_q_.empty() && !search_.state.empty() &&
+        return deep_on() && !search_q_.empty() && !search_.state.empty() &&
                search_.path == folder_.path && search_.q == search_q_;
     }
 
@@ -888,8 +922,7 @@ class FilesPage final : public Page
     // "Auch Unterordner" stays as chosen.
     void end_search()
     {
-        if (search_.state == "running")
-            source().files_search(search_.path, {});
+        stop_console_search();
         search_q_.clear();
         const std::uint64_t seq = search_.seq;
         search_ = FsSearch{};
@@ -897,11 +930,33 @@ class FilesPage final : public Page
         picked_.clear();
     }
 
-    // A hit's folder opened, with the focus on the hit (the search ends with the new folder).
-    void go_to(const std::string &full, ui::Feedback &feedback)
+    // The console's search is stopped when one runs or was just asked for: also before its first answer
+    // (the page knew nothing of it yet and sent no stop; the console then walked the whole drive).
+    void stop_console_search()
+    {
+        if (search_.state == "running" || search_sent_)
+            source().files_search(search_.path.empty() ? folder_.path : search_.path, {});
+        search_sent_ = false;
+    }
+
+    // A hit's folder opened, with the focus on the hit (the search ends with the new folder). By
+    // value: the entry the path came from is gone once the rows are built anew.
+    void go_to(std::string full, ui::Feedback &feedback)
     {
         came_from_ = full;
-        open(fs_parent_of(full), feedback);
+        const std::string parent = fs_parent_of(full);
+        if (parent == folder_.path)
+        {
+            // the hit lies in the open folder itself: no new list comes for it, so the search ends here
+            // and the row gets the focus (before, X and "Ordner öffnen" did nothing on such a hit)
+            end_search();
+            sort_entries();
+            key_.clear();
+            rebuild(); // focus_came_from() puts the cursor on the hit
+            feedback.play(audio::Cue::select);
+            return;
+        }
+        open(parent, feedback);
     }
 
     // The quiet line of the search's note on the card: sentences with " · " between them (each is
@@ -909,7 +964,7 @@ class FilesPage final : public Page
     std::string search_note() const
     {
         const std::string sep = " \xC2\xB7 ";
-        if (!search_deep_)
+        if (!deep_on())
             return std::to_string(entries_.size()) + " von " + std::to_string(folder_.entries.size()) +
                    " Einträgen in diesem Ordner" + sep + "Mehr: Auch Unterordner";
         if (!search_deep_shown())
@@ -990,7 +1045,7 @@ class FilesPage final : public Page
     // reads nothing from the drive while ShadowMountPlus cuts it off.
     void leave_drive(const std::string &mount)
     {
-        if (inside(clip_from_, mount))
+        if (inside(clip_root_, mount))
             clip_paths_.clear();
         if (!inside(folder_.path, mount))
             return;
@@ -1151,6 +1206,16 @@ class FilesPage final : public Page
         }
         menu_entry_ = *e;
         const std::vector<const FsEntry *> t = targets();
+        // Copies, taken now: "Kopieren", "Ausschneiden" and "Löschen" act on what the menu was opened
+        // for. Before, they took what lay under the cursor's row number when the item was chosen, and
+        // hits that came in meanwhile had moved another entry there (audit 26.11.2026).
+        menu_targets_.clear();
+        menu_paths_.clear();
+        for (const FsEntry *x : t)
+        {
+            menu_targets_.push_back(*x);
+            menu_paths_.push_back(path_of(*x));
+        }
         const bool all_writable = std::all_of(t.begin(), t.end(), [](const FsEntry *x)
                                               { return x->writable && pickable(*x); });
         const std::string count = t.size() > 1 ? " (" + std::to_string(t.size()) + ")" : "";
@@ -1226,7 +1291,8 @@ class FilesPage final : public Page
         {
             items.push_back(
                 item("Hier einfügen (" + std::to_string(clip_paths_.size()) + ")", kPaste,
-                     !inside || !folder_.writable || folder_.path == clip_from_ || job_.active));
+                     !inside || !folder_.writable || (!clip_from_.empty() && folder_.path == clip_from_) ||
+                         job_.active));
             items.push_back(item("Ablage leeren", kForget));
         }
         items.push_back(item("Neuer Ordner", kNewFolder, !inside || !folder_.writable));
@@ -1267,9 +1333,6 @@ class FilesPage final : public Page
     void run(int tag, ui::Feedback &feedback)
     {
         feedback.play(audio::Cue::select);
-        std::vector<std::string> paths;
-        for (const FsEntry *e : targets())
-            paths.push_back(path_of(*e));
         switch (tag)
         {
         case kPick:
@@ -1327,10 +1390,13 @@ class FilesPage final : public Page
         case kSearchDeep:
             search_deep_ = !search_deep_;
             picked_.clear();
-            if (search_deep_ && !search_q_.empty())
+            if (deep_on() && !search_q_.empty())
+            {
+                search_sent_ = true;
                 source().files_search(folder_.path, search_q_);
-            else if (!search_deep_ && search_.state == "running")
-                source().files_search(search_.path, {});
+            }
+            else if (!search_deep_)
+                stop_console_search();
             sort_entries();
             break;
         case kSearchEnd:
@@ -1340,8 +1406,23 @@ class FilesPage final : public Page
         case kCopy:
         case kCut:
             clip_move_ = tag == kCut;
-            clip_from_ = folder_.path;
-            clip_paths_ = paths;
+            clip_paths_ = menu_paths_;
+            // "aus …" and the bar on pasting where they came from belong to the folder the entries lie
+            // in: hits from several folders have none (before, it was the folder searched, and pasting
+            // there was refused although the files came from below it)
+            clip_root_ = folder_.path;
+            clip_from_.clear();
+            for (std::size_t i = 0; i < clip_paths_.size(); ++i)
+            {
+                const std::string parent = fs_parent_of(clip_paths_[i]);
+                if (i == 0)
+                    clip_from_ = parent;
+                else if (parent != clip_from_)
+                {
+                    clip_from_.clear();
+                    break;
+                }
+            }
             picked_.clear();
             pick_mode_ = false;
             break;
@@ -1426,25 +1507,30 @@ class FilesPage final : public Page
     // the names, folder or file, where they lie - and the focus opens on "Abbrechen".
     void open_delete_dialog(ui::Feedback &feedback)
     {
-        const std::vector<const FsEntry *> t = targets();
-        if (t.empty())
+        // what the menu was opened for (open_entry_menu), not what lies under the cursor now
+        const std::vector<FsEntry> &t = menu_targets_;
+        if (t.empty() || menu_paths_.size() != t.size())
             return;
         delete_paths_.clear();
         std::vector<std::string> names;
         bool any_folder = false;
-        for (const FsEntry *e : t)
+        for (std::size_t i = 0; i < t.size(); ++i)
         {
-            const std::string full = path_of(*e);
+            const FsEntry &e = t[i];
+            const std::string &full = menu_paths_[i];
             delete_paths_.push_back(full);
-            const bool folder = e->type == "dir";
+            const bool folder = e.type == "dir";
             any_folder = any_folder || folder;
             if (names.size() >= kDeleteShown)
                 continue;
-            std::string what = folder ? "Ordner" : format_bytes(e->size);
+            std::string what = folder ? "Ordner" : format_bytes(e.size);
             const auto s = sizes_.find(full);
             if (folder && s != sizes_.end() && !s->second.failed)
                 what += " \xC2\xB7 " + format_bytes(s->second.bytes);
-            names.push_back(DeleteAsk::line(e->name, what));
+            // a hit of the search below folders is named by its whole path: hits of the same name
+            // ("param.json") could not be told apart, and the note only named the folder searched
+            names.push_back(e.full.empty() ? DeleteAsk::line(e.name, what)
+                                           : "\xE2\x80\x9E" + shorten_path(full) + "\xE2\x80\x9C \xC2\xB7 " + what);
         }
         if (t.size() > names.size())
             names.push_back("und " + std::to_string(t.size() - names.size()) + " weitere");
@@ -1453,10 +1539,26 @@ class FilesPage final : public Page
         const std::string warn =
             std::string("Das lässt sich nicht rückgängig machen.") +
             (any_folder ? "\nOrdner werden mit allem gelöscht, was darin liegt." : "");
-        ask_.open(t.size() > 1          ? std::to_string(t.size()) + " Einträge löschen?"
-                  : t[0]->type == "dir" ? "Ordner löschen?"
-                                        : "Datei löschen?",
+        ask_.open(t.size() > 1         ? std::to_string(t.size()) + " Einträge löschen?"
+                  : t[0].type == "dir" ? "Ordner löschen?"
+                                       : "Datei löschen?",
                   names, notes, feedback, "Das wird endgültig gelöscht:", warn);
+    }
+
+    // A path as one line of the delete question: too long a one keeps its beginning and, longer, its end
+    // (the game's folder and the file's name tell which hit it is), with "…" between.
+    static std::string shorten_path(const std::string &path)
+    {
+        constexpr std::size_t kMax = 58;
+        if (path.size() <= kMax)
+            return path;
+        std::size_t head = 16;
+        std::size_t tail = path.size() - 40;
+        while (head > 0 && (static_cast<unsigned char>(path[head]) & 0xC0) == 0x80)
+            --head;
+        while (tail < path.size() && (static_cast<unsigned char>(path[tail]) & 0xC0) == 0x80)
+            ++tail;
+        return path.substr(0, head) + "\xE2\x80\xA6" + path.substr(tail);
     }
 
     void open_name(int mode, ui::Feedback &feedback)
@@ -1495,8 +1597,11 @@ class FilesPage final : public Page
             {
                 search_q_ = name_;
                 picked_.clear();
-                if (search_deep_ && folder_.path != "/")
+                if (deep_on())
+                {
+                    search_sent_ = true;
                     source().files_search(folder_.path, search_q_);
+                }
             }
             sort_entries();
             key_.clear();
@@ -1749,7 +1854,7 @@ class FilesPage final : public Page
         {
             if (e.type != "dir")
                 continue;
-            const std::string full = join(folder_.path, e.name);
+            const std::string full = path_of(e); // a hit below folders has its own path
             all.push_back(full);
             const auto it = sizes_.find(full);
             if (it == sizes_.end() || it->second.failed)
@@ -1817,7 +1922,8 @@ class FilesPage final : public Page
     // web page.
     void sort_entries()
     {
-        if (search_deep_shown())
+        const bool hits = search_deep_shown();
+        if (hits)
             entries_ = search_.hits;
         else
         {
@@ -1830,6 +1936,21 @@ class FilesPage final : public Page
             }
         }
         const int order = sort_;
+        // without regard to upper and lower case (ASCII), as the console orders a folder
+        const auto name_before = [](const std::string &a, const std::string &b)
+        {
+            const std::size_t n = std::min(a.size(), b.size());
+            for (std::size_t i = 0; i < n; ++i)
+            {
+                const unsigned char ca = static_cast<unsigned char>(a[i]);
+                const unsigned char cb = static_cast<unsigned char>(b[i]);
+                const unsigned char la = ca >= 'A' && ca <= 'Z' ? static_cast<unsigned char>(ca + 32) : ca;
+                const unsigned char lb = cb >= 'A' && cb <= 'Z' ? static_cast<unsigned char>(cb + 32) : cb;
+                if (la != lb)
+                    return la < lb;
+            }
+            return a.size() < b.size();
+        };
         // a folder counts with the size it was measured at, when it was ("Alle Größen messen")
         const auto size_of = [this](const FsEntry &e) -> std::uint64_t
         {
@@ -1839,7 +1960,7 @@ class FilesPage final : public Page
             return it != sizes_.end() && !it->second.failed ? it->second.bytes : 0;
         };
         std::stable_sort(entries_.begin(), entries_.end(),
-                         [order, &size_of](const FsEntry &a, const FsEntry &b)
+                         [order, hits, &size_of, &name_before](const FsEntry &a, const FsEntry &b)
                          {
                              const bool da = a.type == "dir" || a.type == "dirlink";
                              const bool db = b.type == "dir" || b.type == "dirlink";
@@ -1849,7 +1970,9 @@ class FilesPage final : public Page
                                  return size_of(a) > size_of(b);
                              if (order == 2 && a.mtime != b.mtime)
                                  return a.mtime > b.mtime;
-                             return false; // the console's own order: by name, case-insensitive
+                             // a folder comes in the console's own order (by name); hits come in the
+                             // order of the walk and are put by name here (the bar said "nach Name")
+                             return hits && a.name != b.name ? name_before(a.name, b.name) : false;
                          });
     }
 
@@ -1910,7 +2033,7 @@ class FilesPage final : public Page
             else if (e.type == "other")
                 sub += " · Gerät oder Sonderdatei";
             if (!e.full.empty())
-                sub = "in " + fs_parent_of(e.full) + " \xC2\xB7 " + sub;
+                sub = "Ordner: " + fs_parent_of(e.full) + " \xC2\xB7 " + sub;
             item.subtitle = sub;
             const std::string full = path_of(e);
             auto s = sizes_.find(full);
@@ -1931,7 +2054,7 @@ class FilesPage final : public Page
         {
             ui::ListItem n;
             n.title = search_q_.empty()      ? "Der Ordner ist leer"
-                      : !search_deep_        ? "Kein Eintrag in diesem Ordner passt zur Suche."
+                      : !deep_on()           ? "Kein Eintrag in diesem Ordner passt zur Suche."
                       : search_deep_shown() && search_.state != "running" ? "Kein Treffer."
                                                                           : "Noch kein Treffer …";
             n.disabled = true;
@@ -1982,6 +2105,22 @@ class FilesPage final : public Page
                 entries_[static_cast<std::size_t>(tag - kEntryTag)].name == name)
             {
                 list_.set_focus(static_cast<int>(i));
+                return;
+            }
+        }
+    }
+
+    // The row of the entry with this path (after rows came in or went above it).
+    void focus_entry_at(const std::string &path)
+    {
+        const std::vector<ui::ListItem> &rows = list_.items();
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const int tag = rows[i].tag;
+            if (tag >= kEntryTag && tag - kEntryTag < static_cast<int>(entries_.size()) &&
+                path_of(entries_[static_cast<std::size_t>(tag - kEntryTag)]) == path)
+            {
+                list_.set_focus(static_cast<int>(i), false);
                 return;
             }
         }
@@ -2404,6 +2543,10 @@ class FilesPage final : public Page
 
     Dialog dialog_ = kNone;
     FsEntry menu_entry_;
+    std::vector<FsEntry> menu_targets_;   // what the entry menu was opened for (copies: the rows may move under it)
+    std::vector<std::string> menu_paths_; // ... and their paths as they were then
+    std::string clip_root_;               // the folder open when something was cut or copied (its drive may go)
+    bool search_sent_ = false;            // a search was asked of the console and has not answered yet
     int name_mode_ = kNewFolder;
     std::string name_;
     std::string name_error_;

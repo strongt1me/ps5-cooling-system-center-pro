@@ -15,7 +15,6 @@ static struct {
   char     title[FMT_TITLE];
   uint64_t at_ms;
   int      found;
-  int      dir_tried;                    /* a folder's own sce_sys was read for it (a miss without it says nothing about a dump) */
 } g_fmt[FMT_CACHE];
 static unsigned        g_fmt_next;
 static pthread_mutex_t g_fmt_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -42,21 +41,26 @@ fmt_title(const char *real_dir, const char *tid, char *out, size_t n) {
   if(!out || n == 0) return -1;
   out[0] = 0;
   const uint64_t now = ps5tm_mono_ms();
+  /* A remembered "not known" is the system's answer for this title ID. It ends the question for a file, a link or NTFS; a folder still reads its own
+     sce_sys: another folder of the same ID that had none (a save backup named after the game) says nothing about this one, and coming first in every
+     walk it used to hide the dump beside it for good (audit 26.11.2026). The system's records are then not asked again within the minute. */
+  int system_miss = 0;
   pthread_mutex_lock(&g_fmt_lock);
   for(unsigned i = 0; i < FMT_CACHE; i++) {
     if(strcmp(g_fmt[i].tid, tid)) continue;
     const int fresh = now - g_fmt[i].at_ms < (g_fmt[i].found ? 600000u : 60000u);
-    if(fresh && (g_fmt[i].found || !real_dir || g_fmt[i].dir_tried)) {
+    if(fresh && (g_fmt[i].found || !real_dir)) {
       int rc = g_fmt[i].found ? 0 : -1;
       if(g_fmt[i].found) snprintf(out, n, "%s", g_fmt[i].title);
       pthread_mutex_unlock(&g_fmt_lock);
       return rc;
     }
+    system_miss = fresh;
     break;
   }
   pthread_mutex_unlock(&g_fmt_lock);
 
-  char name[FMT_TITLE] = "";
+  char name[FMT_TITLE * 2] = "";         /* room for a long title: it is cut below at a whole character, not here in the middle of one */
   int rc = -1;
   if(real_dir) {
     char p[FM_PATH + FM_NAME + 64];
@@ -67,10 +71,13 @@ fmt_title(const char *real_dir, const char *tid, char *out, size_t n) {
       rc = ps5tm_title_from_param(p, name, sizeof(name));
     }
   }
-  if(rc != 0) rc = ps5tm_title_installed(tid, name, sizeof(name));
-  char clean[FMT_TITLE + 8] = "";
+  if(rc != 0 && !system_miss) rc = ps5tm_title_installed(tid, name, sizeof(name));
+  /* as long as the entries it is copied to: name_for_json never splits a character, a snprintf into a shorter buffer afterwards would (a title of more
+     than 127 bytes then ended in half a character and the list was no valid UTF-8 any more; audit 26.11.2026) */
+  char clean[FMT_TITLE] = "";
   if(rc == 0) name_for_json(clean, sizeof(clean), name);
   if(!clean[0]) rc = -1;
+  if(rc != 0 && system_miss) return -1;  /* nothing new: the remembered answer keeps its time, so that the system is asked again when the minute is over */
 
   pthread_mutex_lock(&g_fmt_lock);
   unsigned slot = FMT_CACHE;
@@ -81,7 +88,6 @@ fmt_title(const char *real_dir, const char *tid, char *out, size_t n) {
   snprintf(g_fmt[slot].title, sizeof(g_fmt[slot].title), "%s", rc == 0 ? clean : "");
   g_fmt[slot].at_ms = now;
   g_fmt[slot].found = rc == 0;
-  g_fmt[slot].dir_tried = real_dir != NULL;
   pthread_mutex_unlock(&g_fmt_lock);
   if(rc == 0) snprintf(out, n, "%s", clean);
   return rc;

@@ -2584,8 +2584,16 @@ int ntfs_unlink(ntfs_vol_t *v, uint64_t parent, const char *name) {
   /* Remove the names from the folder first: if this is interrupted, the
    * worst case is an orphaned file (chkdsk recovers it), never an index
    * entry pointing at freed space. */
+  int removed = 0;
   for (int i = 0; i < nnames && !rc; i++)
-    if (remove[i]) rc = index_remove(v, names[i].parent, names[i].name, names[i].nlen, ino);
+    if (remove[i]) {
+      rc = index_remove(v, names[i].parent, names[i].name, names[i].nlen, ino);
+      if (!rc) removed++;
+    }
+  /* (app, audit 26.11.2026) A file with two names (the long one and its 8.3 partner): when the second removal fails (no room for an index block on a
+   * full drive), the first is already written and not taken back - the record still holds both names, the folder only one. The drive then stays marked
+   * as "to be checked" (ntfs_sync leaves the flag set), so that Windows repairs it instead of trusting it. */
+  if (rc && removed) v->needs_check = 1;
   if (rc) goto out;
   /* (app, 24.11.2026) the order kept on the device (the names gone before the records and clusters are free), without a device sync:
    * the app syncs once at the end of the job */
@@ -3080,8 +3088,25 @@ static int prepare_once_locked(ntfs_vol_t *v) {
   if (!rc && (v->cbmp.resident || v->cbmp.size * 8 < v->total_clusters)) rc = -EIO;
   attr_t mirr;
   if (!rc && attr_find(v, INODE_MFTMIRR, AT_DATA, NULL, 0, &mirr) == 0) {
-    v->mirr_recs = (uint32_t)(mirr.size / v->rec_size);
+    /* (app, audit 26.11.2026) write_record puts the copy of every record below mirr_recs at mftmirr_lcn, the place the boot sector names. The size came
+     * unchecked from $MFTMirr's own record and its run list was never looked at: a size damaged upwards (or a boot sector field that no longer points at
+     * the mirror) made every new record, and each change of the volume flags, also write 1 KiB into the clusters behind or beside the mirror - into other
+     * files' data, without any error. Windows and mkntfs make the mirror four records or one cluster long, whichever is more, in one run that begins
+     * where the boot sector says. Anything else: the drive is not written to (as the Linux driver does on a mismatch); chkdsk on Windows repairs it. */
+    uint64_t cap = v->cluster > 4ull * v->rec_size ? v->cluster : 4ull * v->rec_size;
+    uint64_t sz = mirr.size < mirr.alloc ? mirr.size : mirr.alloc;
+    int ok = !mirr.resident && mirr.nruns && mirr.runs[0].vcn == 0 && mirr.runs[0].lcn >= 0 &&
+             (uint64_t)mirr.runs[0].lcn == v->mftmirr_lcn && mirr.runs[0].len * (uint64_t)v->cluster >= sz &&
+             sz >= v->rec_size && sz <= cap;
+    if (ok) v->mirr_recs = (uint32_t)(sz / v->rec_size);
     attr_free(&mirr);
+    if (!ok) {
+      attr_free(&v->cbmp);
+      snprintf(v->write_err, sizeof v->write_err,
+               "the copy of the file table ($MFTMirr) does not match the boot sector");
+      v->rw = 0;
+      return -EROFS;
+    }
   }
   if (!rc) {
     /* Empty the journal like ntfs-3g does, so Windows starts a fresh log
@@ -3142,20 +3167,21 @@ void ntfs_flush_cache(ntfs_vol_t *v) {
 int ntfs_sync(ntfs_vol_t *v) {
   pthread_mutex_lock(&v->lock);
   int rc = v->rw_ready ? bdev_flush(v->dev) : 0;
-  if (!rc && v->vol_marked && mark_volume(v, 0)) rc = -1;   /* (app) clean again once the rest is on the disk */
+  /* (app) clean again once the rest is on the disk - unless a change stopped half way (needs_check): then the flag stays for Windows */
+  if (!rc && v->vol_marked && !v->needs_check && mark_volume(v, 0)) rc = -1;
   pthread_mutex_unlock(&v->lock);
   return rc ? -EIO : 0;
 }
 
 /* (app) For ntfs_umount: the flag cleared when the drive is let go after its last sync (ntfs.c cannot see mark_volume). */
 void ntfs_unmark_for_umount(ntfs_vol_t *v) {
-  if (v->rw_ready && v->vol_marked && !bdev_flush(v->dev)) (void)mark_volume(v, 0);
+  if (v->rw_ready && v->vol_marked && !v->needs_check && !bdev_flush(v->dev)) (void)mark_volume(v, 0);
 }
 
 void ntfs_disable_write(ntfs_vol_t *v) {
   pthread_mutex_lock(&v->lock);
   if (v->rw_ready) bdev_flush(v->dev);
-  if (v->rw_ready && v->vol_marked) (void)mark_volume(v, 0);
+  if (v->rw_ready && v->vol_marked && !v->needs_check) (void)mark_volume(v, 0);
   v->rw = 0;
   pthread_mutex_unlock(&v->lock);
 }

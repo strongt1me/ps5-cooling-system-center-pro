@@ -89,6 +89,7 @@ lzp_verify(const char *dir, const char *srcroot, lzp_stats_t *st, const lzp_ui_t
   set_t s;
   ui_phase(ui, "Das Paketverzeichnis wird gelesen");
   if(set_open(dir, &s, srcroot == NULL ? 0 : 1, err, en) != 0) return -1;
+  for(unsigned i = 0; i < s.v.n; i++) drop_cache(s.v.fd[i]);     /* the packs are read from the drive, not from memory */
   uint64_t total = 0;
   unsigned nfiles = 0;
   for(size_t i = 0; i < s.m.nf; i++) if(s.m.f[i].flags & FF_PACKED) { total += s.m.f[i].logical; nfiles++; }
@@ -112,6 +113,7 @@ lzp_verify(const char *dir, const char *srcroot, lzp_stats_t *st, const lzp_ui_t
       if(!S_ISREG(sst.st_mode) || (uint64_t)sst.st_size != f->logical) { say(err, en, "Das Original hat nicht die Größe der gepackten Datei: %s", rel); goto out; }
       sfd = open(sp, O_RDONLY);
       if(sfd < 0) { say(err, en, "Das Original ließ sich nicht öffnen: %s", rel); goto out; }
+      drop_cache(sfd);                                           /* after an unpack this is the file just written */
     }
     uint64_t pos = 0;
     for(uint32_t k = 0; k < f->count; k++) {
