@@ -51,6 +51,11 @@ namespace
 constexpr int kPortApp = 8086;
 constexpr int kPortLoader = 9021;
 constexpr std::int64_t kStartLimitUs = 30 * 1000000LL;
+// The app went away while it ran: before the tile starts its own copy, the port must stay closed this
+// long. A newer app sent from a PC replaces the running one in a few seconds (it ends the old one,
+// waits for the port, then opens it); sending the tile's own, older copy into that gap made the
+// older app end the newer one (audit 26.11.2026).
+constexpr std::int64_t kRestartGraceUs = 15 * 1000000LL;
 constexpr std::size_t kMaxBody = 4u * 1024u * 1024u;
 
 enum class Net
@@ -1190,6 +1195,7 @@ bool HttpSource::connect_phase()
     if (retry_.exchange(false))
     {
         payload_sent_ = false;
+        lost_app_ = false; // asked for by the person: start at once
         update_checked_ = false;
         awaiting_update_ = false;
         starting_since_us_ = 0;
@@ -1202,6 +1208,7 @@ bool HttpSource::connect_phase()
     const Net net = exchange("GET", "/api/v1/status", {}, &status, &body, 2);
     if (net == Net::ok && status == 200)
     {
+        lost_app_ = false;
         const std::int64_t at = sys::monotonic_us();
         if (!update_checked_)
         {
@@ -1242,6 +1249,9 @@ bool HttpSource::connect_phase()
         starting_since_us_ = now;
     if (net == Net::refused && !payload_sent_)
     {
+        if (lost_app_ && now - starting_since_us_ < kRestartGraceUs)
+            return false; // perhaps a newer app is taking over: give it the time (see kRestartGraceUs)
+        lost_app_ = false;
         payload_sent_ = true;
         if (!send_payload())
         {
@@ -1342,6 +1352,7 @@ void HttpSource::run()
                 {
                     online_ = false;
                     payload_sent_ = false;
+                    lost_app_ = true;
                     starting_since_us_ = 0;
                     set_link(Link::starting, "Die App läuft nicht mehr und wird neu gestartet …");
                     continue;

@@ -2187,7 +2187,9 @@ void ps5tm_fan_active_rule(char *out, size_t n);
 void ps5tm_fan_snapshot(ps5tm_snapshot_t *out);
 /* Applies `temp_c` immediately and pins it. Returns 0 on success. */
 int  ps5tm_fan_apply_manual(int temp_c, int *errno_out);
-void ps5tm_fan_pin_from_config(void);   /* after the settings were written as a whole: the fixed threshold of observe mode follows them */
+void ps5tm_fan_pin_from_config(void);
+void ps5tm_fan_pin_lock(void);             /* around setting a fixed threshold by hand and storing it (api.c) */
+void ps5tm_fan_pin_unlock(void);   /* after the settings were written as a whole: the fixed threshold of observe mode follows them */
 /* Maps a curve duty (0..100) onto an ICC threshold and back. */
 int  ps5tm_fan_duty_to_threshold(int duty_pct);
 int  ps5tm_fan_threshold_to_duty(int threshold_c);

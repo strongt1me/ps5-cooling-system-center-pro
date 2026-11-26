@@ -225,7 +225,12 @@ job_active_locked(void) {
 
 /* The end of the last job as the history is to hear of it, taken under the lock at the moment the job ends: the thread that writes the history line comes a little later,
    and a next job may have started (and cleared g_job) in between. */
-static struct { int st; char kind[24], detail[340], error[640]; uint64_t bytes, dur; } g_fin;
+/* One record per job, by its number (audit 26.11.2026): with a single record, a next job that started and ended before the thread of the one
+   before had read it overwrote it - the earlier thread wrote the later job's line, the later one wrote none. Four places: a job's own thread
+   reads its record right after the job, so at most one other can come in between. */
+#define SV_FIN_SLOTS 4
+static struct { unsigned gen; int st; char kind[24], detail[340], error[640]; uint64_t bytes, dur; } g_fin[SV_FIN_SLOTS];
+static unsigned g_job_gen;                                    /* the number of the job in g_job (under g_lock) */
 
 static void
 job_state(int st) {
@@ -233,12 +238,14 @@ job_state(int st) {
   g_job.state = st;
   if(st >= J_DONE) {
     g_job.finished_ms = ps5tm_mono_ms();
-    g_fin.st = st;
-    snprintf(g_fin.kind, sizeof(g_fin.kind), "saves_%s", g_job.kind);
-    snprintf(g_fin.detail, sizeof(g_fin.detail), "%s", g_job.path);
-    snprintf(g_fin.error, sizeof(g_fin.error), "%s", g_job.error);
-    g_fin.bytes = g_job.bytes_total;
-    g_fin.dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
+    __typeof__(g_fin[0]) *f = &g_fin[g_job_gen % SV_FIN_SLOTS];
+    f->gen = g_job_gen;
+    f->st = st;
+    snprintf(f->kind, sizeof(f->kind), "saves_%s", g_job.kind);
+    snprintf(f->detail, sizeof(f->detail), "%s", g_job.path);
+    snprintf(f->error, sizeof(f->error), "%s", g_job.error);
+    f->bytes = g_job.bytes_total;
+    f->dur = g_job.finished_ms > g_job.started_ms ? g_job.finished_ms - g_job.started_ms : 0;
   }
   pthread_mutex_unlock(&g_lock);
 }
@@ -1364,7 +1371,7 @@ static void *restore_main(void *arg);
 static void *delete_main(void *arg);
 
 /* The thread: the job itself, then one line in the history (jobhist.c). */
-typedef struct { void *(*fn)(void *); job_args_t *a; } sv_run_t;
+typedef struct { void *(*fn)(void *); job_args_t *a; unsigned gen; } sv_run_t;
 
 static void *
 sv_thread(void *arg) {
@@ -1372,13 +1379,14 @@ sv_thread(void *arg) {
   free(arg);
   void *res = r.fn(r.a);
   pthread_mutex_lock(&g_lock);
-  const int st = g_fin.st;
+  __typeof__(g_fin[0]) *f = &g_fin[r.gen % SV_FIN_SLOTS];
+  const int st = f->gen == r.gen ? f->st : 0;              /* this job's own record, never another's */
   char kind[24], detail[340], error[640];
-  snprintf(kind, sizeof(kind), "%s", g_fin.kind);
-  snprintf(detail, sizeof(detail), "%s", g_fin.detail);
-  snprintf(error, sizeof(error), "%s", g_fin.error);
-  const uint64_t bytes = g_fin.bytes, dur = g_fin.dur;
-  g_fin.st = 0;                                            /* heard of: a job that ends without a state (none does) writes nothing */
+  snprintf(kind, sizeof(kind), "%s", f->kind);
+  snprintf(detail, sizeof(detail), "%s", f->detail);
+  snprintf(error, sizeof(error), "%s", f->error);
+  const uint64_t bytes = f->bytes, dur = f->dur;
+  if(f->gen == r.gen) f->st = 0;                           /* heard of: a job that ends without a state (none does) writes nothing */
   pthread_mutex_unlock(&g_lock);
   if(st == J_DONE || st == J_FAILED || st == J_CANCELLED)
     ps5tm_hist_add(kind, "Spielstände", detail, st == J_DONE ? "done" : st == J_FAILED ? "failed" : "cancelled", error, bytes, dur);
@@ -1395,6 +1403,7 @@ job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size
     return 409;
   }
   memset(&g_job, 0, sizeof(g_job));
+  const unsigned gen = ++g_job_gen;
   g_job.state = J_SCAN;
   snprintf(g_job.kind, sizeof(g_job.kind), "%s", kind);
   snprintf(g_job.phase, sizeof(g_job.phase), "Vorbereiten");
@@ -1424,6 +1433,7 @@ job_launch(void *(*fn)(void *), job_args_t *a, const char *kind, char *err, size
   if(run) {
     run->fn = fn;
     run->a = a;
+    run->gen = gen;
     rc = pthread_create(&t, &attr, sv_thread, run);
     if(rc != 0) free(run);
   }

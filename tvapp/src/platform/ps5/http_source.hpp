@@ -278,6 +278,7 @@ class HttpSource final : public Source
     std::atomic<bool> retry_{false};
     bool online_ = false;
     bool payload_sent_ = false;
+    bool lost_app_ = false; // the app went away while it ran: its own copy is sent only after kRestartGraceUs
     bool update_checked_ =
         false; // the running app's version was compared with the one this tile carries
     bool awaiting_update_ = false; // the tile sent its own app over an older one and waits for it

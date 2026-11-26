@@ -103,6 +103,7 @@ void ntfs_disable_write(ntfs_vol_t *v);
 
 /* Flush everything written so far to the device. */
 int  ntfs_sync(ntfs_vol_t *v);
+void ntfs_keep_check(ntfs_vol_t *v);   /* (app) the dirty flag stays set through later syncs: a change may have stopped half way */
 /* (app) After ntfs_sync, when the drive is let go: the stick empties its own write cache. */
 void ntfs_flush_cache(ntfs_vol_t *v);
 

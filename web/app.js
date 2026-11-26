@@ -2266,7 +2266,7 @@
     }
 
     /* -1 markiert eine Lücke; buildPath zeichnet dort nicht durch. */
-    const clean = (a) => a.map((v) => (v < 0 ? null : v));
+    const clean = (a) => (Array.isArray(a) ? a : []).map((v) => (v < 0 ? null : v));   /* a missing row (an older or newer app) is an empty line, no error */
     const cpu = clean(h.cpu_c), soc = clean(h.soc_c);
     state.hist2 = { t: h.t_ms, cpu, soc, fan: clean(h.fan_pct) };
 
@@ -2477,7 +2477,7 @@
     const dir = d.dir || "/data/PS5-Cooling-Center/payloads";
     txt("#pl-dir", dir);
     txt("#pl-count-stored", plCount(internal.length, "Datei", "Dateien"));
-    const have = new Map(internal.map((f) => [f.name.toLowerCase(), f]));
+    const have = new Map(internal.map((f) => [String(f.name || "").toLowerCase(), f]));
 
     $("#pl-stored").innerHTML = internal.length ? internal.map((f) => plCard({
       icon: PL_SVG.box, title: plTitle(f.name), ver: plVersion(f.name), loaded: plFileLoaded(f.name),
@@ -11766,7 +11766,7 @@
           <div class="sv-bk-main"><b>${esc(svBkGames(b) || svWhen(b.created))}</b>
             ${b.kind === "undo" ? `<span class="badge quiet" title="So war der Stand, bevor ein Titel zurückgespielt wurde.">Stand vor dem Zurückspielen</span>` : ""}
             ${b.this_console ? "" : `<span class="badge warn" title="Diese Sicherung stammt von einer anderen Konsole und lässt sich hier nicht zurückspielen.">andere Konsole</span>`}
-            <small>${esc(svWhen(b.created))} · ${esc(b.label)} · ${esc(String(b.titles.length))} Titel · ${esc(bytes(b.bytes))}
+            <small>${esc(svWhen(b.created))} · ${esc(b.label)} · ${esc(String((b.titles || []).length))} Titel · ${esc(bytes(b.bytes))}
               · ${esc(String(b.users.length))} Benutzer</small></div>
           <div class="row-gap">
             <button type="button" class="btn ghost" data-sv-verify="${esc(b.path)}" aria-label="${b.kind === "undo" ? "Stand vor dem Zurückspielen" : "Sicherung"} vom ${esc(svWhenSec(b.created))} prüfen">Prüfen</button>

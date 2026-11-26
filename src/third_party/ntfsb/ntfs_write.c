@@ -3173,6 +3173,14 @@ int ntfs_sync(ntfs_vol_t *v) {
   return rc ? -EIO : 0;
 }
 
+/* (app, audit 26.11.2026) A change that may stop half way (the app ends while a file is being written): the drive keeps its "to be checked" flag
+ * through every later sync, so that Windows looks at it instead of trusting a file that seems complete. */
+void ntfs_keep_check(ntfs_vol_t *v) {
+  pthread_mutex_lock(&v->lock);
+  v->needs_check = 1;
+  pthread_mutex_unlock(&v->lock);
+}
+
 /* (app) For ntfs_umount: the flag cleared when the drive is let go after its last sync (ntfs.c cannot see mark_volume). */
 void ntfs_unmark_for_umount(ntfs_vol_t *v) {
   if (v->rw_ready && v->vol_marked && !v->needs_check && !bdev_flush(v->dev)) (void)mark_volume(v, 0);

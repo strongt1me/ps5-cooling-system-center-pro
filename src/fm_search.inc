@@ -391,7 +391,7 @@ fs_start_entered(int fd, const char *root, const char *term) {
   }
   /* a running search is stopped first (the page starts a new one when the term changes) */
   pthread_mutex_lock(&g_lock);
-  if(g_search.state == FS_RUNNING) __atomic_store_n(&g_search_cancel, 1, __ATOMIC_RELEASE);
+  if(g_search.state == FS_RUNNING) { int none = 0; __atomic_compare_exchange_n(&g_search_cancel, &none, 1, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE); }
   pthread_mutex_unlock(&g_lock);
   if(!fs_wait_idle(3000)) { ps5tm_http_send_error(fd, 409, "busy", "Die vorige Suche endet gerade noch. Bitte gleich noch einmal."); return; }
   fs_args_t *a = malloc(sizeof(*a));
@@ -479,7 +479,7 @@ static void
 fs_cancel(int fd) {
   pthread_mutex_lock(&g_lock);
   int running = g_search.state == FS_RUNNING;
-  if(running) __atomic_store_n(&g_search_cancel, 1, __ATOMIC_RELEASE);
+  if(running) { int none = 0; __atomic_compare_exchange_n(&g_search_cancel, &none, 1, 0, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE); }   /* an eject's 2 stays */
   pthread_mutex_unlock(&g_lock);
   if(!running) { ps5tm_http_send_error(fd, 409, "not_running", "Es läuft gerade keine Suche."); return; }
   ps5tm_http_send_json(fd, 200, "{\"ok\":true}");

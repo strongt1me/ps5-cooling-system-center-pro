@@ -646,12 +646,16 @@ ps5tm_ntfs_eject(const char *name, char *msg, size_t n) {
 static void
 sync_listed(void) {
   ps5tm_ntfsvol_t *list[PS5TM_NTFS_MAX];
+  int busy[PS5TM_NTFS_MAX];
   unsigned n = 0;
   pthread_mutex_lock(&g_lock);
   for(int k = 0; k < PS5TM_NTFS_MAX; k++)
-    if(g_vol[k]) { g_vol[k]->refs++; list[n++] = g_vol[k]; }
+    if(g_vol[k]) { g_vol[k]->refs++; busy[n] = g_vol[k]->writing > 0; list[n++] = g_vol[k]; }
   pthread_mutex_unlock(&g_lock);
   for(unsigned i = 0; i < n; i++) {
+    /* still written to when the app ends: what is there goes out, but the drive stays marked "to be checked" (a file cut short would
+       otherwise sit on a clean drive with its full size; audit 26.11.2026) */
+    if(busy[i]) ntfs_keep_check(list[i]->ntfs);
     (void)ntfs_sync(list[i]->ntfs);
     ps5tm_ntfs_put(list[i]);
   }

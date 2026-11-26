@@ -103,6 +103,18 @@ static atomic_int       g_started = 0;
    leaves the fan alone. */
 static atomic_int g_manual_threshold_c = 0;
 static atomic_int g_release_req = 0;      /* the settings took the fixed threshold away: the loop gives the fan back to the console */
+
+/* Called right after a write of the loop or of a fixed threshold. The guard sets its state before it writes, but it can still step in between
+   the question "is it holding?" and that write; then its threshold (full cooling) is written again at once instead of after its next round of
+   a few seconds (second review 26.11.2026). 1 when it did so. */
+static int
+guard_rewrite(void) {
+  if(!ps5tm_fanguard_holding()) return 0;
+  const int g = ps5tm_fanguard_held_c();
+  int eno = 0;
+  if(g > 0) (void)ps5tm_platform_set_fan_threshold(g, &eno);
+  return 1;
+}
 /* 1 once this run has written the threshold at all (the seed of ps5tm_fan_init() included). At SIGTERM the loop's own bookkeeping
    (last_applied) is not enough: it is 0 while the guard holds, before the first pass and while no temperature was ever valid, and
    the fan was then left at whatever was written last (audit 24.11.2026, test/sim A_stop_guard_hot, A_stop_nowrite). */
@@ -728,8 +740,13 @@ ps5tm_fan_snapshot(ps5tm_snapshot_t *out) {
 /* The settings were written as a whole (PUT, import): the fixed threshold of observe mode follows them. Until 26.11.2026 a threshold once set by hand
    stayed in force until the app was started again, also when an import had taken it away or changed it (audit). The loop writes a changed value itself
    on its next pass; a pin that is gone is given back to the console there. */
+static pthread_mutex_t g_pin_mu = PTHREAD_MUTEX_INITIALIZER;   /* the fixed threshold: set by hand (api.c) or taken from the settings, one at a time */
+void ps5tm_fan_pin_lock(void)   { pthread_mutex_lock(&g_pin_mu); }
+void ps5tm_fan_pin_unlock(void) { pthread_mutex_unlock(&g_pin_mu); }
+
 void
 ps5tm_fan_pin_from_config(void) {
+  pthread_mutex_lock(&g_pin_mu);
   ps5tm_config_lock();
   const int pinned = g_config.fan_threshold_pinned != 0;
   int c = (int)g_config.fan_threshold_c;
@@ -739,6 +756,7 @@ ps5tm_fan_pin_from_config(void) {
   const int want = pinned ? c : 0;
   const int was = atomic_exchange(&g_manual_threshold_c, want);
   if(was > 0 && want == 0) atomic_store(&g_release_req, 1);
+  pthread_mutex_unlock(&g_pin_mu);
 }
 
 int
@@ -752,6 +770,7 @@ ps5tm_fan_apply_manual(int temp_c, int *errno_out) {
   }
 
   int rc = ps5tm_platform_set_fan_threshold(temp_c, errno_out);
+  if(rc == 0) guard_rewrite();
   if(rc == 0) {
     atomic_store(&g_wrote_any, 1);
     atomic_store(&g_manual_threshold_c, temp_c);
@@ -1564,7 +1583,7 @@ fan_worker(void *arg) {
       else if(!st_running && !ps5tm_fanguard_holding()) {
         int eno = 0;
         if(ps5tm_platform_set_fan_threshold(PS5TM_NEUTRAL_THRESHOLD_C, &eno) == 0) {
-          release_owed = 0;
+          release_owed = guard_rewrite();      /* the guard stepped in meanwhile: its value is back, and the console is still owed its own */
           last_applied = 0;
           PS5TM_INFO("fan_released_late", "Die Konsole hat ihre eigene Lüftereinstellung (%d °C) zurück und regelt den Lüfter wieder selbst.",
                      PS5TM_NEUTRAL_THRESHOLD_C);
@@ -1895,6 +1914,7 @@ fan_worker(void *arg) {
       if((changed || last_applied == 0 || refresh) && !ps5tm_fanguard_holding()) {
         int eno = 0;
         if(ps5tm_platform_set_fan_threshold(desired_threshold, &eno) == 0) {
+          guard_rewrite();                     /* the guard may have stepped in between the question above and this write */
           if(changed) last_servo_ms = now;
 
           int spread = desired_threshold > logged_threshold

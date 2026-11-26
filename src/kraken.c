@@ -451,6 +451,13 @@ store_games(const cJSON *k, uint64_t now) {
     snprintf(cdir, sizeof(cdir), "%s", cp->valuestring);
   for(size_t l = strlen(cdir); l > 1 && cdir[l - 1] == '/'; l--) cdir[l - 1] = 0;
   pthread_mutex_lock(&g_lock);
+  if(g_games_ms && now < g_games_ms) {
+    /* a newer answer is stored already (the page's state came in while this ask was under way): the older one does not overwrite it
+       (audit 26.11.2026) */
+    pthread_mutex_unlock(&g_lock);
+    free(tmp);
+    return 0;
+  }
   if(cdir[0]) memcpy(g_cache_dir, cdir, sizeof(cdir));
   memcpy(g_games, tmp, sizeof(g_games[0]) * (size_t)n);
   g_games_n = n;

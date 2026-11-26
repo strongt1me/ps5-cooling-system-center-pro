@@ -3736,7 +3736,9 @@ handle_fan_threshold(int fd, const ps5tm_request_t *req) {
                           "setzen, sobald er wieder freigibt.");
     return;
   }
+  ps5tm_fan_pin_lock();                     /* the write and the settings as one step: a PUT of the settings in between would take the pin away */
   if(ps5tm_fan_apply_manual(clamped, &eno) != 0) {
+    ps5tm_fan_pin_unlock();
     ps5tm_http_send_error(fd, 500, "icc_fan_ioctl_failed",
                           ps5tm_platform_fan_message());
     return;
@@ -3746,6 +3748,7 @@ handle_fan_threshold(int fd, const ps5tm_request_t *req) {
   g_config.fan_threshold_c = (unsigned)clamped;
   g_config.fan_threshold_pinned = 1;        /* the person's own: observe mode keeps it, also after a restart (fan.c) */
   ps5tm_config_unlock();
+  ps5tm_fan_pin_unlock();
   int saved = (ps5tm_config_save() == 0);
 
   if(!saved) {
