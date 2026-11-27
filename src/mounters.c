@@ -39,8 +39,8 @@ ps5tm_mounters_conflicts(void) {
     cJSON_AddStringToObject(o, "title_id", kg[i].title_id);
     cJSON_AddStringToObject(o, "name", kg[i].name[0] ? kg[i].name : kg[i].title_id);
     cJSON *k = cJSON_AddObjectToObject(o, "kraken");
-    cJSON_AddStringToObject(k, "path", kg[i].path);
-    cJSON_AddStringToObject(k, "kind", kg[i].kind);
+    cJSON_AddStringToObject(k, "path", kg[i].image[0] ? kg[i].image : kg[i].path);   /* an image game (0.4.2): the image file, not Kraken Mount's mount of it */
+    cJSON_AddStringToObject(k, "kind", kg[i].image[0] ? "image" : kg[i].kind);
     cJSON *w = cJSON_AddObjectToObject(o, "other");
     cJSON_AddStringToObject(w, "by", by);
     cJSON_AddStringToObject(w, "path", path);

@@ -5074,6 +5074,7 @@ void HttpSource::poll_kraken()
             x.name = str(g, "title_name");
             x.version = str(g, "version");
             x.path = str(g, "path");
+            x.image = str(g, "image");
             x.kind = str(g, "kind");
             x.packing = str(g, "packing");
             x.drive = drive_label(str(g, "drive"));

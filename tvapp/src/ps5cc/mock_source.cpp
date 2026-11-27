@@ -783,7 +783,8 @@ class MockSource final : public Source
             const bool fpkg_item = item.op.rfind("fpkg", 0) == 0;
             item.target = item.mount +
                           (item.mode == "backup" ? "/PS5-Sicherung/Spiele/"
-                                                 : (fpkg_item ? "/FPKG-Games/" : "/homebrew/")) +
+                           : item.mode == "kraken" || fpkg_item ? "/Kraken-Games/"
+                                                                : "/homebrew/") +
                           stem + "." + (fpkg_item ? std::string("pkg") : item.op);
             queue_.push_back(item);
             queue_run_ = true;
@@ -986,8 +987,9 @@ class MockSource final : public Source
         else
         {
             target = mount +
-                     (mode == "backup" ? "/PS5-Sicherung/Spiele/"
-                                       : (fpkg ? "/FPKG-Games/" : "/homebrew/")) +
+                     (mode == "backup"                ? "/PS5-Sicherung/Spiele/"
+                      : mode == "kraken" || fpkg ? "/Kraken-Games/"
+                                                      : "/homebrew/") +
                      stem + ext;
             add("name", "ok",
                 "Name der Ausgabe: " + stem + ext + " (" +
@@ -1533,8 +1535,8 @@ class MockSource final : public Source
         {
             k.running = true;
             k.starting = false;
-            k.version = "0.4.0";
-            msg = "Kraken Mount 0.4.0 wird gestartet. Das dauert einige Sekunden.";
+            k.version = "0.4.2";
+            msg = "Kraken Mount 0.4.2 wird gestartet. Das dauert einige Sekunden.";
         }
         else if (has("\"stop\""))
         {
@@ -2465,7 +2467,9 @@ class MockSource final : public Source
                 {
                     cJSON *o = cJSON_AddObjectToObject(d, kModeKeys[mode]);
                     const std::string path = std::string(m.mount) +
-                                             (mode == 0 ? "/homebrew/" : "/PS5-Sicherung/Spiele/") +
+                                             (mode == kModeHomebrew ? "/homebrew/"
+                                              : mode == kModeKraken ? "/Kraken-Games/"
+                                                                    : "/PS5-Sicherung/Spiele/") +
                                              leaf;
                     const bool leftover = mode == 1 && std::string(m.mount) == "/mnt/ext0";
                     cJSON_AddStringToObject(o, "path", path.c_str());
@@ -2580,14 +2584,18 @@ class MockSource final : public Source
                 {
                     cJSON *o = cJSON_AddObjectToObject(d, kModeKeys[mode]);
                     const std::string dir =
-                        std::string(m.mount) + (mode == 0 ? "/homebrew" : "/PS5-Sicherung/Spiele");
+                        std::string(m.mount) + (mode == kModeHomebrew ? "/homebrew"
+                                                : mode == kModeKraken ? "/Kraken-Games"
+                                                                      : "/PS5-Sicherung/Spiele");
                     cJSON_AddStringToObject(o, "dir", dir.c_str());
                     for (const char *op : kOpKeys)
                     {
                         cJSON *t = cJSON_AddObjectToObject(o, op);
                         const bool fp = std::string(op) == "fpkg";
                         const std::string path =
-                            (fp && mode == 0 ? std::string(m.mount) + "/FPKG-Games" : dir) + "/" +
+                            (fp && mode == kModeHomebrew ? std::string(m.mount) + "/Kraken-Games"
+                                                         : dir) +
+                            "/" +
                             g->id + (fp ? ".pkg" : std::string(".") + op);
                         cJSON_AddStringToObject(t, "path", path.c_str());
                         cJSON_AddBoolToObject(t, "exists", path == g->path);
@@ -3189,8 +3197,8 @@ class MockSource final : public Source
     {
         KrakenState &k = data_.kraken;
         k.loaded = k.running = true;
-        k.version = "0.4.0";
-        k.embedded_version = "0.4.0";
+        k.version = "0.4.2";
+        k.embedded_version = "0.4.2";
         struct Seed
         {
             const char *id, *name, *version, *kind, *packing, *drive, *status;
@@ -3202,6 +3210,8 @@ class MockSource final : public Source
             {"PPSA04311", "Harbor Lights", "01.000", "folder", "zstd", "Interne SSD", "ready", 11.2,
              true},
             {"PPSA07720", "Pixel Garden", "01.001", "pkg", "", "USB 2", "building", 8.1, false},
+            // Kraken Mount 0.4.2: an image game (a folder in its own mount of the image)
+            {"PPSA09105", "Quiet Orbit", "01.000", "folder", "plain", "USB 1", "ready", 14.6, false},
         };
         for (const Seed &s : kSeeds)
         {
@@ -3217,6 +3227,11 @@ class MockSource final : public Source
             g.cache_size = static_cast<std::uint64_t>(s.gb * 4e6);
             g.path = std::string(g.kind == "pkg" ? "/mnt/usb0/homebrew/" : "/data/homebrew/") +
                      s.name + (g.kind == "pkg" ? ".pkg" : "");
+            if (std::string(s.id) == "PPSA09105")
+            {
+                g.image = "/mnt/usb0/Kraken-Games/Quiet Orbit.exfat";
+                g.path = "/mnt/krakenmount/Quiet_Orbit_5c1e9a07";
+            }
             g.running = s.live;
             if (std::string(s.id) == "PPSA01325")
                 g.conflict_with = "ShadowMountPlus";

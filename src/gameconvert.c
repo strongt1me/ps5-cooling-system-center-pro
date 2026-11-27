@@ -79,7 +79,7 @@
 #define FAT32_MAX_FILE   0xFFFFFFFFull
 #define BACKUP_DIR       "PS5-Sicherung/Spiele"
 #define FPKG_NAME_MAX    63             /* Dump Forge refuses an output name longer than this (bytes, without ".pkg") */
-#define FPKG_DIR         "FPKG-Games"   /* where Kraken Mount searches (kraken.c): a playable debug FPKG goes there instead of "homebrew" */
+#define FPKG_DIR         PS5TM_KRAKEN_GAMES   /* where Kraken Mount searches (kraken.c): mode "kraken", and a playable debug FPKG of an older page */
 /* Not the copy's ".ps5cc-teil": a copy of an image and a conversion can end up
    with the same target name, and must never be able to share — or delete — a
    temporary file. */
@@ -397,17 +397,19 @@ drive_base(const char *mount, char *base, size_t base_len, char *label, size_t l
   return -1;
 }
 
+/* mode: "homebrew" (ShadowMountPlus finds it), "kraken" (Kraken Mount finds it, 27.11.2026) or "backup" (kept only). */
 static int
 dest_dir(const char *base, const char *mode, char *out, size_t out_len) {
   const char *sub = !strcmp(mode, "homebrew") ? "homebrew"
+                  : !strcmp(mode, "kraken")   ? FPKG_DIR
                   : !strcmp(mode, "backup")   ? BACKUP_DIR : NULL;
   if(!sub) return -1;
   int n = snprintf(out, out_len, "%s/%s", base, sub);
   return (n > 0 && (size_t)n < out_len) ? 0 : -1;
 }
 
-/* The folder for result op: like dest_dir, but a playable (mode "homebrew") debug FPKG goes to FPKG-Games, which Kraken Mount searches
-   (ShadowMountPlus does not mount a .pkg). */
+/* The folder for result op: like dest_dir, but a debug FPKG asked for as "homebrew" (a page from before 27.11.2026, a queued job) goes to
+   Kraken-Games as well: ShadowMountPlus does not mount a .pkg, Kraken Mount searches there. */
 static int
 dest_dir_op(const char *base, const char *mode, const char *op, char *out, size_t out_len) {
   if(is_fpkg_op(op) && !strcmp(mode, "homebrew")) {
@@ -786,9 +788,10 @@ sweep_leftovers(void) {
   for(unsigned i = 0; i < info.volume_count; i++) {
     char base[64], dir[128];
     snprintf(base, sizeof(base), "%s", !strcmp(info.volumes[i].path, "/user") ? "/data" : info.volumes[i].path);
-    static const char *const modes[] = { "homebrew", "backup" };
-    for(int m = 0; m < 2; m++) if(dest_dir(base, modes[m], dir, sizeof(dir)) == 0) n += sweep_dir(dir, now);
-    if(snprintf(dir, sizeof(dir), "%s/%s", base, FPKG_DIR) < (int)sizeof(dir)) n += sweep_dir(dir, now);
+    static const char *const modes[] = { "homebrew", "kraken", "backup" };
+    for(int m = 0; m < 3; m++) if(dest_dir(base, modes[m], dir, sizeof(dir)) == 0) n += sweep_dir(dir, now);
+    /* the folder's name until 27.11.2026: a leftover of a job of that time */
+    if(snprintf(dir, sizeof(dir), "%s/%s", base, PS5TM_KRAKEN_GAMES_OLD) < (int)sizeof(dir)) n += sweep_dir(dir, now);
   }
   /* The overlay folders under dump-image are NOT swept here: the overlay of the job that starts now is written before this runs, and an old
      leftover of the same title would be taken for it (audit 15.11.2026). The next job of that title writes its own over the old one. */
@@ -2094,7 +2097,7 @@ plan_body(const char *title_id, char *err, size_t err_len) {
        a stick it would not fit on as one file is named before the start, as the job would refuse it. */
     cJSON_AddBoolToObject  (d, "fat32_too_big_ffpkg",
                             !strcmp(fs, "msdosfs") && (ffpkg_bytes ? ffpkg_bytes : raw) > FAT32_MAX_FILE);
-    static const char *const modes[] = { "homebrew", "backup" };
+    static const char *const modes[] = { "homebrew", "kraken", "backup" };
     static const char *const exts[]  = { ".ffpfsc", ".ffpkg", ".exfat", ".pkg" };
     static const char *const keys[]  = { "ffpfsc", "ffpkg", "exfat", "fpkg" };
     const int offered[4] = { can_ffpfsc, can_ffpkg, can_exfat, can_fpkg };
@@ -2103,7 +2106,7 @@ plan_body(const char *title_id, char *err, size_t err_len) {
        THAT target (enough_space inside the target). The drive-wide
        enough_space is true when at least one offered target fits. */
     int fits_any = avail >= need;
-    for(int m = 0; m < 2; m++) {
+    for(int m = 0; m < 3; m++) {
       char dir[128];
       if(dest_dir(base, modes[m], dir, sizeof(dir)) != 0) continue;
       cJSON *o = cJSON_AddObjectToObject(d, modes[m]);
@@ -2331,11 +2334,18 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     char fname[300];
     snprintf(fname, sizeof(fname), "%s%s", stem, op_ext(op));
     chk_add(arr, "name", "ok", NULL, "Name der Ausgabe: %s (%zu von %d Bytes)", fname, name_bytes, PS5TM_CVNAME_MAX - PS5TM_CVNAME_SUFFIX);
-    /* Kraken Mount registers what lies in the folders it searches. The app gives it FPKG-Games when it writes its config, but a config
-       that was there before (or changed on its own page) may not name this one: the package would be written and never registered. */
-    if(is_fpkg_op(op) && !strcmp(mode, "homebrew") && ps5tm_kraken_searches(dir) == 0)
-      chk_add(arr, "kraken_dir", "warn", "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern eintragen, sonst meldet es das Paket nicht an.",
+    /* Kraken Mount registers what lies in the folders it searches. The app gives it Kraken-Games when it writes its config, but a config
+       that was there before (or changed on its own page) may not name this one: the result would be written and never registered. One that
+       still names the folder's old name FPKG-Games (Kraken Mount ran when the app was updated) is moved at the next start by the app. */
+    if((!strcmp(mode, "kraken") || (is_fpkg_op(op) && !strcmp(mode, "homebrew"))) && ps5tm_kraken_searches(dir) == 0) {
+      char old_dir[160];
+      const int old_name = snprintf(old_dir, sizeof old_dir, "%s/%s", base, PS5TM_KRAKEN_GAMES_OLD) < (int)sizeof old_dir &&
+                           ps5tm_kraken_searches(old_dir) == 1;
+      chk_add(arr, "kraken_dir", "warn", old_name
+              ? "Kraken Mount einmal aus- und wieder einschalten (Reiter FPKGMount): Die App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine Suchordner um."
+              : "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern eintragen, sonst meldet es das Spiel nicht an.",
               "Kraken Mount sucht in %s nicht.", dir);
+    }
     if(is_fpkg_op(op) && strlen(stem) > FPKG_NAME_MAX) {
       chk_add(arr, "name_len", "error", "Kürze den Namen, zum Beispiel mit einer Vorlage wie {id} v{version}.",
               "Dump Forge nimmt nur Namen bis %d Bytes ohne „.pkg“; dieser hat %zu.", FPKG_NAME_MAX, strlen(stem));

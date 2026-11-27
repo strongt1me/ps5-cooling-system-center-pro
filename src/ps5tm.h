@@ -984,14 +984,24 @@ int           ps5tm_kraken_icon(const char *title_id, unsigned char **png, size_
 
 /* The games Kraken Mount lists (for the check of titles two mounters want, src/mounters.c): a copy kept for 10 s, nothing while it does
    not run. kind is "pkg" (a .pkg file) or "folder" (a game folder: Kraken Mount takes those too). backport is the backport folder Kraken
-   Mount applies to the game (<scan root>/backports/<TITLE_ID>...), empty when none (23.11.2026). Returns how many were filled in. */
+   Mount applies to the game (<scan root>/backports/<TITLE_ID>...), empty when none (23.11.2026). image: since Kraken Mount 0.4.2 an image game
+   (.exfat, .ffpkg, .ffpfs, .ffpfsc) is a folder source whose path is the game folder in Kraken Mount's own mount (/mnt/krakenmount/...); image
+   is then the image file on the drive, else empty (27.11.2026). Returns how many were filled in. */
 #define PS5TM_KRAKEN_MAX 256
+/* The folder the app gives Kraken Mount on the internal storage (/data/<it>) and on each drive (<drive>/<it>): it takes .pkg files, game folders
+   and images alike there, and ShadowMountPlus does not search it. Until 27.11.2026 it was called FPKG-Games, which made it look as if only FPKGs
+   belonged there (user, 27.11.2026). */
+#ifndef PS5TM_KRAKEN_GAMES                      /* krakenmig.h names them the same */
+#define PS5TM_KRAKEN_GAMES     "Kraken-Games"
+#define PS5TM_KRAKEN_GAMES_OLD "FPKG-Games"
+#endif
 typedef struct {
   char title_id[12];
   char name[96];
   char path[192];
   char kind[8];
   char backport[160];
+  char image[192];
 } ps5tm_kraken_game_t;
 int ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max);
 /* The folder Kraken Mount keeps its game caches in (its /api/state names it; /data/krakenmount/caches until it has): <dir>/<TITLE_ID> holds

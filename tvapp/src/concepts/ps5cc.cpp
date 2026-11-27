@@ -999,6 +999,10 @@ class Ps5cc final : public app::Concept
             {0.4f, 0, Direction::none, "plan-laedt"},
             {0.5f, 0, Direction::right},
             {0.7f, 0, Direction::none, "plan-kopieren"},
+            // 27.11.2026: B, "Spielbar mit Kraken Mount" (Kraken-Games), and back to A
+            {0.4f, 0, Direction::right},
+            {0.7f, 0, Direction::none, "plan-kopieren-kraken"},
+            {0.4f, 0, Direction::left},
             // "Original danach" (18.11.2026): down past the drives to the row, then each way: the
             // delete asks first (back leaves it), a move with a good folder, the keyboard for the
             // folder, a drive without room (red, the start is held back)
@@ -1403,6 +1407,20 @@ class Ps5cc final : public app::Concept
             {0.4f, action_bit(Action::north)},
             {0.7f, 0, Direction::none, "fpkg-mehr"},
             {0.3f, action_bit(Action::back)},
+            // Kraken Mount 0.4.2: the fourth game is an image ("Abbild (exfat)"); its Quelle and the
+            // delete question name the image file, not Kraken Mount's mount of it
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.2f, 0, Direction::down},
+            {0.6f, 0, Direction::none, "fpkg-abbild"},
+            {0.3f, action_bit(Action::west)},
+            {0.2f, 0, Direction::down},
+            {0.3f, action_bit(Action::confirm)},
+            {0.7f, 0, Direction::none, "fpkg-abbild-loeschen"},
+            {0.3f, action_bit(Action::back)},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
+            {0.2f, 0, Direction::up},
             // Spiele → Disc (the preview has a drive): the list, a running disc game dumped with ✕,
             // △ and the settings.
             {0.5f, action_bit(Action::jump_next)},

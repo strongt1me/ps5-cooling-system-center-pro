@@ -5,9 +5,9 @@
 set -e
 cd "$(dirname "$0")/../.."
 OUT=${USBEJECTOUT:-$HOME/.cache/ps5tm-usbeject}
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$OUT/krakenimages"
 gcc -std=gnu11 -D_DEFAULT_SOURCE -O1 -g -fsanitize=address,undefined -Wall -Wextra -Wno-unused-function -Wno-format-truncation -Wno-unknown-pragmas \
   -Itest/usbeject/shim -Isrc -Isrc/third_party \
-  -DEJECTMARK_PATH="\"$OUT/usb_eject_offen.txt\"" -DEJECTMARK_LATER_MS=120 \
+  -DEJECTMARK_PATH="\"$OUT/usb_eject_offen.txt\"" -DEJECTMARK_LATER_MS=120 -DKR_IMAGE_STATE="\"$OUT/krakenimages/\"" \
   -o "$OUT/test" test/usbeject/usbeject_test.c src/usbeject.c src/drivegate.c src/ejectmark.c src/third_party/cJSON.c -lpthread -lm
 "$OUT/test"

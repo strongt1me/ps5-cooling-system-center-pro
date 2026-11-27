@@ -73,6 +73,17 @@ std::string kind_of(const KrakenGame &g)
 {
     if (g.kind == "pkg")
         return "FPKG-Datei";
+    if (!g.image.empty())
+    {
+        // Kraken Mount 0.4.2: "Abbild (exfat)"; a pattern "Abbild ({0})" in the dictionaries
+        const std::size_t dot = g.image.find_last_of("./");
+        std::string ext =
+            dot != std::string::npos && g.image[dot] == '.' ? g.image.substr(dot + 1) : "?";
+        for (char &c : ext)
+            if (c >= 'A' && c <= 'Z')
+                c = static_cast<char>(c - 'A' + 'a');
+        return "Abbild (" + ext + ")";
+    }
     if (g.packing == "zstd")
         return "Spielordner (zstd)";
     if (g.packing == "lz4")
@@ -256,10 +267,10 @@ class KrakenPage final : public Page
             float below = card.y + (g->conflict_with.empty() ? 590.0f : 550.0f);
             if (!g->conflict_with.empty())
                 below = paragraph(canvas,
-                                  "Achtung! Lege FPKG-Spiele nur in den Ordner FPKG-Games (auf dem "
-                                  "internen Speicher /data/FPKG-Games, auf einem USB- oder "
-                                  "M.2-Laufwerk der Ordner FPKG-Games im Hauptordner), dort sucht "
-                                  "ShadowMountPlus nicht!",
+                                  "Achtung! Lege Spiele für Kraken Mount nur in den Ordner "
+                                  "Kraken-Games (auf dem internen Speicher /data/Kraken-Games, auf "
+                                  "einem USB- oder M.2-Laufwerk der Ordner Kraken-Games im "
+                                  "Hauptordner), dort sucht ShadowMountPlus nicht!",
                                   card.x + 30.0f, below + 10.0f, card.w - 60.0f, kWarning, 5);
             // With the warning there is no room left for the error text; the state above names it
             // and the log has it.
@@ -270,9 +281,10 @@ class KrakenPage final : public Page
         else
         {
             paragraph(canvas,
-                      "Spielt (F)PKG-Spiele ohne Installation, mit dem Programm Kraken Mount von "
-                      "quer3q. Lege ein unverschlüsseltes Debug-FPKG (.pkg) in den Ordner "
-                      "FPKG-Games; Kraken Mount meldet das Spiel von selbst an.",
+                      "Spielt Spiele ohne Installation, mit dem Programm Kraken Mount von "
+                      "quer3q: Debug-FPKG (.pkg), Spielordner und Abbilder (.exfat, .ffpkg, "
+                      ".ffpfs, .ffpfsc). Lege sie in den Ordner Kraken-Games; Kraken Mount "
+                      "meldet das Spiel von selbst an.",
                       card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kMuted, 5);
             paragraph(canvas, roots_text(), card.x + 30.0f, card.y + 300.0f, card.w - 60.0f, kInk,
                       5);
@@ -415,27 +427,36 @@ class KrakenPage final : public Page
     {
         if (state_.scanpaths.empty())
         {
-            // Not running: its setting is not known, the app writes the folder FPKG-Games at the
+            // Not running: its setting is not known, the app writes the folder Kraken-Games at the
             // first start. Running with an empty list: its own default.
             if (!state_.running)
                 return "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner "
-                       "FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- "
-                       "und M.2-Laufwerk.";
+                       "Kraken-Games ein: /data/Kraken-Games und der Ordner Kraken-Games auf jedem "
+                       "USB- und M.2-Laufwerk.";
             return "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, "
                    "/data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- "
                    "und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege "
-                   "FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games "
-                   "auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner "
-                   "ein.";
+                   "Spiele für Kraken Mount besser in den Ordner Kraken-Games (/data/Kraken-Games "
+                   "oder Kraken-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken "
+                   "Mount als Suchordner ein.";
         }
         // the folders the app writes into its config (kraken.c seed_config)
-        std::vector<std::string> own = {"/data/FPKG-Games"};
+        std::vector<std::string> own = {"/data/Kraken-Games"};
         for (int i = 0; i < 8; ++i)
-            own.push_back("/mnt/usb" + std::to_string(i) + "/FPKG-Games");
-        own.push_back("/mnt/ext0/FPKG-Games");
-        own.push_back("/mnt/ext1/FPKG-Games");
+            own.push_back("/mnt/usb" + std::to_string(i) + "/Kraken-Games");
+        own.push_back("/mnt/ext0/Kraken-Games");
+        own.push_back("/mnt/ext1/Kraken-Games");
+        // the same list under the folder's old name (until 27.11.2026): renamed at the next start of
+        // Kraken Mount by the app (kraken.c migrate_folders)
+        std::vector<std::string> old = own;
+        for (std::string &p : old)
+            p.replace(p.size() - std::string("Kraken-Games").size(), std::string::npos, "FPKG-Games");
+        if (state_.scanpaths == old)
+            return "Suchordner unter dem alten Namen FPKG-Games. Kraken Mount einmal aus- und "
+                   "wieder einschalten: Dann benennt die App die Ordner FPKG-Games in Kraken-Games "
+                   "um und stellt die Suchordner um.";
         if (state_.scanpaths == own)
-            return "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und "
+            return "Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und "
                    "M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel "
                    "(dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die "
                    "Quere; die App meldet es dann.";
@@ -500,6 +521,7 @@ class KrakenPage final : public Page
     {
         menu_id_ = g.title_id;
         menu_path_ = g.path;
+        menu_source_ = g.image.empty() ? g.path : g.image; // an image game: the file that goes
         menu_name_ = g.name.empty() ? g.title_id : g.name;
         menu_size_ = g.size;
         std::vector<ui::MenuItem> items;
@@ -570,7 +592,7 @@ class KrakenPage final : public Page
             names.push_back(DeleteAsk::line(menu_name_, menu_size_ != 0 ? format_bytes(menu_size_)
                                                                         : std::string()));
             std::vector<std::string> notes;
-            notes.push_back("Quelle: " + menu_path_); // a pattern "Quelle: {0}" in the dictionaries
+            notes.push_back("Quelle: " + menu_source_); // a pattern "Quelle: {0}" in the dictionaries
             notes.push_back("Die Kachel und der Zwischenspeicher gehen mit. Spielstände bleiben.");
             ask_.open("Spiel löschen?", names, notes, feedback);
             break;
@@ -670,14 +692,11 @@ class KrakenPage final : public Page
             rows.push_back({"Titel-ID", g->title_id});
             rows.push_back({"Version", g->version.empty() ? "-" : g->version});
             rows.push_back({"Art", kind_of(*g)});
-            // Game folders are ShadowMountPlus's business; only .pkg files belong in these folders
-            if (g->kind != "pkg")
-                rows.push_back({"Hinweis", "nur .pkg gehört hierher"});
             rows.push_back({"Laufwerk", g->drive});
             rows.push_back({"Größe", g->size != 0 ? format_bytes(g->size) : "-"});
             rows.push_back(
                 {"Zwischenspeicher", g->cache_size != 0 ? format_bytes(g->cache_size) : "-"});
-            rows.push_back({"Quelle", g->path});
+            rows.push_back({"Quelle", g->image.empty() ? g->path : g->image});
         }
         std::string key;
         for (const ui::DetailItem &r : rows)
@@ -700,7 +719,8 @@ class KrakenPage final : public Page
         focus_id_; // the game the focus is on (title id): it stays on it when the list is refilled
     std::string info_key_ = "\x01";
     std::string menu_id_;
-    std::string menu_path_;
+    std::string menu_path_;   // sent back to Kraken Mount as it listed it (it checks it)
+    std::string menu_source_; // shown: the image file of an image game, else the path
     std::string menu_name_;
     std::uint64_t menu_size_ = 0;
     bool menu_playgo_off_ = false; // the PlayGo stub of the game in the menu is off now

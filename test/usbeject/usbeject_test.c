@@ -63,9 +63,12 @@ int ps5tm_drive_holders(const char *mount, ps5tm_holder_t *out, int max) {
 }
 void ps5tm_drive_holders_diag(char *out, size_t n) { snprintf(out, n, "test"); }
 
+static int g_kraken_mount;                        /* Kraken Mount 0.4.2 has an image mounted: /mnt/krakenmount/<name> from /dev/lvd3 */
+#define KR_TEST_NAME "Quiet_Orbit_5c1e9a07"
 int getfsstat(struct statfs *buf, long bufsize, int mode) {
   (void)mode;
-  if(!buf) return 2;
+  const int n = 2 + (g_kraken_mount ? 1 : 0);
+  if(!buf) return n;
   (void)bufsize;
   snprintf(buf[0].f_mntfromname, sizeof(buf[0].f_mntfromname), "/dev/da0p1");
   snprintf(buf[0].f_mntonname, sizeof(buf[0].f_mntonname), "/mnt/usb0");
@@ -73,7 +76,24 @@ int getfsstat(struct statfs *buf, long bufsize, int mode) {
   snprintf(buf[1].f_mntfromname, sizeof(buf[1].f_mntfromname), "/dev/ssd0");
   snprintf(buf[1].f_mntonname, sizeof(buf[1].f_mntonname), "/data");
   snprintf(buf[1].f_fstypename, sizeof(buf[1].f_fstypename), "ufs");
-  return 2;
+  if(g_kraken_mount) {
+    snprintf(buf[2].f_mntfromname, sizeof(buf[2].f_mntfromname), "/dev/lvd3");
+    snprintf(buf[2].f_mntonname, sizeof(buf[2].f_mntonname), "/mnt/krakenmount/" KR_TEST_NAME);
+    snprintf(buf[2].f_fstypename, sizeof(buf[2].f_fstypename), "exfatfs");
+  }
+  return n;
+}
+
+/* Kraken Mount's record of that mount: "<unit>\n<image path>"; NULL takes it away */
+static void
+kraken_record(const char *image) {
+  const char *p = KR_IMAGE_STATE KR_TEST_NAME;
+  unlink(p);
+  if(!image) return;
+  FILE *f = fopen(p, "w");
+  if(!f) { printf("FAIL: cannot write %s\n", p); g_fail++; return; }
+  fprintf(f, "3\n%s\n", image);
+  fclose(f);
 }
 
 /* ShadowMountPlus: the calls it gets, in order; what it answers */
@@ -150,7 +170,7 @@ hold(void *arg) {
 
 int
 main(void) {
-  char msg[400];
+  char msg[640];                                  /* as api.c passes it */
   unlink(EJECTMARK_PATH);
 
   /* 1. everything quiet: ShadowMountPlus is asked, once, after the list; the state is logged first; the marker is written; the follower ends it */
@@ -360,6 +380,41 @@ main(void) {
     g_smp_can = 0;
     CHECK(ps5tm_usbeject_start("/mnt/usb0", msg, sizeof(msg)) == 409);
     CHECK(g_smp_eject_calls == 0 && !exists());
+  }
+
+  /* 13. Kraken Mount 0.4.2 has an image of the drive mounted (27.11.2026): that mount names no path of the drive and ShadowMountPlus's eject does not
+     release it, so the eject is refused, naming the image; ShadowMountPlus is NOT asked. An image of another drive (usb01 is not usb0), or a mount without
+     Kraken Mount's record, does not hold it back. */
+  {
+    g_kraken_mount = 1;
+    kraken_record("/mnt/usb0/FPKG-Games/Quiet Orbit.exfat");
+    int rc = start("/mnt/usb0", msg, sizeof(msg));
+    CHECK(rc == 409 && strstr(msg, "Kraken Mount hat 1 Abbild") != NULL && strstr(msg, "/mnt/usb0/FPKG-Games/Quiet Orbit.exfat") != NULL);
+    CHECK(g_smp_eject_calls == 0 && g_smp_list_calls == 0 && !exists());
+    CHECK(strstr(g_codes, "usb_eject_held") != NULL);
+    CHECK(!ps5tm_usbeject_busy());
+    {
+      /* the refusal arrives whole, in the answer and in the state kept for the page (a cut one would find no key in the dictionaries) */
+      const char *end = "(läuft Kraken Mount nicht, vorher einschalten).";
+      size_t ml = strlen(msg), el = strlen(end);
+      CHECK(ml > el && strcmp(msg + ml - el, end) == 0);
+      cJSON *j = ps5tm_usbeject_json();
+      const cJSON *m = j ? cJSON_GetObjectItem(j, "message") : NULL;
+      CHECK(cJSON_IsString(m) && strcmp(m->valuestring, msg) == 0);
+      cJSON_Delete(j);
+    }
+
+    kraken_record("/mnt/usb01/FPKG-Games/Quiet Orbit.exfat");                                 /* another drive whose name begins the same */
+    rc = start("/mnt/usb0", msg, sizeof(msg));
+    CHECK(rc == 202 && g_smp_eject_calls == 1);
+    wait_end();
+    usleep(400 * 1000);
+
+    kraken_record(NULL);                                                                      /* no record: which drive it is on is not to be known */
+    rc = start("/mnt/usb0", msg, sizeof(msg));
+    CHECK(rc == 202 && g_smp_eject_calls == 1);
+    wait_end();
+    g_kraken_mount = 0;
   }
 
   usleep(500 * 1000);

@@ -4710,7 +4710,7 @@ handle_usb_eject(int fd, const ps5tm_request_t *req) {
   cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
   const cJSON *jm = body ? cJSON_GetObjectItem(body, "mount") : NULL;
   const cJSON *ja = body ? cJSON_GetObjectItem(body, "action") : NULL;
-  char mount[16] = "", msg[300];
+  char mount[16] = "", msg[640];                      /* as usbeject.c keeps it: a cut refusal would not be translated */
   if(cJSON_IsString(jm)) snprintf(mount, sizeof(mount), "%s", jm->valuestring);
   /* {"action":"rearm"}: the person allows ejecting again after the last eject did not come back (usbeject.c, 21.11.2026) */
   if(cJSON_IsString(ja) && !strcmp(ja->valuestring, "rearm")) {

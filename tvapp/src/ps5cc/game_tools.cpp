@@ -115,15 +115,51 @@ const char *level_short(int level)
     }
 }
 
-std::string mode_text(bool fpkg)
+// The words under "Ziel" (one line): what the chosen kind does. An FPKG is not for ShadowMountPlus,
+// a PS4 game is not for Kraken Mount (27.11.2026); a kind that does not fit is never chosen, the row
+// says why at the one that is.
+std::string mode_text(int mode, bool fpkg, bool ps4)
 {
-    return fpkg ? "A: Ordner FPKG-Games (intern, M.2-SSD oder USB) – der richtige Ort für FPKG in "
-                  "dieser App: "
-                  "Kraken Mount meldet es an, ShadowMountPlus sucht dort nicht · B: "
-                  "PS5-Sicherung/Spiele, "
-                  "nur aufbewahrt"
-                : "A: homebrew, ShadowMountPlus bindet es ein · B: PS5-Sicherung/Spiele, nur "
-                  "aufbewahrt";
+    switch (mode)
+    {
+    case kModeHomebrew:
+        return ps4 ? "Ordner homebrew: ShadowMountPlus bindet es ein. Kraken Mount spielt keine "
+                     "PS4-Spiele."
+                   : "Ordner homebrew: ShadowMountPlus bindet es ein.";
+    case kModeKraken:
+        return fpkg ? "Ordner Kraken-Games: Kraken Mount meldet es an. ShadowMountPlus bindet kein "
+                      "FPKG ein."
+                    : "Ordner Kraken-Games: Kraken Mount meldet es an, ShadowMountPlus sucht dort "
+                      "nicht.";
+    case kModeBackup:
+        return "Ordner PS5-Sicherung/Spiele: nur aufbewahrt.";
+    default:
+        return "A: ShadowMountPlus · B: Kraken Mount · C: nur aufbewahrt";
+    }
+}
+
+// The row "Ziel" lists "bitte wählen", then the kinds in kModeOrder; the number of a kind and its
+// place in the row.
+int mode_of_choice(int index)
+{
+    return index >= 1 && index <= kModes ? kModeOrder[index - 1] : -1;
+}
+
+int choice_of_mode(int mode)
+{
+    for (int i = 0; i < kModes; ++i)
+    {
+        if (kModeOrder[i] == mode)
+            return i + 1;
+    }
+    return 0;
+}
+
+// A kind that does not fit the result: ShadowMountPlus does not mount an FPKG, Kraken Mount does not
+// play a PS4 game.
+bool mode_fits(int mode, bool fpkg, bool ps4)
+{
+    return !(fpkg && mode == kModeHomebrew) && !(ps4 && mode == kModeKraken);
 }
 
 std::string verify_text(bool quick, bool fpkg)
@@ -595,9 +631,11 @@ void GameTools::build_form(int keep_focus)
     {
         form_.add_header(header);
         form_
-            .add_choice(kRowMode, "Ziel", {"bitte wählen", "A · Spielbar", "B · Sicherung"},
-                        choice_.mode + 1)
-            .description = mode_text(choice_.op == kOpFpkg);
+            .add_choice(kRowMode, "Ziel",
+                        {"bitte wählen", "A · Spielbar mit ShadowMountPlus",
+                         "B · Spielbar mit Kraken Mount", "C · Sicherung"},
+                        choice_of_mode(choice_.mode))
+            .description = mode_text(choice_.mode, choice_.op == kOpFpkg, plan_.ps4);
     };
     int first = kRowStart;
     switch (tool_)
@@ -788,15 +826,15 @@ void GameTools::refresh()
         // Focused, a refused drive says all of it: the reason may not fit beside the name.
         row->description = why.empty() ? std::string() : why + " · " + info;
     }
+    // the words under "Ziel" follow the kind chosen (copy and convert)
+    if (ui::FormRow *row = form_.row(kRowMode))
+        row->description = mode_text(choice_.mode, choice_.op == kOpFpkg, plan_.ps4);
     if (tool_ == Tool::convert)
     {
         request_check();
         const bool fpkg = choice_.op == kOpFpkg;
         const bool packs = packing(plan_, choice_);
-        // The words of the rows that depend on the format: the targets, the check afterwards, the
-        // AMPR index.
-        if (ui::FormRow *row = form_.row(kRowMode))
-            row->description = mode_text(fpkg);
+        // The words of the rows that depend on the format: the check afterwards, the AMPR index.
         if (ui::FormRow *row = form_.row(kRowVerify))
             row->description = verify_text(choice_.quick, fpkg);
         if (ui::FormRow *row = form_.row(kRowPack))
@@ -1153,7 +1191,14 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
     if (event == ui::Event::changed)
     {
         if (id == kRowMode)
-            choice_.mode = form_.choice_index(kRowMode) - 1;
+        {
+            const int mode = mode_of_choice(form_.choice_index(kRowMode));
+            // a kind that does not fit stays unchosen: the row goes back, its words say why
+            if (mode_fits(mode, choice_.op == kOpFpkg, plan_.ps4))
+                choice_.mode = mode;
+            else
+                form_.set_choice(kRowMode, choice_of_mode(choice_.mode));
+        }
         else if (id == kRowOp)
         {
             const bool had_pack_rows = pack_rows(plan_, choice_.op);
@@ -1164,12 +1209,13 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             if (ui::FormRow *row = form_.row(kRowOp))
                 row->description =
                     choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
-            // FPKG: the folder FPKG-Games is the right place, so it is chosen from the start (the
-            // person can still pick B)
-            if (choice_.op == kOpFpkg && choice_.mode < 0 && form_.row(kRowMode))
+            // FPKG: Kraken Mount's folder Kraken-Games is the right place, so it is chosen from the
+            // start (the person can still pick C); ShadowMountPlus does not mount a .pkg
+            if (choice_.op == kOpFpkg && (choice_.mode < 0 || choice_.mode == kModeHomebrew) &&
+                form_.row(kRowMode))
             {
-                choice_.mode = 0;
-                form_.set_choice(kRowMode, 1);
+                choice_.mode = kModeKraken;
+                form_.set_choice(kRowMode, choice_of_mode(kModeKraken));
             }
             // the rows of packing stand under exFAT and ffpkg only: the form is built anew where
             // they come or go, with the focus on the format
@@ -1733,6 +1779,12 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                               : std::string(".")),
                      kWarning, 3);
         }
+        if (choice_.mode == kModeKraken && (!orig_side || choice_.orig == kOrigKeep))
+            para("Das Original und das Ergebnis haben beide die Titel-ID " + plan_.id +
+                     ". Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald "
+                     "Kraken Mount das Ergebnis anmeldet. Hänge das Original erst aus oder lösche "
+                     "es, bevor du das Ergebnis startest.",
+                 kWarning, 5);
         if (orig_side)
             orig_notes();
         else if (choice_.mode == 0)
@@ -1814,13 +1866,13 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                  kWarning, 5);
         if (orig_side)
             orig_notes();
-        // the debug FPKG goes to FPKG-Games, which ShadowMountPlus does not search: its own
-        // warning, while the original stays
-        if (choice_.mode == 0 && choice_.op == kOpFpkg && (!orig_side || choice_.orig == kOrigKeep))
-            para("Das Original und das Paket haben beide die Titel-ID " + plan_.id +
+        // the result goes to Kraken-Games, which ShadowMountPlus does not search: its own warning,
+        // while the original stays
+        if (choice_.mode == kModeKraken && (!orig_side || choice_.orig == kOrigKeep))
+            para("Das Original und das Ergebnis haben beide die Titel-ID " + plan_.id +
                      ". Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald "
-                     "Kraken Mount das Paket anmeldet. Hänge das Original erst aus oder lösche "
-                     "es, bevor du das Paket startest.",
+                     "Kraken Mount das Ergebnis anmeldet. Hänge das Original erst aus oder lösche "
+                     "es, bevor du das Ergebnis startest.",
                  kWarning, 5);
         else if (choice_.mode == 0 && !orig_side)
             para("ShadowMountPlus findet das Spiel danach zweimal (Original und neues Abbild). "

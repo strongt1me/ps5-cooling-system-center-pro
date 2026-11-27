@@ -905,6 +905,9 @@ struct KrakenGame
     std::string name;
     std::string version;
     std::string path;    // the .pkg or the game folder
+    // Kraken Mount 0.4.2: an image game (.exfat, .ffpkg, .ffpfs, .ffpfsc) is a folder in its own mount
+    // (/mnt/krakenmount/...); image is then the image file on the drive, else ""
+    std::string image;
     std::string kind;    // "pkg" or "folder"
     std::string packing; // folder: "plain", "zstd", "lz4"
     std::string drive;   // the label of its drive

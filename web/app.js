@@ -5711,8 +5711,8 @@
     return ogDefaultDest(plan, d);
   };
   /* Der Hinweis „Original und Ergebnis liegen beide im Suchordner“ bei „Behalten“: nur wenn das Ergebnis in einen Suchordner von
-     ShadowMountPlus geht. Konvertieren/Kopieren: Art „Spielbar“ (homebrew); ein FPKG geht nach FPKG-Games, das ShadowMountPlus nicht
-     durchsucht. Entpacken: immer (das Ergebnis liegt in <Laufwerk>/homebrew). */
+     ShadowMountPlus geht. Konvertieren/Kopieren: Art „Spielbar mit ShadowMountPlus“ (homebrew); „Spielbar mit Kraken Mount“ geht nach Kraken-Games,
+     das ShadowMountPlus nicht durchsucht (ein FPKG immer). Entpacken: immer (das Ergebnis liegt in <Laufwerk>/homebrew). */
   const ogKeepWarn = (ctx) => !!ctx && (ctx.kind === "unpack" || (ctx.mode === "homebrew" && !ctx.fpkg));
   /* Die Felder der Start-Anfrage: nur wenn nicht „behalten“. */
   const ogFields = (s) => {
@@ -6315,7 +6315,8 @@
         if (n === "cv-op") {
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value === "fpkg" ? (cv.fl || "fpkg") : e.target.value;   /* the format "FPKG" carries the level chosen last */
-          if (cvIsFpkg(cv.op) && !cv.mode) cv.mode = "homebrew";                  /* FPKG: the folder FPKG-Games is the right place, chosen from the start */
+          /* FPKG: Kraken Mount's folder Kraken-Games is the right place, chosen from the start (ShadowMountPlus does not mount a .pkg) */
+          if (cvIsFpkg(cv.op) && (!cv.mode || cv.mode === "homebrew")) cv.mode = "kraken";
         }
         if (n === "cv-fl") { cv.fl = e.target.value; cv.op = e.target.value; }
         if (n.startsWith("mv-")) mvRenderPlan();
@@ -6325,6 +6326,31 @@
     }
     return o;
   };
+
+  /* „Als was?“ beim Kopieren und Konvertieren (27.11.2026): spielbar mit ShadowMountPlus (homebrew), spielbar mit Kraken Mount (Kraken-Games, Reiter
+     FPKGMount: .pkg, Spielordner und Abbilder) oder nur aufbewahrt. Ein FPKG bindet ShadowMountPlus nicht ein, ein PS4-Spiel spielt Kraken Mount nicht. */
+  const playModes = (name, cur, fpkg, ps4) => `
+        <label class="cp-choice${fpkg ? " off" : ""}">
+          <input type="radio" name="${name}" value="homebrew" ${cur === "homebrew" && !fpkg ? "checked" : ""} ${fpkg ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>A · Spielbar mit ShadowMountPlus</b>
+            <span class="muted">${fpkg ? "ShadowMountPlus bindet kein FPKG (.pkg) ein."
+              : `In den Ordner <code>homebrew</code> des Ziels. ShadowMountPlus findet das Spiel dort und bindet es ein.`}</span></span>
+        </label>
+        <label class="cp-choice${ps4 ? " off" : ""}">
+          <input type="radio" name="${name}" value="kraken" ${cur === "kraken" && !ps4 ? "checked" : ""} ${ps4 ? "disabled" : ""}>
+          <span class="cp-choice-text"><b>B · Spielbar mit Kraken Mount</b>
+            <span class="muted">${ps4 ? "Kraken Mount spielt PS5-Spiele, keine PS4-Spiele."
+              : `In den Ordner <code>Kraken-Games</code> des Ziels (intern, M.2-SSD oder USB). Kraken Mount (Reiter „FPKGMount“) findet das Spiel dort und meldet es an; ShadowMountPlus sucht dort nicht.`}</span></span>
+        </label>
+        <label class="cp-choice">
+          <input type="radio" name="${name}" value="backup" ${cur === "backup" ? "checked" : ""}>
+          <span class="cp-choice-text"><b>C · Sicherung</b>
+            <span class="muted">In den Ordner <code>PS5-Sicherung/Spiele</code>. Dort suchen weder ShadowMountPlus noch Kraken Mount, das Spiel wird nur aufbewahrt.</span></span>
+        </label>`;
+  /* Original bei ShadowMountPlus, Ergebnis bei Kraken Mount: dieselbe Titel-ID bei beiden */
+  const krakenTwinWarn = (id) => `<div class="cp-warn"><b>⚠ Gleiche Titel-ID</b>: Das Original und das Ergebnis haben beide die Titel-ID
+          ${esc(id)}. Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald Kraken Mount das Ergebnis anmeldet. Hänge das
+          Original erst aus oder lösche es, bevor du das Ergebnis startest.</div>`;
 
   /* Warum ein Laufwerk für die gewählte Art nicht in Frage kommt, oder "". */
   const cpBlocked = (d) => {
@@ -6377,21 +6403,10 @@
           ? ` · ${num(p.skipped)} Verknüpfungen oder Sonderdateien bleiben weg` : ""}</span></p>
 
       <h4 class="cp-step">1. Als was?</h4>
-      <div class="cp-list">
-        <label class="cp-choice">
-          <input type="radio" name="cp-mode" value="homebrew" ${cp.mode === "homebrew" ? "checked" : ""}>
-          <span class="cp-choice-text"><b>A · Spielbar</b>
-            <span class="muted">In den Ordner <code>homebrew</code> des Ziels.
-              ShadowMountPlus findet die Kopie dort und bindet sie ein.</span></span>
-        </label>
-        <label class="cp-choice">
-          <input type="radio" name="cp-mode" value="backup" ${cp.mode === "backup" ? "checked" : ""}>
-          <span class="cp-choice-text"><b>B · Sicherung</b>
-            <span class="muted">In den Ordner <code>PS5-Sicherung/Spiele</code>.
-              Dort sucht ShadowMountPlus nicht, die Kopie wird nur aufbewahrt.</span></span>
-        </label>
+      <div class="cp-list">${playModes("cp-mode", cp.mode, false, !!p.ps4 || /^CUSA/.test(p.title_id || ""))}
       </div>
-      ${cp.mode === "homebrew" && !ogOffered(cp.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
+      ${cp.mode === "kraken" ? krakenTwinWarn(p.title_id)
+        : cp.mode === "homebrew" && !ogOffered(cp.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
           danach zweimal</b>: das Original und die Kopie, beide mit der Titel-ID
           ${esc(p.title_id)}. Zwei Ordner mit derselben Titel-ID können beim Einbinden
           Probleme machen: Es wird womöglich der falsche eingebunden oder das Spiel
@@ -6448,7 +6463,8 @@
          copy done when it matches the plan, so these are the same or more. */
       html = `<p class="cp-ok">✓ Fertig: ${bytes(j.done_bytes)} in ${cpFiles(j.files_done)} kopiert und zurückgelesen.</p>${where}
         ${cpSums(j, "die Kopie")}
-        ${j.mode === "homebrew" ? (ogHandled("copy", j.title_id) ? "" : `<p class="muted">ShadowMountPlus bindet die Kopie bei seinem nächsten
+        ${j.mode === "kraken" ? `<p class="muted">Kraken Mount findet die Kopie im Ordner „Kraken-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet sie an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
+        : j.mode === "homebrew" ? (ogHandled("copy", j.title_id) ? "" : `<p class="muted">ShadowMountPlus bindet die Kopie bei seinem nächsten
           Durchlauf ein. Das Spiel liegt jetzt zweimal vor. Wenn du es nur verschieben wolltest,
           lösche das Original.</p>`) : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
     } else if (j.state === "cancelled") {
@@ -7178,26 +7194,9 @@
       </label>` : ""}
 
       <h4 class="cp-step">2. Als was?</h4>
-      <div class="cp-list">
-        <label class="cp-choice">
-          <input type="radio" name="cv-mode" value="homebrew" ${cv.mode === "homebrew" ? "checked" : ""}>
-          <span class="cp-choice-text"><b>${cvIsFpkg(cv.op) ? "A · Spielbar: Ordner FPKG-Games (richtig für diese App)" : "A · Spielbar"}</b>
-            ${cvIsFpkg(cv.op)
-              ? `<span class="muted">In den Ordner <code>FPKG-Games</code> des Ziels (intern, M.2-SSD oder USB). Das ist der richtige Ort für FPKG in dieser App: Kraken Mount (Reiter „FPKGMount“) sucht dort und meldet das Paket an, ShadowMountPlus sucht dort nicht, es gibt also keine Konflikte.</span>`
-              : `<span class="muted">In den Ordner <code>homebrew</code> des Ziels. ShadowMountPlus findet
-              das Ergebnis dort und bindet es ein.</span>`}</span>
-        </label>
-        <label class="cp-choice">
-          <input type="radio" name="cv-mode" value="backup" ${cv.mode === "backup" ? "checked" : ""}>
-          <span class="cp-choice-text"><b>B · Sicherung</b>
-            <span class="muted">In den Ordner <code>PS5-Sicherung/Spiele</code>. ${cvIsFpkg(cv.op)
-              ? "Dort sucht Kraken Mount nicht."
-              : "Dort sucht ShadowMountPlus nicht."}</span></span>
-        </label>
+      <div class="cp-list">${playModes("cv-mode", cv.mode, cvIsFpkg(cv.op), !!p.ps4)}
       </div>
-      ${cv.mode === "homebrew" && cvIsFpkg(cv.op) ? `<div class="cp-warn"><b>⚠ Gleiche Titel-ID</b>: Das Original und das Paket
-          haben beide die Titel-ID ${esc(p.title_id)}. Ist das Original bei ShadowMountPlus eingehängt, stören sich beide, sobald Kraken Mount
-          das Paket anmeldet. Hänge das Original erst aus oder lösche es, bevor du das Paket startest.</div>`
+      ${cv.mode === "kraken" ? krakenTwinWarn(p.title_id)
         : cv.mode === "homebrew" && !ogOffered(cv.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
           danach zweimal</b>: das Original und das neue Abbild, beide mit der Titel-ID
           ${esc(p.title_id)}. Das kann beim Einbinden Probleme machen. ShadowMountPlus rät, je
@@ -7314,7 +7313,7 @@
           ? `✓ Fertig und geprüft: ${bytes(j.output_bytes)} statt ${bytes(j.total_bytes)} (${ratio} %).`
           : `✓ Fertig und geprüft: ${bytes(j.output_bytes)}.`}</p>${where}
         ${cpSums(j, "das Ergebnis")}
-        ${cvIsFpkg(j.op) && j.mode === "homebrew" ? `<p class="muted">Kraken Mount sucht im Ordner „FPKG-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet das Paket an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
+        ${j.mode === "kraken" || (cvIsFpkg(j.op) && j.mode === "homebrew") ? `<p class="muted">Kraken Mount findet das Ergebnis im Ordner „Kraken-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet es an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
         : /^CUSA/.test(j.title_id || "") && j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</p>`
         : j.mode === "homebrew" ? (ogHandled("convert", j.title_id) ? "" : `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
           nächsten Durchlauf. Das Spiel liegt jetzt zweimal vor. Lösche das Original erst, wenn das
@@ -7755,7 +7754,7 @@
     box.dataset.key = "1";
     box.textContent = "";
     const p = document.createElement("p");
-    p.textContent = "Achtung! Lege FPKG-Spiele nur in den Ordner FPKG-Games (auf dem internen Speicher /data/FPKG-Games, auf einem USB- oder M.2-Laufwerk der Ordner FPKG-Games im Hauptordner), dort sucht ShadowMountPlus nicht!";
+    p.textContent = "Achtung! Lege Spiele für Kraken Mount nur in den Ordner Kraken-Games (auf dem internen Speicher /data/Kraken-Games, auf einem USB- oder M.2-Laufwerk der Ordner Kraken-Games im Hauptordner), dort sucht ShadowMountPlus nicht!";
     box.append(p);
     box.hidden = false;
   };
@@ -8701,13 +8700,16 @@
     txt("#fp-prog", prog.join(" · "));
     $("#fp-open").href = `http://${location.hostname}:8097/`;
     const roots = d.settings && Array.isArray(d.settings.scanpath) && d.settings.scanpath.length ? d.settings.scanpath : null;
-    /* the folders the app writes into the config of Kraken Mount (kraken.c seed_config): /data/FPKG-Games and FPKG-Games on every drive */
-    const own = ["/data/FPKG-Games", ...Array.from({ length: 8 }, (_, i) => `/mnt/usb${i}/FPKG-Games`), "/mnt/ext0/FPKG-Games", "/mnt/ext1/FPKG-Games"];
+    /* the folders the app writes into the config of Kraken Mount (kraken.c seed_config): /data/Kraken-Games and Kraken-Games on every drive */
+    const own = ["/data/Kraken-Games", ...Array.from({ length: 8 }, (_, i) => `/mnt/usb${i}/Kraken-Games`), "/mnt/ext0/Kraken-Games", "/mnt/ext1/Kraken-Games"];
     const isOwn = roots && roots.length === own.length && roots.every((r, i) => r === own[i]);
-    txt("#fp-roots", isOwn ? "Suchordner: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel (dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die Quere; die App meldet es dann."
+    /* the same list under the folder's old name (until 27.11.2026): the app renames it at the next start of Kraken Mount by the app (kraken.c migrate_folders) */
+    const isOld = roots && roots.length === own.length && roots.every((r, i) => r === own[i].replace("/Kraken-Games", "/FPKG-Games"));
+    txt("#fp-roots", isOld ? "Suchordner unter dem alten Namen FPKG-Games. Kraken Mount einmal aus- und wieder einschalten: Dann benennt die App die Ordner FPKG-Games in Kraken-Games um und stellt die Suchordner um."
+      : isOwn ?"Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel (dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die Quere; die App meldet es dann."
       : roots ? `Suchordner: ${roots.join(", ")}`
-      : d.settings ? "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege FPKG-Spiele besser in den Ordner FPKG-Games (/data/FPKG-Games oder FPKG-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein."
-      : "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner FPKG-Games ein: /data/FPKG-Games und der Ordner FPKG-Games auf jedem USB- und M.2-Laufwerk.");
+      : d.settings ? "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege Spiele für Kraken Mount besser in den Ordner Kraken-Games (/data/Kraken-Games oder Kraken-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein."
+      : "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner Kraken-Games ein: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk.");
     const note = $("#fp-note");
     note.hidden = !!k && !k.waiting && !(k.cache && k.cache.low_space) && !k.paused && !d.restart_needed;
     if (!k) note.textContent = d.starting ? "Kraken Mount startet. Das dauert einige Sekunden." : "Kraken Mount ist ausgeschaltet. Einschalten, damit die Spiele gesucht und angemeldet werden.";
@@ -8718,7 +8720,9 @@
     dupFill($("#fp-dup"), d.conflicts);
     const fpListHtml = games.length ? games.map((g) => {
       const st = running.has(g.title_id) ? ["ok", "Läuft"] : (FP_STATE[g.status] || ["", g.status]);
-      const kind = g.kind === "pkg" ? "FPKG" : (FP_PACK[g.packing] || "Ordner");
+      /* Kraken Mount 0.4.2: an image game (.exfat, .ffpkg, .ffpfs, .ffpfsc) is a folder in its own mount; "image" names the file on the drive */
+      const img = typeof g.image === "string" && g.image ? g.image : "";
+      const kind = g.kind === "pkg" ? "FPKG" : img ? `Abbild (${(img.match(/\.([^./]+)$/) || ["", "?"])[1].toLowerCase()})` : (FP_PACK[g.packing] || "Ordner");
       const meta = [g.title_id, g.version ? `Version ${g.version}` : "", g.size > 0 ? bytes(g.size) : "", drive(g.drive), kind].filter(Boolean);   /* a folder has no size of its own here */
       const busy = g.status === "building" || g.status === "checking" || running.has(g.title_id);
       /* Kraken Mount 0.3.2 (#115): a rebuild asked for and not started yet (rebuild_queued), or a game still waiting: no second one */
@@ -8728,15 +8732,15 @@
         <div class="p4m-main"><div class="p4m-name">${esc(g.title_name || g.title_id)}</div>
           <div class="p4m-meta">${esc(meta.join(" · "))}</div>
           ${g.error ? `<div class="p4m-meta">${esc(g.error)}</div>` : ""}
-          ${g.kind === "pkg" ? "" : `<div class="p4m-meta fp-folder">Ein Spielordner im Suchordner von Kraken Mount. Ordner-Spiele gehören zu ShadowMountPlus; hier sollten nur .pkg-Dateien liegen.</div>`}</div>
+</div>
         <span class="p4m-state ${st[0]}">${esc(st[1])}</span>
         <div class="p4m-btns">
           <button type="button" class="btn ghost" data-fp="rebuild" data-id="${esc(g.title_id)}" ${rebuildBusy ? "disabled" : ""}
             title="Baut den Zwischenspeicher dieses Spiels neu auf und meldet es neu an.">Neu aufbauen</button>
           ${(g.playgo === true || g.playgo_off === true) && typeof g.playgo_off === "boolean" ? `<button type="button" class="btn ghost" data-fp="playgo" data-id="${esc(g.title_id)}" data-off="${g.playgo_off ? 0 : 1}" ${busy ? "disabled" : ""}
             title="Ausschalten, wenn das Spiel auf einem schwarzen Bildschirm bleibt; einschalten, wenn es verlangt, den Download abzuschließen.">${g.playgo_off ? "PlayGo-Stub einschalten" : "PlayGo-Stub ausschalten"}</button>` : ""}
-          <button type="button" class="btn ghost" data-fp="delete" data-id="${esc(g.title_id)}" data-path="${esc(g.path)}" data-name="${esc(g.title_name || g.title_id)}" ${busy ? "disabled" : ""}
-            title="Löscht die PKG-Datei bzw. den Spielordner vom Laufwerk, dazu Kachel und Zwischenspeicher.">Spiel löschen</button>
+          <button type="button" class="btn ghost" data-fp="delete" data-id="${esc(g.title_id)}" data-path="${esc(g.path)}" data-image="${esc(img)}" data-name="${esc(g.title_name || g.title_id)}" ${busy ? "disabled" : ""}
+            title="${img ? "Löscht das Abbild vom Laufwerk, dazu Kachel und Zwischenspeicher." : "Löscht die PKG-Datei bzw. den Spielordner vom Laufwerk, dazu Kachel und Zwischenspeicher."}">Spiel löschen</button>
         </div></div>`;
     }).join("") : `<p class="muted">${k ? "Kraken Mount hat auf den Laufwerken keine Spiele gefunden." : "Sobald Kraken Mount läuft, stehen hier seine Spiele."}</p>`;
     { const el = $("#fp-list");          /* nur bei geändertem Inhalt: sonst verliert der Knopf mit Fokus alle 5 s den Fokus, und jedes Symbol wird neu angefragt */
@@ -9071,8 +9075,11 @@
     if (b.dataset.fp === "rebuild") { fpPost({ action: "rebuild", id: b.dataset.id }); return; }
     if (b.dataset.fp === "playgo") { fpPost({ action: "playgo", id: b.dataset.id, off: b.dataset.off === "1" }); return; }
     if (b.dataset.fp === "delete") {
-      if (!(await askDelete({ title: "Spiel löschen?", items: [{ name: b.dataset.name, info: b.dataset.path }],
-        notes: ["Gelöscht werden die PKG-Datei bzw. der Spielordner auf dem Laufwerk, die Kachel auf dem Startbildschirm und der Zwischenspeicher des Spiels. Spielstände bleiben."] }))) return;
+      /* an image game: the file that goes is the image, not Kraken Mount's mount of it; the path sent stays the one of its list (Kraken Mount checks it) */
+      const image = b.dataset.image || "";
+      if (!(await askDelete({ title: "Spiel löschen?", items: [{ name: b.dataset.name, info: image || b.dataset.path }],
+        notes: [image ? "Gelöscht werden das Abbild auf dem Laufwerk, die Kachel auf dem Startbildschirm und der Zwischenspeicher des Spiels. Spielstände bleiben."
+          : "Gelöscht werden die PKG-Datei bzw. der Spielordner auf dem Laufwerk, die Kachel auf dem Startbildschirm und der Zwischenspeicher des Spiels. Spielstände bleiben."] }))) return;
       b.disabled = true;
       fpPost({ action: "delete", id: b.dataset.id, path: b.dataset.path });
     }

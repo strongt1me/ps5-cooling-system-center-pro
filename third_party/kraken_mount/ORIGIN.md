@@ -1,11 +1,11 @@
 # Kraken Mount
 
-**Version:** v0.4.1 (26.11.2026)
+**Version:** v0.4.2 (27.11.2026)
 **Autor:** quer3q
-**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.4.1`, Commit `54b1f9d8697bc4607e860a2223e4df610d38200d`)
+**Quelle:** https://github.com/quer3q/kraken-mount (Tag `v0.4.2`, Commit `7c73d0a09708464d74fe22009b3ccad9b5cd1ebe`)
 **Lizenz:** GPL-3.0-or-later (Lizenztext und Hinweise zu Fremdbausteinen im Quellprojekt: `LICENSE`, `THIRD_PARTY_NOTICES`)
-**Datei:** `kraken-mount_v0.4.1.elf` (PS5-ELF, 7 273 824 Bytes), unverändert aus der Veröffentlichung
-**SHA-256:** `88d39545728f4202421616a299467545afe7f9b295b636f7bd49b1f2fe1aad1d` (gleich `SHA256SUMS` der Veröffentlichung; am 26.11.2026 mit `gh release download v0.4.1` geladen, ELF-Kopf und Kennung `kraken-mount/0.4.0` geprüft)
+**Datei:** `kraken-mount_v0.4.2.elf` (PS5-ELF, 7 601 584 Bytes), unverändert aus der Veröffentlichung
+**SHA-256:** `4d4ec0fc2b436d7be3e9d573dc63e6c94c64eac0d72c08aa15fe54446a19201f` (gleich `SHA256SUMS` der Veröffentlichung; am 27.11.2026 mit `gh release download v0.4.2` geladen, ELF-Kopf und Kennung `kraken-mount/0.4.2` geprüft)
 
 ## Verwendung
 
@@ -26,7 +26,32 @@ Datei, und es entsteht keine Kachel (nur eine Zeile „not registered“ im Prot
 löscht die Markierung (`keep_tile_away` in `src/kraken.c`, `src/tilekeep.c`).
 
 Aus dem Quellcode von Kraken Mount ist nichts in diese App übernommen; die ELF wird nur weitergegeben. Den Quellcode zu dieser Fassung
-gibt es unter der oben genannten Adresse (Tag `v0.4.1`).
+gibt es unter der oben genannten Adresse (Tag `v0.4.2`).
+
+## Neu in v0.4.2 (27.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.4.1…v0.4.2)
+
+- **Spiel-Abbilder** (`src/image.rs`, `src/image/probe.rs`, Port von ShadowMountPlus `sm_image.c`/`sm_mount_device.c`, nur LVD): `.exfat`, `.ffpkg`
+  (UFS), `.ffpfs` (PFS) und `.ffpfsc` (PFS-Behälter) direkt in einem Suchordner (oder eine Ebene tiefer) werden vorher mit den Lesern von PS5 Dump
+  Forge geprüft (`ps5-dump-forge-pfs`, `ps5upload-fpkg`; ihre Lizenzhinweise stehen in den `THIRD_PARTY_NOTICES` von Kraken Mount), dann über
+  `/dev/lvdctl` angehängt und **schreibgeschützt** auf `/mnt/krakenmount/[pfsc_]<Name>_<Prüfwert>` eingehängt. Das Spiel ist dann ein Ordner-Spiel:
+  `path` in `GET /api/state` ist der Spielordner in diesem Einhängepunkt, das neue Feld `image` nennt die Abbild-Datei. `/data/krakenmount/images/<Name>`
+  hält `<Einheit>\n<Abbild>`; eine spätere Kopie übernimmt eine noch lebende Einhängung. Freigegeben wird nur, was kein Spiel mehr nutzt, beim
+  eigenen Aushängen eines Laufwerks (`POST /api/eject`, vor dem Auswerfen) und vor dem Löschen. **Für diese App:** Die App gibt Kraken Mount eigene
+  Suchordner (`Kraken-Games`, bis 27.11.2026 `FPKG-Games`), in denen ShadowMountPlus nicht sucht; doppelt eingehängt wird ein Abbild also nur, wenn jemand die Suchordner ändert
+  (dann meldet `mounters.c` den Titel wie bisher). Die Einhängung eines Abbilds nennt keinen Pfad des Laufwerks (sie kommt von `/dev/lvdN`) und
+  bleibt auch nach dem Beenden von Kraken Mount stehen; das Auswerfen der App über ShadowMountPlus gibt sie nicht frei. Deshalb lehnt die App das
+  Auswerfen ab, solange Kraken Mount ein Abbild des Laufwerks eingehängt hat (`kraken_images_on` in `src/usbeject.c`, über die Einhängetabelle und
+  `/data/krakenmount/images`), und nennt den Weg über das Aushängen in Kraken Mount. Die Seite FPKGMount zeigt bei solchen Spielen „Abbild (exfat)“
+  usw. und nennt beim Löschen die Abbild-Datei (Kraken Mount löscht die Datei, nachdem es die Einhängung freigegeben hat).
+- **ampr-emu-ng je Ordner-Spiel abschaltbar** (`ampr_off`, auf seiner Seite; `POST /api/ng/<ID>` jetzt auch für ungepackte Ordner, solange
+  `inject_ampr` an ist). Von der App nicht benutzt.
+- **Suche läuft weiter, während ein Homebrew-Titel läuft** (eine Titel-ID, die nicht mit `CUSA`/`PPSA` beginnt): Ein Starter wie Playden bekommt neue
+  Spiele, ohne geschlossen zu werden. Laufende Spiele halten die Suche weiter an (`paused`).
+- **Schnittstelle von ShadowMountPlus:** `games/info` (ein Titel, für den Installer von RecompStore) und `games/fakelib` für einen Titel, der noch nicht
+  in der Liste steht. Sie liegt in der Fassung dieser App weiter auf 18097 (Änderung 3).
+- **Behoben:** Ein außerhalb von Kraken Mount deinstallierter Titel (anderes Programm, Löschen auf dem Startbildschirm) wird beim nächsten Durchlauf
+  wieder angemeldet, nicht erst nach einem Neustart.
+- Mitgeliefert weiter ampr-emu-ng 0.5.1.
 
 ## Neu in v0.4.1 (26.11.2026, laut Veröffentlichung, `DESIGN.md` und Vergleich v0.4.0…v0.4.1)
 
@@ -186,10 +211,12 @@ eine Portnummer, jede Änderung an zwei Stellen (das Programm trägt sich für s
    `66 C7 44 24 70 B1 46`. Die Schnittstelle bleibt, aber auf einem Port, den niemand fragt; ShadowMountPlus bleibt für diese App auf 127.0.0.1:10101
    erreichbar. Seine eigene Schnittstelle auf 8097 bleibt unverändert. Eine spätere Fassung, in der der Befehl anders aussieht, wird nicht geändert
    (das Bauprotokoll und die Meldung `kraken_patch` nennen dann 0 Stellen); `src/smp.c` erkennt Kraken Mount auf 10101 dann trotzdem.
+   Achtung beim Prüfen: Seine Protokollzeile „ShadowMount+ API on 127.0.0.1:10101“ gibt die Konstante aus (`log!(… {SMP_PORT})`), nicht den Port
+   des Bindens; sie nennt auch in der geänderten Fassung 10101. Ob ShadowMountPlus erreichbar bleibt, zeigt die App (kein `smp_port_kraken`).
 
-Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.4.1.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
+Gleiche Länge, sonst bleibt die ELF unverändert. Die Datei `kraken-mount_v0.4.2.elf` in diesem Ordner ist die unveränderte Veröffentlichung (SHA-256
 oben); die geänderte entsteht erst im Bau (`gen/kraken-mount-patched.elf`, nicht im Repository). Der Quelltext der Änderungen sind die drei Werte
-`SMP_PROCESS` (`src/main.rs`), `RELEASE_URL` (`src/update.rs`) und `SMP_PORT` (`src/web.rs`) im Quellprojekt, Tag `v0.4.1`.
+`SMP_PROCESS` (`src/main.rs`), `RELEASE_URL` (`src/update.rs`) und `SMP_PORT` (`src/web.rs`) im Quellprojekt, Tag `v0.4.2`.
 
 ## Hinweise des Autors
 

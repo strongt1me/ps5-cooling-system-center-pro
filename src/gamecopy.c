@@ -12,6 +12,8 @@
  *             title id then lives in two places, which ShadowMountPlus
  *             advises against ("keep only one source per TITLE_ID"); the
  *             page says so before anything is copied.
+ *   kraken    <drive>/Kraken-Games/<folder> (27.11.2026): the folder the app gives Kraken Mount (FPKGMount), which takes game folders and
+ *             images as well as .pkg files; ShadowMountPlus does not search it.
  *   backup    <drive>/PS5-Sicherung/Spiele/<folder>. ShadowMountPlus also
  *             scans the roots of USB and M.2 drives, but never deeper than
  *             two levels (scan_depth=2 at most, per its README), and this is
@@ -367,6 +369,7 @@ static int
 dest_path(const char *base, const char *mode, const char *folder,
           char *out, size_t out_len) {
   const char *sub = !strcmp(mode, "homebrew") ? "homebrew"
+                  : !strcmp(mode, "kraken")   ? PS5TM_KRAKEN_GAMES
                   : !strcmp(mode, "backup")   ? BACKUP_DIR : NULL;
   if(!sub) return -1;
   int n = snprintf(out, out_len, "%s/%s/%s", base, sub, folder);
@@ -1173,8 +1176,8 @@ ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len) {
        for THAT destination (enough_space inside the destination). The
        drive-wide enough_space is true when at least one of the two fits. */
     int fits_any = avail >= need;
-    static const char *const modes[] = { "homebrew", "backup" };
-    for(int m = 0; m < 2; m++) {
+    static const char *const modes[] = { "homebrew", "kraken", "backup" };
+    for(int m = 0; m < 3; m++) {
       char path[320];
       if(dest_path(base, modes[m], folder, path, sizeof(path)) != 0) continue;
       int      ds   = dest_state(path);
@@ -1234,7 +1237,7 @@ ps5tm_filejobs_busy_for_dump(char *err, size_t err_len) {
   return other_job_active(1, err, err_len);
 }
 
-/* dest_dir NULL: the destination of mode ("homebrew" or "backup") on the drive with this mount point; else the absolute folder the copy goes
+/* dest_dir NULL: the destination of mode ("homebrew", "kraken" or "backup") on the drive with this mount point; else the absolute folder the copy goes
    into (mode is then "backup"; the folder is the one the person chose for the original: origafter.c has checked it) */
 static int
 copy_start_impl(const char *title_id, const char *mount, const char *mode, const char *dest_dir, const char *expect_source,

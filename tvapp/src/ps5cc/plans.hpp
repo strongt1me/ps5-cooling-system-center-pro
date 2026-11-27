@@ -31,9 +31,17 @@ struct PlanDest
     bool path_too_long = false;
 };
 
-constexpr int kModes = 2; // homebrew, backup
-constexpr int kOps = 4;   // ffpfsc, ffpkg, exfat, fpkg
-constexpr const char *kModeKeys[kModes] = {"homebrew", "backup"};
+// The kinds of target, as the console names them: homebrew (ShadowMountPlus finds it), backup (kept
+// only) and, since 27.11.2026, kraken (<drive>/Kraken-Games: Kraken Mount finds it). The numbers stay
+// as they were (0 homebrew, 1 backup); the form shows them as A ShadowMountPlus, B Kraken Mount,
+// C backup (kModeOrder).
+constexpr int kModes = 3;
+constexpr int kOps = 4; // ffpfsc, ffpkg, exfat, fpkg
+constexpr int kModeHomebrew = 0;
+constexpr int kModeBackup = 1;
+constexpr int kModeKraken = 2;
+constexpr const char *kModeKeys[kModes] = {"homebrew", "backup", "kraken"};
+constexpr int kModeOrder[kModes] = {kModeHomebrew, kModeKraken, kModeBackup};
 constexpr const char *kOpKeys[kOps] = {"ffpfsc", "ffpkg", "exfat", "fpkg"};
 
 // The debug FPKG (written by Dump Forge, 14.11.2026) is one format with four compression levels;
@@ -415,8 +423,8 @@ std::string orig_dest_of(const OrigPlan &plan, const OrigChoice &choice);
 // path when it lies elsewhere.
 std::string orig_folder_text(const OrigPlan &plan, const OrigChoice &choice);
 // True when the result of this tool and choice lands in a folder ShadowMountPlus searches: a copy
-// or a conversion as "A · Spielbar" (the folder homebrew; the debug FPKG goes to FPKG-Games, which
-// it does not search), an unpack always.
+// or a conversion as "A · Spielbar mit ShadowMountPlus" (the folder homebrew; "B · Spielbar mit
+// Kraken Mount" goes to Kraken-Games, which it does not search), an unpack always.
 bool result_in_search_folder(Tool tool, const PlanChoice &choice);
 // The note for "Behalten" when original and result both lie in a searched folder; "" otherwise
 // (and for every other way).

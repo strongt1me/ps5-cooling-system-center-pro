@@ -31,7 +31,7 @@ static struct {
   int      running;
   char     mount[16];
   char     state[12];           /* "" never, running, done, failed */
-  char     message[240];
+  char     message[640];        /* the longest refusals (a program holding files, Kraken Mount's images) name a path: whole, or the translation finds no key */
   uint64_t at_ms;
 } g_job;
 
@@ -204,13 +204,55 @@ kraken_game_on(const char *mount) {
   int k = ps5tm_kraken_games(kg, PS5TM_KRAKEN_MAX), hit = 0;
   size_t ml = strlen(mount);
   for(int i = 0; i < k && !hit; i++) {
-    if(strncmp(kg[i].path, mount, ml) || kg[i].path[ml] != '/') continue;
+    const char *src = kg[i].image[0] ? kg[i].image : kg[i].path;      /* an image game (0.4.2): its image file is on the drive, its path in Kraken Mount's mount */
+    if(strncmp(src, mount, ml) || src[ml] != '/') continue;
     /* an id that the kernel way never judges (not PPSA/CUSA, not the app's tile) would count as "not to be known" for ever: skipped (review 18.11.) */
     if(!ps5tm_is_game_title_id(kg[i].title_id) && !ps5tm_is_own_tile(kg[i].title_id)) continue;
     hit = ps5tm_procmgr_title_running(kg[i].title_id) != 0;
   }
   free(kg);
   return hit;
+}
+
+/* Kraken Mount 0.4.2 mounts game images (.exfat, .ffpkg, .ffpfs, .ffpfsc) itself: attached to /dev/lvdN and mounted read-only on /mnt/krakenmount/<name>,
+   with /data/krakenmount/images/<name> = "<unit>\n<image path>" (its src/image.rs). Such a mount names no path of the drive (drive_in_use does not
+   see it), it outlives a stop of Kraken Mount (a later copy takes it over), and ShadowMountPlus's eject releases only its own images: the console would cut the
+   drive off under it. Kraken Mount's own unmount of the drive releases them first. How many of its image mounts are of an image on this drive, the first
+   one in `first`. A mount without a readable record is not counted: which drive it is on is not to be known (27.11.2026). */
+#define KR_IMAGE_BASE  "/mnt/krakenmount/"
+#ifndef KR_IMAGE_STATE                            /* the host test (test/usbeject) points it at a folder of its own */
+#define KR_IMAGE_STATE "/data/krakenmount/images/"
+#endif
+static int
+kraken_images_on(const char *mount, char *first, size_t n) {
+  int count = getfsstat(NULL, 0, MNT_NOWAIT);
+  if(count <= 0) return 0;
+  struct statfs *list = malloc(sizeof(*list) * (size_t)(count + 16));
+  if(!list) return 0;
+  count = getfsstat(list, (long)(sizeof(*list) * (size_t)(count + 16)), MNT_NOWAIT);
+  const size_t ml = strlen(mount), bl = strlen(KR_IMAGE_BASE);
+  int hits = 0;
+  for(int i = 0; i < count; i++) {
+    const char *on = list[i].f_mntonname, *name = on + bl;
+    if(strncmp(on, KR_IMAGE_BASE, bl) || !name[0] || strchr(name, '/') || !strcmp(name, ".") || !strcmp(name, "..")) continue;
+    char rec[sizeof(KR_IMAGE_STATE) + sizeof(list[0].f_mntonname)];
+    if(snprintf(rec, sizeof(rec), KR_IMAGE_STATE "%s", name) >= (int)sizeof(rec)) continue;
+    int fd = open(rec, O_RDONLY | O_NONBLOCK);
+    if(fd < 0) continue;
+    char buf[1100];
+    ssize_t got = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if(got <= 0) continue;
+    buf[got] = 0;
+    char *img = strchr(buf, '\n');                   /* line 1: the unit; line 2: the image file */
+    if(!img) continue;
+    img++;
+    img[strcspn(img, "\r\n")] = 0;
+    if(strncmp(img, mount, ml) || img[ml] != '/') continue;
+    if(!hits++) snprintf(first, n, "%s", img);
+  }
+  free(list);
+  return hits;
 }
 
 /* ShadowMountPlus's refusal codes (docs/api.md of 1.7beta10) in words. */
@@ -411,6 +453,18 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     PS5TM_INFO("usb_eject_held", "%s", msg);
     finish("failed", msg);
     return 409;
+  }
+  {
+    char img[160] = "";
+    const int kn = kraken_images_on(mount, img, sizeof(img));
+    if(kn > 0) {
+      snprintf(msg, n, "%s wurde nicht ausgeworfen: Kraken Mount hat %d Abbild(er) dieses Laufwerks eingehängt, zum Beispiel %s. Das Auswerfen über "
+               "ShadowMountPlus gibt sie nicht frei. Erst in Kraken Mount aushängen: Seite FPKGMount, „Seite von Kraken Mount“, beim Laufwerk „Aushängen“ "
+               "(läuft Kraken Mount nicht, vorher einschalten).", label, kn, img);
+      PS5TM_INFO("usb_eject_held", "%s", msg);
+      finish("failed", msg);
+      return 409;
+    }
   }
 
   /* The scanners of the app (the PS4Mount worker above all: every 10 s a walk down every drive, up to eight levels) look at no drive that is being

@@ -29,6 +29,7 @@
 #include <unistd.h>
 
 #include "krakenboot.h"
+#include "krakenmig.h"
 #include "lhttp.h"
 #include "ps5tm.h"
 #include "sha256.h"
@@ -36,7 +37,7 @@
 #include "upd_http.h"
 
 #define KR_PORT              8097
-#define KR_EMBEDDED_VERSION  "0.4.1"
+#define KR_EMBEDDED_VERSION  "0.4.2"
 #define KR_PROJECT           "https://github.com/quer3q/kraken-mount"
 #define KR_DIR               PS5TM_DATA_DIR "/kraken"
 #define PS5TM_KRAKEN_DATA    "/data/krakenmount"
@@ -448,7 +449,8 @@ store_games(const cJSON *k, uint64_t now) {
       break;
     }
     const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *nm = cJSON_GetObjectItem(g, "title_name"),
-                *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind"), *bp = cJSON_GetObjectItem(g, "backport");
+                *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind"), *bp = cJSON_GetObjectItem(g, "backport"),
+                *im = cJSON_GetObjectItem(g, "image");
     if(!cJSON_IsString(t) || !valid_tid(t->valuestring)) continue;
     ps5tm_kraken_game_t *e = &tmp[n++];
     memset(e, 0, sizeof(*e));
@@ -457,6 +459,7 @@ store_games(const cJSON *k, uint64_t now) {
     snprintf(e->path, sizeof(e->path), "%s", cJSON_IsString(p) ? p->valuestring : "");
     snprintf(e->kind, sizeof(e->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
     snprintf(e->backport, sizeof(e->backport), "%s", cJSON_IsString(bp) ? bp->valuestring : "");   /* null: none applied */
+    snprintf(e->image, sizeof(e->image), "%s", cJSON_IsString(im) ? im->valuestring : "");          /* null or absent (before 0.4.2): no image game */
   }
   /* where the caches lie: an absolute path without "..", else the last one stays */
   const cJSON *cache = k ? cJSON_GetObjectItem(k, "cache") : NULL, *cp = cache ? cJSON_GetObjectItem(cache, "path") : NULL;
@@ -561,13 +564,93 @@ keep_tile_away(void) {
 /* ------------------------------------------------------------------ search folders */
 
 /* Kraken Mount searches /data/homebrew, /data/etaHEN/games and the roots of the drives by itself, where ShadowMountPlus searches too:
-   every game folder there would be registered twice. The app therefore gives it folders of its own, FPKG-Games on the internal storage
+   every game folder there would be registered twice. The app therefore gives it folders of its own, Kraken-Games on the internal storage
    and on each drive (user, 13.11.2026: "getrennte Ordner, beide laufen"), and writes them into its config when there is none yet.
-   An existing config is never touched (the page of Kraken Mount on port 8097 changes it). A drive that is not there costs nothing. */
+   An existing config is not changed (the page of Kraken Mount on port 8097 changes it), with one exception: the app's own list under the
+   folder's old name FPKG-Games is moved to Kraken-Games, together with the folders (migrate_folders, 27.11.2026). A drive that is not
+   there costs nothing. */
 #define KR_CONFIG      PS5TM_KRAKEN_DATA "/config.toml"
-#define KR_FPKG_FOLDER "FPKG-Games"
+#define KR_FPKG_FOLDER PS5TM_KRAKEN_GAMES
 
 static int make_dir(const char *p);
+
+/* Writes `text` as Kraken Mount's config: into a file of its own and renamed, so that a full disk or a power cut never leaves half a config
+   behind (audit 15.11.2026). 0 when done. */
+static int
+write_config(const char *text) {
+  const char *tmp = KR_CONFIG ".tmp";
+  FILE *f = fopen(tmp, "w");
+  if(!f) { PS5TM_WARN("kraken_config", "%s ließ sich nicht anlegen: %s", KR_CONFIG, strerror(errno)); return -1; }
+  int ok = fputs(text, f) >= 0;
+  ok = (fflush(f) == 0) && ok;
+  if(ok) fsync(fileno(f));
+  ok = (fclose(f) == 0) && ok;
+  if(!ok || rename(tmp, KR_CONFIG) != 0) {
+    PS5TM_WARN("kraken_config", "%s ließ sich nicht schreiben: %s", KR_CONFIG, strerror(errno));
+    unlink(tmp);
+    return -1;
+  }
+  return 0;
+}
+
+/* One old folder <base>/FPKG-Games becomes <base>/Kraken-Games (krakenmig.h); a drive being ejected is not touched (at the next start). */
+static void
+migrate_folder(const char *base) {
+  char from[64];
+  snprintf(from, sizeof from, "%s/%s", base, PS5TM_KRAKEN_GAMES_OLD);
+  const int tok = ps5tm_drive_enter(from);
+  if(tok == 0) return;
+  ps5tm_krmig_folder_t r;
+  ps5tm_krmig_folder(base, &r);
+  ps5tm_drive_leave(tok);
+  switch(r.state) {
+  case PS5TM_KRMIG_RENAMED:
+    PS5TM_INFO("kraken_folder_renamed", "Ordner %s in %s umbenannt.", from, PS5TM_KRAKEN_GAMES);
+    break;
+  case PS5TM_KRMIG_MERGED:
+    PS5TM_INFO("kraken_folder_renamed", "Inhalt von %s nach %s/%s verschoben (%u Einträge), der leere alte Ordner ist weg.", from, base, PS5TM_KRAKEN_GAMES, r.moved);
+    break;
+  case PS5TM_KRMIG_PARTLY:
+    PS5TM_WARN("kraken_folder_rename", "%s: %u Einträge nach %s verschoben, %u blieben (der Name ist dort schon vergeben, zum Beispiel %s).",
+               from, r.moved, PS5TM_KRAKEN_GAMES, r.kept, r.first_kept[0] ? r.first_kept : "?");
+    break;
+  case PS5TM_KRMIG_FAILED:
+    PS5TM_WARN("kraken_folder_rename", "%s ließ sich nicht in %s umbenennen: %s", from, PS5TM_KRAKEN_GAMES, strerror(r.err));
+    break;
+  case PS5TM_KRMIG_NOT_DIR:
+    PS5TM_WARN("kraken_folder_rename", "%s bleibt: %s/%s ist kein Ordner.", from, base, PS5TM_KRAKEN_GAMES);
+    break;
+  default:
+    break;
+  }
+}
+
+/* FPKG-Games -> Kraken-Games (krakenmig.h; user, 27.11.2026: "Ordner umbenennen"), right before the app starts Kraken Mount: its own list in the
+   config under the old name is rewritten, and the folders on the internal storage and on the drives there now are renamed; with the new list (or no
+   config yet, which seed_config then writes) the folders are renamed too, so a drive that was not there last time follows at the next start. A list
+   changed by hand is left alone, and so are its folders. */
+static void
+migrate_folders(void) {
+  unsigned char *raw = NULL;
+  size_t len = 0;
+  int kind = PS5TM_KRMIG_CFG_NEW;                        /* no config: seed_config writes the new list */
+  if(read_file(KR_CONFIG, &raw, &len, 256 * 1024) == 0) {
+    char *out = NULL;
+    kind = ps5tm_krmig_config((const char *)raw, len, &out);
+    if(kind == PS5TM_KRMIG_CFG_OLD) {
+      if(out && write_config(out) == 0)
+        PS5TM_INFO("kraken_config", "Suchordner von Kraken Mount umgestellt: %s heißt jetzt %s.", PS5TM_KRAKEN_GAMES_OLD, PS5TM_KRAKEN_GAMES);
+      else
+        kind = PS5TM_KRMIG_CFG_OTHER;                   /* the list still names the old folders: they stay */
+    }
+    free(out);
+    free(raw);
+  }
+  if(kind == PS5TM_KRMIG_CFG_OTHER) return;
+  migrate_folder("/data");
+  for(int i = 0; i < 8; i++) { char b[16]; snprintf(b, sizeof b, "/mnt/usb%d", i); migrate_folder(b); }
+  for(int i = 0; i < 2; i++) { char b[16]; snprintf(b, sizeof b, "/mnt/ext%d", i); migrate_folder(b); }
+}
 
 static void
 seed_config(void) {
@@ -575,25 +658,10 @@ seed_config(void) {
   if(stat(KR_CONFIG, &st) == 0 && st.st_size > 0) return; /* an empty one is the rest of an interrupted write: written anew */
   make_dir(PS5TM_KRAKEN_DATA);
   make_dir("/data/" KR_FPKG_FOLDER);
-  char buf[900];
-  size_t o = (size_t)snprintf(buf, sizeof buf, "# search folders set by the app (page FPKGMount); ShadowMountPlus does not search them\nscanpath = [\"/data/" KR_FPKG_FOLDER "\"");
-  for(int i = 0; i < 8 && o < sizeof buf; i++) o += (size_t)snprintf(buf + o, sizeof buf - o, ", \"/mnt/usb%d/" KR_FPKG_FOLDER "\"", i);
-  for(int i = 0; i < 2 && o < sizeof buf; i++) o += (size_t)snprintf(buf + o, sizeof buf - o, ", \"/mnt/ext%d/" KR_FPKG_FOLDER "\"", i);
-  if(o < sizeof buf) o += (size_t)snprintf(buf + o, sizeof buf - o, "]\n");
-  if(o >= sizeof buf) return;
-  /* Written to a file of its own and renamed, so that a full disk or a power cut never leaves half a config behind (audit 15.11.2026). */
-  const char *tmp = KR_CONFIG ".tmp";
-  FILE *f = fopen(tmp, "w");
-  if(!f) { PS5TM_WARN("kraken_config", "%s ließ sich nicht anlegen: %s", KR_CONFIG, strerror(errno)); return; }
-  int ok = fputs(buf, f) >= 0;
-  ok = (fflush(f) == 0) && ok;
-  if(ok) fsync(fileno(f));
-  ok = (fclose(f) == 0) && ok;
-  if(!ok || rename(tmp, KR_CONFIG) != 0) {
-    PS5TM_WARN("kraken_config", "%s ließ sich nicht schreiben: %s", KR_CONFIG, strerror(errno));
-    unlink(tmp);
-    return;
-  }
+  char line[640], buf[900];
+  if(ps5tm_krmig_scanpath(KR_FPKG_FOLDER, line, sizeof line) != 0) return;
+  if(snprintf(buf, sizeof buf, "# search folders set by the app (page FPKGMount); ShadowMountPlus does not search them\n%s\n", line) >= (int)sizeof buf) return;
+  if(write_config(buf) != 0) return;
   PS5TM_INFO("kraken_config", "Suchordner für Kraken Mount angelegt: /data/%s und %s auf den Laufwerken.", KR_FPKG_FOLDER, KR_FPKG_FOLDER);
 }
 
@@ -623,6 +691,7 @@ start_kraken(char *msg, size_t n, int by_person) {
   pthread_mutex_unlock(&g_lock);
   if(again) { snprintf(msg, n, "Kraken Mount wird gerade gestartet. Das dauert einige Sekunden."); return 409; }
   keep_tile_away();
+  migrate_folders();                                     /* FPKG-Games -> Kraken-Games, while it does not run (27.11.2026) */
   seed_config();
   unsigned char *elf = NULL;
   size_t elf_len = 0;
