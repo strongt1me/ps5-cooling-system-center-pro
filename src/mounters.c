@@ -1,13 +1,13 @@
 /* PS5 Cooling & System Center - Pro: titles two mounters want at once (14.11.2026).
  *
- * Kraken Mount (FPKGMount), ShadowMountPlus and PS4Mount each register the games they find with the console and mount them: all of them
+ * Kraken Mount (KrakenMount), ShadowMountPlus and PS4Mount each register the games they find with the console and mount them: all of them
  * write /user/app/<title id> and mount /system_ex/app/<title id>. A title that lies with two of them is fought over. Seen on the test
  * console with Alex Kidd: a .pkg for Kraken Mount and an image for ShadowMountPlus. Kraken Mount took ShadowMountPlus's mount away
  * ("not ours, or stale; unmounting it"), got "Device busy" while the title was running, and its tile differed from the other one (Kraken
  * Mount registers the param.json as it is, ShadowMountPlus rewrites it).
  *
  * The app cannot settle that for the person (it would have to move or delete their files), so it says it: the game list and the page of
- * FPKGMount name every title that Kraken Mount lists and that another mounter manages too. Where the title lies at the other mounter is
+ * KrakenMount name every title that Kraken Mount lists and that another mounter manages too. Where the title lies at the other mounter is
  * taken from that one's own list: for ShadowMountPlus a folder or an image (an installed package is something else), for PS4Mount the
  * mount table. Nothing here changes anything. */
 #include "ps5tm.h"

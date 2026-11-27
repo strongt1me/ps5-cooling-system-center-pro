@@ -1,4 +1,4 @@
-// ps5cc - The FPKGMount page (Spiele → FPKGMount): the games of Kraken Mount.
+// ps5cc - The KrakenMount page (Spiele → KrakenMount): the games of Kraken Mount.
 // Copyright (C) 2026 strongt1me
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -248,7 +248,7 @@ class KrakenPage final : public Page
             title_w -= 116.0f;
         }
         const std::string title =
-            g != nullptr ? (g->name.empty() ? g->title_id : g->name) : std::string("FPKGMount");
+            g != nullptr ? (g->name.empty() ? g->title_id : g->name) : std::string("KrakenMount");
         float y = card.y + 66.0f;
         int lines = 0;
         for (const std::string &line : fonts.display.font->wrap(title, 32.0f, title_w))

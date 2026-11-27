@@ -100,7 +100,7 @@ class HttpSource final : public Source
     // Plans and starts of the game tools: a plan measures a whole game and may take a minute, so it
     // has a thread of its own and the temperatures keep coming meanwhile.
     void run_tools();
-    // The download of FPKGMount / Dump Forge (minutes): a thread of its own, so that plans, checks
+    // The download of KrakenMount / Dump Forge (minutes): a thread of its own, so that plans, checks
     // and starts of the tool thread do not wait behind it (audit 15.11.2026).
     void run_engine_fetch(const std::string &id, const std::string &body);
 
@@ -168,7 +168,7 @@ class HttpSource final : public Source
     {
         bool start = false; // false: the plan
         int kind = 0; // 0: a plan or a start; 1: the check before a conversion; 2: the queue of
-                      // conversions; 3: FPKGMount or Dump Forge (id: "kraken" or "dumpforge")
+                      // conversions; 3: KrakenMount or Dump Forge (id: "kraken" or "dumpforge")
         Tool tool = Tool::copy;
         std::string id;
         std::string body;
@@ -178,7 +178,7 @@ class HttpSource final : public Source
     void push(Request request);
     void handle_tool(const ToolRequest &request);
     void
-    handle_engine(const ToolRequest &request); // FPKGMount / Dump Forge (a tool request of kind 3)
+    handle_engine(const ToolRequest &request); // KrakenMount / Dump Forge (a tool request of kind 3)
     void handle_engine_now(const ToolRequest &request);
     void engine_post(const std::string &which, const std::string &json);
     void notice(Notice::Kind kind, std::string title, std::string body = {});
@@ -255,9 +255,9 @@ class HttpSource final : public Source
     std::atomic<bool> eject_pending_{false};
     std::atomic<unsigned> queue_seq_{0}; // counts actions on the convert queue (twice each): a list fetched across one is older
     std::string store_force_id_; // worker thread only: the store entry whose next "install" replaces a foreign file
-    std::atomic<bool> engine_fetching_{false}; // a download of FPKGMount / Dump Forge is on its way
+    std::atomic<bool> engine_fetching_{false}; // a download of KrakenMount / Dump Forge is on its way
     std::atomic<bool> ng_fetching_{false}; // the check for a new AMPR EMU NG version is on its way
-    std::mutex kraken_poll_mutex_; // one question about FPKGMount at a time: the newer answer wins
+    std::mutex kraken_poll_mutex_; // one question about KrakenMount at a time: the newer answer wins
     std::atomic<bool> jobs_wanted_{false}; // a tool started: ask for the jobs at once
     bool orig_status_missing_ = false;     // an older app has no /library/orig/status (worker only)
     bool leaving_for_delete_ = false;      // the app ends itself for a delete (worker thread only)

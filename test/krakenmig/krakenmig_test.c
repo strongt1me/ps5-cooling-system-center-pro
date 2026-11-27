@@ -78,10 +78,10 @@ main(void) {
   /* 2. the config: the app's list under the old name is replaced, everything else stays as it was (line ends too) */
   {
     char text[2048], *out = NULL;
-    snprintf(text, sizeof text, "# search folders set by the app (page FPKGMount); ShadowMountPlus does not search them\n%s\nlog = true\n", line_old);
+    snprintf(text, sizeof text, "# search folders set by the app (page KrakenMount); ShadowMountPlus does not search them\n%s\nlog = true\n", line_old);
     CHECK(ps5tm_krmig_config(text, strlen(text), &out) == PS5TM_KRMIG_CFG_OLD);
     char want[2048];
-    snprintf(want, sizeof want, "# search folders set by the app (page FPKGMount); ShadowMountPlus does not search them\n%s\nlog = true\n", line_new);
+    snprintf(want, sizeof want, "# search folders set by the app (page KrakenMount); ShadowMountPlus does not search them\n%s\nlog = true\n", line_new);
     CHECK(out && !strcmp(out, want));
     free(out);
 

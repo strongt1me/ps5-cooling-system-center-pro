@@ -1,5 +1,5 @@
 /* PS5 Cooling & System Center - Pro: the folder the app gives Kraken Mount is called Kraken-Games since 27.11.2026, before that FPKG-Games (krakenmig.h).
- * Wish of the user: Kraken Mount (page FPKGMount) takes game folders and images as well as .pkg files, and the old name made it look as if only FPKGs
+ * Wish of the user: Kraken Mount (page KrakenMount) takes game folders and images as well as .pkg files, and the old name made it look as if only FPKGs
  * belonged there; on a console set up before, the folders are renamed ("Ordner umbenennen"). kraken.c runs this right before it starts Kraken Mount
  * (it does not run then, and so no game of it runs: it refuses to stop while one does) and writes the log; the decisions and the renaming are here,
  * with the folders as parameters, so a host test can try them on folders of its own (test/krakenmig).

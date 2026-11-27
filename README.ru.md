@@ -180,7 +180,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 - Конвертация в образы exFAT, ffpkg и ffpfsc без ПК; всё перечитывается и проверяется после записи, с файлом `.sha256`. Кроме того, отладочный FPKG (`.pkg`) для Kraken Mount, который записывает Dump Forge (quer3q; встроен в приложение).
 - LZ4-ассет-паки, индекс AMPR, APR-EMU (ampr_emu и AMPR EMU NG), заглушка PlayGo и модули DLC для каждой игры; проверка, распаковка и исправление образов.
 - PS4 PKG с USB: fake PKG PS4 PKG с USB-накопителя в библиотеку без установки (PS4Mount от gasb07).
-- FPKGMount: запуск игр (F)PKG и папок игр без установки через Kraken Mount от quer3q (приложение содержит его и запускает).
+- KrakenMount: запуск игр (F)PKG и папок игр без установки через Kraken Mount от quer3q (приложение содержит его и запускает).
 - Disc: показывает, какой диск лежит в дисководе (PS2/PS3/PS4/PS5, ID заголовка), и создаёт образ DVD PS2 и дисков PS3 с CRC-32, MD5 и SHA-1, при желании с проверкой по Redump (по мотивам ps-disc-detect).
 - Время игры с температурами, резервное копирование и восстановление сохранений, поиск, разделение и установка пакетов, история всех операций.
 
@@ -236,7 +236,7 @@ ELF собран с PS5 payload SDK **v0.50**, стартовый код кот�
 | Страница | Содержание |
 | --- | --- |
 | **Охлаждение** | Состояние, история, датчики, целевая температура, режим, профили для игр |
-| **Игры** | Библиотека, время игры, сохранения, пакеты, PS4 PKG с USB, FPKGMount, резервные копии, история |
+| **Игры** | Библиотека, время игры, сохранения, пакеты, PS4 PKG с USB, KrakenMount, резервные копии, история |
 | **Файловый менеджер** | Папки консоли и накопителей |
 | **Пейлоады** | Запущенные, сохранённые и лежащие на USB пейлоады, профили, загрузка пейлоадов |
 | **Система** | Консоль, хранилище, сеть, диагностика |
@@ -321,7 +321,7 @@ make
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) и участники [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): образы exFAT, PFS и PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): образец для записи UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-ассет-паки, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) и [dlc_emu](https://github.com/drakmor/dlc_emu) (встроенные сборки, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.5.1 и 0.5.0, более новые приложение загружает по запросу). А также [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): программа за вкладкой «FPKGMount» (встроена без изменений как ELF).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.5.1 и 0.5.0, более новые приложение загружает по запросу). А также [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): программа за вкладкой «KrakenMount» (встроена без изменений как ELF).
 - **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.

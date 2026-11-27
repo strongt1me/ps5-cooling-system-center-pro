@@ -5323,7 +5323,7 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     send_cjson(fd, 200, o);
     return;
   }
-  /* FPKGMount (kraken.c): Kraken Mount started, asked and stopped; GET the state with its game list, POST {action: start|stop|rescan|rebuild|
+  /* KrakenMount (kraken.c): Kraken Mount started, asked and stopped; GET the state with its game list, POST {action: start|stop|rescan|rebuild|
      rebuild_all|delete|fetch, id?, path?}. */
   if(!strcmp(req->path, "/api/v1/kraken")) {
     if(is_get) { send_cjson(fd, 200, ps5tm_kraken_state()); return; }

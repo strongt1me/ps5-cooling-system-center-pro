@@ -1,6 +1,6 @@
 /* PS5 Cooling & System Center - Pro: a game that Kraken Mount and ShadowMountPlus both manage is unmounted at ShadowMountPlus after it ended (15.11.2026).
  *
- * Kraken Mount (FPKGMount) and ShadowMountPlus register the same title id and mount the same /system_ex/app/<id> (mounters.c names such titles).
+ * Kraken Mount (KrakenMount) and ShadowMountPlus register the same title id and mount the same /system_ex/app/<id> (mounters.c names such titles).
  * Wish of the user: when a game that lies at both is started and later ended, it should be unmounted (the "Aushängen" button of its card). Only
  * this case is touched: a game that lies at one mounter alone, and every tile, stay as they are. The unmount is ShadowMountPlus's own
  * (POST /games/unmount, ps5tm_smpremount): the app never unmounts a thing itself. Kraken Mount keeps what it has, it never gets a command.

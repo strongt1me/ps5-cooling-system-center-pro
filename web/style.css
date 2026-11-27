@@ -2505,7 +2505,7 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
 :root[data-theme="hell"] .cv-step.done { border-color: rgba(30,123,89,.5); background: rgba(30,123,89,.08); }
 :root[data-theme="hell"] .cv-step.stopped { border-color: rgba(142,11,11,.45); background: rgba(142,11,11,.07); }
 
-/* Hell-Design: die Fehler- und Warnchips der Listen (PS4Mount, FPKGMount, AMPR-Prüfung) waren hell auf hell (Kontrast 1,3 bis 2,1 : 1).
+/* Hell-Design: die Fehler- und Warnchips der Listen (PS4Mount, KrakenMount, AMPR-Prüfung) waren hell auf hell (Kontrast 1,3 bis 2,1 : 1).
    Von Hand, nicht aus tools/gen_theme_hell.py: der Generator trifft .warn (zu hell) nie und würde Handgesetztes überschreiben. */
 :root[data-theme="hell"] .p4m-state.bad,
 :root[data-theme="hell"] .apr-state.bad { color: #8e0b0b; }

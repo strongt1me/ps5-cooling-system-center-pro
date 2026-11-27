@@ -194,7 +194,7 @@ drive_in_use(const char *mount, char *why, size_t n) {
   return 0;
 }
 
-/* A game of Kraken Mount (FPKGMount) that runs, also paused, from this drive (audit F-254). drive_in_use sees the nullfs of the .pkg's folder in the game's
+/* A game of Kraken Mount (KrakenMount) that runs, also paused, from this drive (audit F-254). drive_in_use sees the nullfs of the .pkg's folder in the game's
    sandbox, but not a .pkg that lies in the drive's root (that mount names the drive itself, as the nullfs of the whole drive does in every sandbox). Asked of
    the kernel (the eboot.bin of that title), not of the game state; -1, not to be known: held back, as with PS4Mount. */
 static int
@@ -459,7 +459,7 @@ ps5tm_usbeject_start(const char *mount, char *msg, size_t n) {
     const int kn = kraken_images_on(mount, img, sizeof(img));
     if(kn > 0) {
       snprintf(msg, n, "%s wurde nicht ausgeworfen: Kraken Mount hat %d Abbild(er) dieses Laufwerks eingehängt, zum Beispiel %s. Das Auswerfen über "
-               "ShadowMountPlus gibt sie nicht frei. Erst in Kraken Mount aushängen: Seite FPKGMount, „Seite von Kraken Mount“, beim Laufwerk „Aushängen“ "
+               "ShadowMountPlus gibt sie nicht frei. Erst in Kraken Mount aushängen: Seite KrakenMount, „Seite von Kraken Mount“, beim Laufwerk „Aushängen“ "
                "(läuft Kraken Mount nicht, vorher einschalten).", label, kn, img);
       PS5TM_INFO("usb_eject_held", "%s", msg);
       finish("failed", msg);

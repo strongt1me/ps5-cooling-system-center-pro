@@ -427,7 +427,7 @@ void HttpSource::ps4mount_post(const std::string &route, const std::string &json
 {
     push({Request::Kind::ps4mount, 0, route, json});
 }
-// FPKGMount and Dump Forge go through the tool thread: loading a newer release takes minutes, and
+// KrakenMount and Dump Forge go through the tool thread: loading a newer release takes minutes, and
 // the one thread that asks for the temperatures, the jobs and the cancel of everything else must
 // not wait for it (audit 15.11.2026).
 void HttpSource::engine_post(const std::string &which, const std::string &json)
@@ -1804,7 +1804,7 @@ void HttpSource::run()
         {
             storage_open = false;
         }
-        // FPKGMount: every 5 s while it is open, as the web page; at once when it opens.
+        // KrakenMount: every 5 s while it is open, as the web page; at once when it opens.
         if (page == Watch::kraken)
         {
             if (!kraken_open || now - last_kraken >= 5000000)
@@ -3564,7 +3564,7 @@ void HttpSource::poll_library()
         // installed (29.10.2026).
         if (g.format == "pkg" && flag(item, "ps4mount"))
             g.format = "ps4mount";
-        // A game Kraken Mount (FPKGMount) mounted, the same way (17.11.2026): shown as what it is.
+        // A game Kraken Mount (KrakenMount) mounted, the same way (17.11.2026): shown as what it is.
         else if ((g.format.empty() || g.format == "pkg") && flag(item, "fpkgmount"))
             g.format = "fpkgmount";
         g.path = str(item, "path");
@@ -4854,7 +4854,7 @@ void HttpSource::poll_ps4mount()
     ++data_.serial;
 }
 
-// One request of FPKGMount ("kraken") or Dump Forge ("dumpforge"). The downloads take minutes and
+// One request of KrakenMount ("kraken") or Dump Forge ("dumpforge"). The downloads take minutes and
 // go to a thread of their own, so that the plans and checks on the tool thread do not wait behind
 // them; everything else answers within seconds and stays on the tool thread.
 void HttpSource::handle_engine(const ToolRequest &request)
@@ -4869,7 +4869,7 @@ void HttpSource::handle_engine(const ToolRequest &request)
     bool expected = false;
     if (!engine_fetching_.compare_exchange_strong(expected, true))
     {
-        notice(Notice::Kind::error, request.id == "kraken" ? "FPKGMount" : "Dump Forge",
+        notice(Notice::Kind::error, request.id == "kraken" ? "KrakenMount" : "Dump Forge",
                "Es wird schon etwas geladen.");
         return;
     }
@@ -4914,13 +4914,13 @@ void HttpSource::handle_engine_now(const ToolRequest &request)
         if (net != Net::ok || status >= 300)
         {
             result = message_of(body, "Die App hat nicht geantwortet.");
-            notice(Notice::Kind::error, "FPKGMount", result);
+            notice(Notice::Kind::error, "KrakenMount", result);
         }
         else
         {
             result = message_of(body, "");
             if (!result.empty())
-                notice(Notice::Kind::success, "FPKGMount", result);
+                notice(Notice::Kind::success, "KrakenMount", result);
         }
         if (fetch)
         {

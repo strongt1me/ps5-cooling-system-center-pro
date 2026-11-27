@@ -10,7 +10,7 @@
 ## Verwendung
 
 Kraken Mount ist ein eigenes Programm (Rust), das Spiele aus Debug-FPKG-`.pkg`-Dateien und Spielordnern (roh, zstd oder LZ4) ohne
-Installation auf dem Startbildschirm anmeldet und sie mit ampr-emu-ng startet. Der Reiter „FPKGMount“ der App (Spiele) startet es,
+Installation auf dem Startbildschirm anmeldet und sie mit ampr-emu-ng startet. Der Reiter „KrakenMount“ der App (Spiele) startet es,
 zeigt seine Spiele und bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`).
 
 Die fertige ELF wird als zlib-Blob eingebettet (`tools/gen_blob.py`, `gen/kraken_blob.c`) und bei „Kraken Mount starten“ an den
@@ -41,7 +41,7 @@ gibt es unter der oben genannten Adresse (Tag `v0.4.2`).
   (dann meldet `mounters.c` den Titel wie bisher). Die Einhängung eines Abbilds nennt keinen Pfad des Laufwerks (sie kommt von `/dev/lvdN`) und
   bleibt auch nach dem Beenden von Kraken Mount stehen; das Auswerfen der App über ShadowMountPlus gibt sie nicht frei. Deshalb lehnt die App das
   Auswerfen ab, solange Kraken Mount ein Abbild des Laufwerks eingehängt hat (`kraken_images_on` in `src/usbeject.c`, über die Einhängetabelle und
-  `/data/krakenmount/images`), und nennt den Weg über das Aushängen in Kraken Mount. Die Seite FPKGMount zeigt bei solchen Spielen „Abbild (exfat)“
+  `/data/krakenmount/images`), und nennt den Weg über das Aushängen in Kraken Mount. Die Seite KrakenMount zeigt bei solchen Spielen „Abbild (exfat)“
   usw. und nennt beim Löschen die Abbild-Datei (Kraken Mount löscht die Datei, nachdem es die Einhängung freigegeben hat).
 - **ampr-emu-ng je Ordner-Spiel abschaltbar** (`ampr_off`, auf seiner Seite; `POST /api/ng/<ID>` jetzt auch für ungepackte Ordner, solange
   `inject_ampr` an ist). Von der App nicht benutzt.
@@ -76,7 +76,7 @@ gibt es unter der oben genannten Adresse (Tag `v0.4.2`).
   auch in seiner Liste (`GET /api/state`, `kind: "installed"`, neue Felder `installed`, `installed_version`, `retail` je Spiel). Kraken Mount hängt sie
   nie ein, nimmt sie nie vom Startbildschirm und löscht sie nie (`/api/delete`, `/api/hide` lehnen ab: „an installed game: uninstall it from the
   console's menu“). Eine installierte Kopie gewinnt gegen dasselbe Spiel als FPKG oder Ordner (#121). **Die App lässt diese Einträge aus** ihrem Reiter
-  FPKGMount, aus der Warnliste für doppelt angemeldete Titel und aus der Prüfung vor dem Löschen heraus (`kr_drop_installed` in `src/kraken.c`); die
+  KrakenMount, aus der Warnliste für doppelt angemeldete Titel und aus der Prüfung vor dem Löschen heraus (`kr_drop_installed` in `src/kraken.c`); die
   Seite Spiele der App zeigt sie ohnehin.
 - **Backports für installierte Spiele:** Ein Backport in `backports/<TITLE_ID>*` (in den Suchordnern, sonst in `/data/homebrew` wie bei ShadowMountPlus)
   gilt jetzt auch für ein installiertes Spiel: Seine Bibliotheken kommen in den Fakelib-Überbau, seine übrigen Dateien werden bei jedem Start über
@@ -137,7 +137,7 @@ gibt es unter der oben genannten Adresse (Tag `v0.4.2`).
 - **PlayGo-Stub je Spiel abschaltbar:** Einstellung `playgo_off` (Liste von Titelnummern) und neu in der Schnittstelle `POST /api/playgo/<TID>` (Rumpf genau `on` oder
   `off`; 204, 404 für eine ungültige oder unbekannte Titelnummer, 400 sonst); die Spiele in `GET /api/state` tragen neu `playgo` (die `eboot.bin` lädt PlayGo, `null`
   wenn unbekannt oder `add_emulators` aus) und `playgo_off`. Resident Evil Village und einige andere bleiben mit dem Stub auf einem schwarzen Bildschirm (#84, #85, #87).
-  **Die App zeigt den Schalter** je Spiel im Reiter „FPKGMount“ (Browser: Knopf „PlayGo-Stub ausschalten/einschalten“; Vollbild-App: Eintrag im Spielmenü), nur bei
+  **Die App zeigt den Schalter** je Spiel im Reiter „KrakenMount“ (Browser: Knopf „PlayGo-Stub ausschalten/einschalten“; Vollbild-App: Eintrag im Spielmenü), nur bei
   Spielen, die PlayGo laden oder bei denen er schon aus ist, und nur wenn die Antwort `playgo_off` enthält (ältere Fassungen kennen die Route nicht); die Aktion
   heißt `playgo` in `POST /api/v1/kraken` (`src/kraken.c`).
 - **Scan:** Spiele in einem Ordner direkt in einem Suchordner werden jetzt auch gefunden (#83; ein Titel, der direkt in einem Suchordner liegt, wird nie von einer Kopie
@@ -192,7 +192,7 @@ elfldr läuft (`/system_ex` wird bei EROFS einmal schreibbar eingehängt; Dank a
 
 **Wichtig für diese App:** Kraken Mount wartet seit v0.2.0 nach dem Start (`wait_ready`, `src/main.rs`), bis kstuff geladen ist **und kein Prozess
 `shadowmountplus.elf` mehr läuft**, bevor es irgendein Spiel anmeldet. Der Zustand steht als Feld `waiting` (`"kstuff"`, `"shadowmount"` oder
-null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount nichts an; die Seite FPKGMount zeigt es an.
+null) in `GET /api/state`. Läuft ShadowMountPlus dauerhaft, meldet Kraken Mount nichts an; die Seite KrakenMount zeigt es an.
 
 **Änderung durch diese App (modifizierte Kopie, GPL-3.0):** Die App betreibt Kraken Mount absichtlich neben ShadowMountPlus (getrennte Suchordner, wie
 mit v0.0.1-beta). Deshalb ändert sie in der eingebetteten ELF beim Bau (`tools/patch_kraken.py`, `Makefile`) und in einer von GitHub geladenen

@@ -59,7 +59,7 @@ class Covers
     void prefer(const std::string &id);
     // Every page asks for the cover of its focused row in update(), also the pages that are not
     // shown; the screen lets only the one in front be heard (the cover of the game in the library
-    // list was loaded last when the FPKGMount page had been opened once).
+    // list was loaded last when the KrakenMount page had been opened once).
     void listen(bool on);
 
     // GL side, once a frame. create(w, h, rgba) returns a texture name.

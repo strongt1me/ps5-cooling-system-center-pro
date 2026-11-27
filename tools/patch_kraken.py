@@ -5,7 +5,7 @@ off ShadowMountPlus's API port (PS5 Cooling & System Center - Pro).
 usage: patch_kraken.py <kraken-mount.elf> <out.elf>
 
 1. Since v0.2.0 Kraken Mount waits at start (src/main.rs wait_ready) until kstuff is loaded AND no process named "shadowmountplus.elf" runs,
-   and mounts nothing before. This app runs next to ShadowMountPlus on purpose (separate search folders, see FPKGMount in the manual), as it
+   and mounts nothing before. This app runs next to ShadowMountPlus on purpose (separate search folders, see KrakenMount in the manual), as it
    did with v0.0.1-beta. The name of the process is a string constant of 19 bytes in the program; its last byte is changed
    ("shadowmountplus.elf" -> "shadowmountplus.elX"), so that no process has that name and the wait for ShadowMountPlus ends at once. The
    wait for kstuff stays.

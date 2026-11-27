@@ -311,7 +311,7 @@ const char *format_label(const std::string &format)
         return "PS4Mount (USB)";
     // played from the .pkg by Kraken Mount (http_source: "fpkgmount")
     if (format == "fpkgmount")
-        return "FPKGMount";
+        return "KrakenMount";
     return format.c_str();
 }
 
@@ -937,7 +937,7 @@ class Ps5cc final : public app::Concept
             {0.9f, 0, Direction::none, "details"},
             {0.2f, action_bit(Action::back)},
             // the firmware a game asks for is newer than the console's (23.11.2026): Neon Harbor
-            // (FPKGMount, SDK 12.00) starts, Double Dragon Revive (SDK 13.00) does not; back to
+            // (KrakenMount, SDK 12.00) starts, Double Dragon Revive (SDK 13.00) does not; back to
             // ASTRO BOT after
             {0.15f, 0, Direction::down},
             {0.15f, 0, Direction::down},
@@ -1393,7 +1393,7 @@ class Ps5cc final : public app::Concept
             {0.3f, action_bit(Action::confirm)},
             {0.3f, 0, Direction::down},
             {0.9f, 0, Direction::none, "ps4-uebersprungen"},
-            // Spiele → FPKGMount: the list of Kraken Mount, □ on a game, △.
+            // Spiele → KrakenMount: the list of Kraken Mount, □ on a game, △.
             {0.5f, action_bit(Action::jump_next)},
             {1.0f, 0, Direction::none, "fpkg"},
             // the first game (Lantern Pass) is also at ShadowMountPlus: "KONFLIKT"; the second is a
@@ -1841,7 +1841,7 @@ class Ps5cc final : public app::Concept
         const View shown = game_views_.empty() ? kGames : view_of_game_tab();
         game_views_ = {kGames, kPlaytime, kSaves, kPackages, kPs4, kKraken};
         std::vector<ui::TabItem> tabs = {{"Bibliothek"}, {"Spielzeit"},       {"Spielstände"},
-                                         {"Pakete"},     {"PS4 PKG von USB"}, {"FPKGMount"}};
+                                         {"Pakete"},     {"PS4 PKG von USB"}, {"KrakenMount"}};
         if (disc)
         {
             game_views_.push_back(kDisc);
@@ -2148,7 +2148,7 @@ class Ps5cc final : public app::Concept
         items.push_back({"Titel-ID", g->id});
         // What needs a look comes first, the list shows six rows: a mounted game that does not run
         // keeps other launches from starting. (Titles that two mounters want are shown on the page
-        // FPKGMount only, not in the library.)
+        // KrakenMount only, not in the library.)
         if (holds_launch(*g))
             items.push_back({"Eingehängt", "wird gleich ausgehängt"});
         items.push_back({"Version", g->version});

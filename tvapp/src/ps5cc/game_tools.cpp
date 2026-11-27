@@ -1893,7 +1893,7 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
             // one paragraph for what it is (the two that said the same ran over the window's edge
             // with the Dump Forge hint above)
             para("Dump Forge von quer3q schreibt das Debug-Paket (.pkg) als eigenes Programm; die "
-                 "App zeigt seine Schritte. Kraken Mount (Seite FPKGMount) hängt es ein. Eine "
+                 "App zeigt seine Schritte. Kraken Mount (Seite KrakenMount) hängt es ein. Eine "
                  "Prüfsummen-Datei entsteht nicht.",
                  kMuted, 4);
             para(level_text(choice_.level), kMuted, 3);

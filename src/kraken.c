@@ -1,4 +1,4 @@
-/* FPKGMount: Kraken Mount (quer3q, GPL-3.0, https://github.com/quer3q/kraken-mount) as a game mounter next to PS4Mount (13.11.2026, wish of
+/* KrakenMount: Kraken Mount (quer3q, GPL-3.0, https://github.com/quer3q/kraken-mount) as a game mounter next to PS4Mount (13.11.2026, wish of
  * the user: "(F)PKG games mounted like PS4Mount, but with the kraken payload").
  *
  * Kraken Mount is a program of its own (Rust, with a reader for debug FPKGs and its Kraken block decoder), so it is not ported: the
@@ -169,7 +169,7 @@ pending_check(void) {
   } else {
     kr_set_on(0);
     if(!kr_is_on())
-      PS5TM_WARN("kraken_start_lost", "Die Konsole ging aus, kurz nachdem die App Kraken Mount %s mit sich gestartet hatte: Die App startet es nicht mehr von selbst (Seite FPKGMount, „Einschalten“ schaltet es wieder ein).", ver);
+      PS5TM_WARN("kraken_start_lost", "Die Konsole ging aus, kurz nachdem die App Kraken Mount %s mit sich gestartet hatte: Die App startet es nicht mehr von selbst (Seite KrakenMount, „Einschalten“ schaltet es wieder ein).", ver);
   }
 }
 
@@ -417,7 +417,7 @@ static pthread_cond_t      g_games_cv = PTHREAD_COND_INITIALIZER;
 
 /* Kraken Mount 0.4.0 lists the games installed on the console too (kind "installed", /user/app and the M.2 drive). It never mounts, rebuilds
    or deletes them (it refuses with "an installed game: uninstall it from the console's menu"); the app's page Spiele shows them already. They
-   are taken out of its answer here, so the page FPKGMount, the duplicate warning (mounters.c) and the delete check see Kraken Mount's own
+   are taken out of its answer here, so the page KrakenMount, the duplicate warning (mounters.c) and the delete check see Kraken Mount's own
    sources only. The number taken out, for the page. */
 static int
 kr_drop_installed(cJSON *k) {
@@ -502,7 +502,7 @@ ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max) {
     kr_drop_installed(k);
     if(st == 200 || st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) pending_clear();      /* it is there: the start with the app went through */
     if(st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) {
-      /* It listens and is busy (a scan, a rebuild): what was known stays - the mark "FPKGMount" and the warning for titles two mounters want
+      /* It listens and is busy (a scan, a rebuild): what was known stays - the mark "KrakenMount" and the warning for titles two mounters want
          must not flicker away for seconds (audit 17.11.2026). The next ask waits for the usual time. */
       pthread_mutex_lock(&g_lock);
       g_games_ms = ps5tm_mono_ms();
@@ -547,7 +547,7 @@ ps5tm_kraken_icon(const char *id, unsigned char **png, size_t *len) {
 
 /* ------------------------------------------------------------------ no tile of its own */
 
-/* Kraken Mount puts a home-screen tile of its own (KRKN00001, for its web page) at every start. Here the page FPKGMount is the
+/* Kraken Mount puts a home-screen tile of its own (KRKN00001, for its web page) at every start. Here the page KrakenMount is the
    way in, as the page "PS4 PKG von USB" is for PS4Mount, so there is to be no tile (user, 13.11.2026). The program leaves the title's
    folder alone when /user/app/KRKN00001 exists and its own marker (/data/krakenmount/tile.ok) does not (register.rs ensure_tile),
    so before every start: a tile it made earlier goes (the console's own uninstall, then the marker), and a plain empty file takes the
@@ -660,7 +660,7 @@ seed_config(void) {
   make_dir("/data/" KR_FPKG_FOLDER);
   char line[640], buf[900];
   if(ps5tm_krmig_scanpath(KR_FPKG_FOLDER, line, sizeof line) != 0) return;
-  if(snprintf(buf, sizeof buf, "# search folders set by the app (page FPKGMount); ShadowMountPlus does not search them\n%s\n", line) >= (int)sizeof buf) return;
+  if(snprintf(buf, sizeof buf, "# search folders set by the app (page KrakenMount); ShadowMountPlus does not search them\n%s\n", line) >= (int)sizeof buf) return;
   if(write_config(buf) != 0) return;
   PS5TM_INFO("kraken_config", "Suchordner für Kraken Mount angelegt: /data/%s und %s auf den Laufwerken.", KR_FPKG_FOLDER, KR_FPKG_FOLDER);
 }
@@ -756,7 +756,7 @@ stop_kraken(char *msg, size_t n) {
     g_quit_ms = ps5tm_mono_ms();
     pthread_mutex_unlock(&g_lock);
     snprintf(msg, n, "Kraken Mount wird beendet.");
-    PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite FPKGMount).");
+    PS5TM_INFO("kraken_stop", "Kraken Mount beendet (Seite KrakenMount).");
     return 200;
   }
   /* 409: a game runs, or (from 0.4.0) an install of its own runs or waits */
@@ -1065,7 +1065,7 @@ boot_thread(void *arg) {
     PS5TM_INFO("kraken_boot", "Kraken Mount mit der App gestartet (Versuch %d): %d, %s", tries + 1, rc, msg);
     if(rc == 200) { pending_confirm(); return NULL; }
   }
-  PS5TM_WARN("kraken_boot_failed", "Kraken Mount ließ sich mit der App nicht starten: auf der Seite FPKGMount „Einschalten“ drücken.");
+  PS5TM_WARN("kraken_boot_failed", "Kraken Mount ließ sich mit der App nicht starten: auf der Seite KrakenMount „Einschalten“ drücken.");
   return NULL;
 }
 

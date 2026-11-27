@@ -898,7 +898,7 @@ struct Ps4Mount
     std::vector<Ps4Skipped> skipped;
 };
 
-// One game of Kraken Mount (FPKGMount, GET /api/v1/kraken: "kraken":{"games":[...]}).
+// One game of Kraken Mount (KrakenMount, GET /api/v1/kraken: "kraken":{"games":[...]}).
 struct KrakenGame
 {
     std::string title_id;
@@ -946,7 +946,7 @@ inline std::string kraken_key(const std::string &title_id)
     return "krm:" + title_id;
 }
 
-// FPKGMount: Kraken Mount (quer3q) as the app started it, and what it reports.
+// KrakenMount: Kraken Mount (quer3q) as the app started it, and what it reports.
 struct KrakenState
 {
     bool loaded = false;
@@ -1474,7 +1474,7 @@ class Source
     virtual void ps4mount_post(const std::string &route, const std::string &json) = 0;
     // "game" (with the title id): Snapshot::ps4_detail; "log": Snapshot::ps4_log.
     virtual void ps4mount_fetch(const std::string &what, const std::string &id) = 0;
-    // FPKGMount: a JSON body for POST /api/v1/kraken (start, stop, rescan, rebuild, rebuild_all,
+    // KrakenMount: a JSON body for POST /api/v1/kraken (start, stop, rescan, rebuild, rebuild_all,
     // playgo, delete, fetch); the answer's message comes back as a notice.
     virtual void kraken_post(const std::string &json) = 0;
     // Dump Forge fetched from GitHub for the format "FPKG" (POST /api/v1/dumpforge

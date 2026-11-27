@@ -48,21 +48,21 @@ For example:
   `bind_address` to `127.0.0.1`.
 - **Kraken Mount (port 8097) and Dump Forge (port 8095) are programs by other
   authors.** Kraken Mount is started by the app only when you switched it on on
-  the FPKGMount tab (it is off from the start since 21.11.2026; the choice is
+  the KrakenMount tab (it is off from the start since 21.11.2026; the choice is
   kept in `kraken/zustand.txt` in the data folder); switched on, the app starts
   it by itself about five seconds after its own start. Dump Forge starts it only
   for the duration of a conversion. Both listen on the whole home network and
   check neither `Host` nor `Origin`; the setting `bind_address` and this app's
   browser protection do not apply to them. If you do not want that, leave Kraken
   Mount switched off (as it is from the start) or switch it off again on the
-  FPKGMount tab (the switch is remembered across restarts).
+  KrakenMount tab (the switch is remembered across restarts).
   Such things are reported to the authors of those programs. The consequence for
   Kraken Mount 0.3.0 (checked on 18.11.2026, read from the program's source
   code, not reproduced): a foreign web page in the browser of a device on the
   home network can change the settings there without a login (search folders,
   debug mode) and delete a game whose exact path it knows; it reads files under
   `/data` only with the debug mode switched on and by a detour (DNS rebinding).
-  The FPKGMount tab shows differing search folders; checking `Host` and `Origin`
+  The KrakenMount tab shows differing search folders; checking `Host` and `Origin`
   can only be added by the author of Kraken Mount.
 - Vulnerabilities in the console itself, in the jailbreak, in kstuff, in the
   payload loader or in other homebrew programs. Please report them there.

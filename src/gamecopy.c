@@ -12,7 +12,7 @@
  *             title id then lives in two places, which ShadowMountPlus
  *             advises against ("keep only one source per TITLE_ID"); the
  *             page says so before anything is copied.
- *   kraken    <drive>/Kraken-Games/<folder> (27.11.2026): the folder the app gives Kraken Mount (FPKGMount), which takes game folders and
+ *   kraken    <drive>/Kraken-Games/<folder> (27.11.2026): the folder the app gives Kraken Mount (KrakenMount), which takes game folders and
  *             images as well as .pkg files; ShadowMountPlus does not search it.
  *   backup    <drive>/PS5-Sicherung/Spiele/<folder>. ShadowMountPlus also
  *             scans the roots of USB and M.2 drives, but never deeper than

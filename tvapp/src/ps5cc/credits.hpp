@@ -66,7 +66,7 @@ inline constexpr Credit kCredits[] = {
     {"Zusammenspiel, Wissen und Vorbilder", "", "quer3q", "@quer3q",
      "AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei "
      "neuesten Fassungen (0.5.1 und 0.5.0) stecken eingebettet in der App, neuere lädt sie auf "
-     "Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „FPKGMount“, es spielt "
+     "Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „KrakenMount“, es spielt "
      "(F)PKG-Spiele "
      "ohne Installation. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "Knutwurst", "@knutwurst",

@@ -2342,7 +2342,7 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
       const int old_name = snprintf(old_dir, sizeof old_dir, "%s/%s", base, PS5TM_KRAKEN_GAMES_OLD) < (int)sizeof old_dir &&
                            ps5tm_kraken_searches(old_dir) == 1;
       chk_add(arr, "kraken_dir", "warn", old_name
-              ? "Kraken Mount einmal aus- und wieder einschalten (Reiter FPKGMount): Die App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine Suchordner um."
+              ? "Kraken Mount einmal aus- und wieder einschalten (Reiter KrakenMount): Die App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine Suchordner um."
               : "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern eintragen, sonst meldet es das Spiel nicht an.",
               "Kraken Mount sucht in %s nicht.", dir);
     }

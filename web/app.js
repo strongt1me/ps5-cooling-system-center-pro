@@ -5241,12 +5241,12 @@
   };
   /* 29.10.2026: ein PS4Mount-Spiel liegt auch als app.pkg in /user/app, läuft aber vom USB-Laufwerk (library.c meldet
      "ps4mount"); es heißt „PS4Mount“, damit man es nicht für ein vom Paket-Installer installiertes hält. */
-  /* 17.11.2026: ein Spiel, das Kraken Mount (FPKGMount) eingehängt hat, meldet library.c als "fpkgmount"; es heißt „FPKGMount“, wie das PS4Mount-Spiel. */
+  /* 17.11.2026: ein Spiel, das Kraken Mount (KrakenMount) eingehängt hat, meldet library.c als "fpkgmount"; es heißt „KrakenMount“, wie das PS4Mount-Spiel. */
   const gmFormatLabel = (x) => {
     if (x.format === "pkg" && x.ps4mount)
       return "PS4Mount";
     if (x.fpkgmount && (!x.format || x.format === "pkg"))
-      return "FPKGMount";
+      return "KrakenMount";
     if (x.format === "pkg")
       return "Installiert";
     return GM_FORMAT_TAGS[x.format] || "";
@@ -5318,7 +5318,7 @@
     const fmt = gmFormatLabel(x);
     const fw = gmFw(x);
     const t = fmt
-      ? [`<span class="gm-tag fmt" title="${esc(x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : fmt === "FPKGMount" ? "FPKGMount: ein Debug-Paket (.pkg), das Kraken Mount einhängt, nicht installiert" : GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
+      ? [`<span class="gm-tag fmt" title="${esc(x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : fmt === "KrakenMount" ? "KrakenMount: ein Spiel, das Kraken Mount einhängt (FPKG, Spielordner oder Abbild), nicht installiert" : GM_FORMATS[x.format] || x.format)}">${esc(fmt)}</span>`]
       : [];
     if (fw && !fw.backport) t.push(gmFwTag(fw));
     gmMarks(x).forEach((s) => t.push(s));
@@ -5454,7 +5454,7 @@
                x.size_bytes > 0 ? bytes(x.size_bytes) : "—"]);
     /* Wo die Daten wirklich liegen: bei einem Abbild die Datei, nicht der
        Ordner unter /mnt/shadowmnt, in den ShadowMountPlus es einhängt. */
-    if (x.format || gmFormatLabel(x) === "FPKGMount") rows.push(["Format", x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : gmFormatLabel(x) === "FPKGMount" ? "FPKGMount: ein Debug-Paket (.pkg), das Kraken Mount einhängt, nicht installiert" : x.format === "pkg" && x.platform
+    if (x.format || gmFormatLabel(x) === "KrakenMount") rows.push(["Format", x.ps4mount ? "PS4Mount: läuft vom USB-Laufwerk, nicht installiert" : gmFormatLabel(x) === "KrakenMount" ? "KrakenMount: ein Spiel, das Kraken Mount einhängt (FPKG, Spielordner oder Abbild), nicht installiert" : x.format === "pkg" && x.platform
       ? `${x.platform} PKG (installiert)` : (GM_FORMATS[x.format] || x.format)]);
     /* AMPR-Packs, egal in welchem Format das Spiel liegt (17.11.2026): bei Abbildern liest die App sie mit dem Abbild */
     if (m && (m.zstd || m.lz4))
@@ -6328,7 +6328,7 @@
   };
 
   /* „Als was?“ beim Kopieren und Konvertieren (27.11.2026): spielbar mit ShadowMountPlus (homebrew), spielbar mit Kraken Mount (Kraken-Games, Reiter
-     FPKGMount: .pkg, Spielordner und Abbilder) oder nur aufbewahrt. Ein FPKG bindet ShadowMountPlus nicht ein, ein PS4-Spiel spielt Kraken Mount nicht. */
+     KrakenMount: .pkg, Spielordner und Abbilder) oder nur aufbewahrt. Ein FPKG bindet ShadowMountPlus nicht ein, ein PS4-Spiel spielt Kraken Mount nicht. */
   const playModes = (name, cur, fpkg, ps4) => `
         <label class="cp-choice${fpkg ? " off" : ""}">
           <input type="radio" name="${name}" value="homebrew" ${cur === "homebrew" && !fpkg ? "checked" : ""} ${fpkg ? "disabled" : ""}>
@@ -6340,7 +6340,7 @@
           <input type="radio" name="${name}" value="kraken" ${cur === "kraken" && !ps4 ? "checked" : ""} ${ps4 ? "disabled" : ""}>
           <span class="cp-choice-text"><b>B · Spielbar mit Kraken Mount</b>
             <span class="muted">${ps4 ? "Kraken Mount spielt PS5-Spiele, keine PS4-Spiele."
-              : `In den Ordner <code>Kraken-Games</code> des Ziels (intern, M.2-SSD oder USB). Kraken Mount (Reiter „FPKGMount“) findet das Spiel dort und meldet es an; ShadowMountPlus sucht dort nicht.`}</span></span>
+              : `In den Ordner <code>Kraken-Games</code> des Ziels (intern, M.2-SSD oder USB). Kraken Mount (Reiter „KrakenMount“) findet das Spiel dort und meldet es an; ShadowMountPlus sucht dort nicht.`}</span></span>
         </label>
         <label class="cp-choice">
           <input type="radio" name="${name}" value="backup" ${cur === "backup" ? "checked" : ""}>
@@ -6463,7 +6463,7 @@
          copy done when it matches the plan, so these are the same or more. */
       html = `<p class="cp-ok">✓ Fertig: ${bytes(j.done_bytes)} in ${cpFiles(j.files_done)} kopiert und zurückgelesen.</p>${where}
         ${cpSums(j, "die Kopie")}
-        ${j.mode === "kraken" ? `<p class="muted">Kraken Mount findet die Kopie im Ordner „Kraken-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet sie an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
+        ${j.mode === "kraken" ? `<p class="muted">Kraken Mount findet die Kopie im Ordner „Kraken-Games“ des Laufwerks (Reiter „KrakenMount“, Knopf „Jetzt suchen“) und meldet sie an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
         : j.mode === "homebrew" ? (ogHandled("copy", j.title_id) ? "" : `<p class="muted">ShadowMountPlus bindet die Kopie bei seinem nächsten
           Durchlauf ein. Das Spiel liegt jetzt zweimal vor. Wenn du es nur verschieben wolltest,
           lösche das Original.</p>`) : `<p class="muted">Die Sicherung wird nicht eingebunden.</p>`}`;
@@ -6887,7 +6887,7 @@
     /* 14.11.2026 (dumpforge.c): the program Dump Forge writes it; the app starts it, gives it the job and shows its steps. */
     fpkg: {
       t: "FPKG (Debug-.pkg) · für Kraken Mount",
-      d: () => "Ein Debug-Paket (.pkg), das Kraken Mount einhängt (Reiter „FPKGMount“). Es schreibt das PS5-Programm Dump Forge von quer3q, das die App dafür startet."
+      d: () => "Ein Debug-Paket (.pkg), das Kraken Mount einhängt (Reiter „KrakenMount“). Es schreibt das PS5-Programm Dump Forge von quer3q, das die App dafür startet."
     }
   };
   /* The compression levels of a debug FPKG: the op the app takes, its name and what it means (Dump Forge: balanced and smallest give a
@@ -7313,7 +7313,7 @@
           ? `✓ Fertig und geprüft: ${bytes(j.output_bytes)} statt ${bytes(j.total_bytes)} (${ratio} %).`
           : `✓ Fertig und geprüft: ${bytes(j.output_bytes)}.`}</p>${where}
         ${cpSums(j, "das Ergebnis")}
-        ${j.mode === "kraken" || (cvIsFpkg(j.op) && j.mode === "homebrew") ? `<p class="muted">Kraken Mount findet das Ergebnis im Ordner „Kraken-Games“ des Laufwerks (Reiter „FPKGMount“, Knopf „Jetzt suchen“) und meldet es an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
+        ${j.mode === "kraken" || (cvIsFpkg(j.op) && j.mode === "homebrew") ? `<p class="muted">Kraken Mount findet das Ergebnis im Ordner „Kraken-Games“ des Laufwerks (Reiter „KrakenMount“, Knopf „Jetzt suchen“) und meldet es an. Läuft das Original noch bei ShadowMountPlus, hänge es vorher aus.</p>`
         : /^CUSA/.test(j.title_id || "") && j.mode === "homebrew" ? `<p class="muted">ShadowMountPlus findet das Abbild bei seinem nächsten Durchlauf im Ordner „homebrew“ des Laufwerks. Ob das Spiel läuft, zeigt erst ein Test. Trophäen gibt es bei PS4-Spielen aus Abbildern nicht (0x80551618), und manche Titel bleiben bei „Bitte warten“ stehen: Beides verlangt eine echte Installation (Reiter „Pakete“).</p>`
         : j.mode === "homebrew" ? (ogHandled("convert", j.title_id) ? "" : `<p class="muted">ShadowMountPlus findet das neue Abbild bei seinem
           nächsten Durchlauf. Das Spiel liegt jetzt zweimal vor. Lösche das Original erst, wenn das
@@ -8637,7 +8637,7 @@
     $$("#p4m-skip img.p4m-icon").forEach((im) => im.addEventListener("error", () => { im.style.visibility = "hidden"; }));
   };
 
-  let p4mSeq = 0, p4mBusy = 0;                      /* as with the list of FPKGMount: an older answer is dropped, the timer does not stack */
+  let p4mSeq = 0, p4mBusy = 0;                      /* as with the list of KrakenMount: an older answer is dropped, the timer does not stack */
   const loadP4m = async () => {
     const my = ++p4mSeq;
     p4mBusy++;
@@ -8659,7 +8659,7 @@
   };
 
 
-  /* ── FPKGMount (kraken.c, 13.11.2026) ───────────────────────────────
+  /* ── KrakenMount (kraken.c, 13.11.2026) ───────────────────────────────
    * Kraken Mount von quer3q (GPL-3.0) meldet (F)PKG-Spiele und Spielordner an, ohne sie zu installieren. Die App bringt das Programm mit,
    * startet und beendet es und zeigt seine Liste (GET /api/v1/kraken; „kraken“ darin ist die Antwort seiner eigenen Schnittstelle). */
   const fp = { data: null, timer: 0 };

@@ -971,7 +971,7 @@ void          ps5tm_amprlib_smp_info(struct cJSON *o);
 const char   *ps5tm_amprlib_smp_key(void);
 struct cJSON *ps5tm_amprng_fetch(char *why, size_t why_len, int *http);
 
-/* FPKGMount (src/kraken.c): Kraken Mount (quer3q) started, asked and stopped by the app. The state is {embedded_version, fetched_version?,
+/* KrakenMount (src/kraken.c): Kraken Mount (quer3q) started, asked and stopped by the app. The state is {embedded_version, fetched_version?,
    start_version, project, fetching, running, starting?, kraken:{…Kraken Mount's own /api/state…}}. The action is a JSON object with "action":
    start, stop, rescan, rebuild (id), rebuild_all, delete (id, path), fetch; the result is an HTTP status (200 = done) with a sentence in msg. */
 struct cJSON *ps5tm_kraken_state(void);

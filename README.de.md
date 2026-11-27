@@ -180,7 +180,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
 - Ohne PC in exFAT-, ffpkg- und ffpfsc-Abbilder umwandeln; alles wird nach dem Schreiben zurückgelesen und geprüft, mit `.sha256`-Datei. Dazu ein Debug-FPKG (`.pkg`) für Kraken Mount, geschrieben von Dump Forge (quer3q; in der App eingebaut).
 - LZ4-Asset-Packs, AMPR-Index, APR-EMU (ampr_emu und AMPR EMU NG), PlayGo-Stub und DLC-Module pro Spiel, Abbilder prüfen, entpacken und reparieren.
 - PS4 PKG von USB: PS4-Fake-PKGs vom USB-Laufwerk in die Bibliothek, ohne Installation (PS4Mount von gasb07).
-- FPKGMount: (F)PKG-Spiele und Spielordner ohne Installation spielen, mit Kraken Mount von quer3q (die App bringt es mit und startet es).
+- KrakenMount: (F)PKG-Spiele und Spielordner ohne Installation spielen, mit Kraken Mount von quer3q (die App bringt es mit und startet es).
 - Disc: zeigt, welche Disc im Laufwerk liegt (PS2/PS3/PS4/PS5, Titelkennung), und legt von PS2-DVDs und PS3-Discs ein Abbild mit CRC-32, MD5 und SHA-1 an, auf Wunsch geprüft gegen Redump (nach ps-disc-detect).
 - Spielzeit mit Temperaturen, Spielstände sichern, zurückspielen und auf eine andere Konsole übertragen, Pakete finden, aufteilen und installieren, Verlauf aller Vorgänge.
 
@@ -236,7 +236,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.50** gebaut, dessen Startcode jede Firm
 | Seite | Inhalt |
 | --- | --- |
 | **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Profile pro Spiel |
-| **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 PKG von USB, FPKGMount, Sicherungen, Verlauf |
+| **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 PKG von USB, KrakenMount, Sicherungen, Verlauf |
 | **Dateimanager** | Ordner der Konsole und der Laufwerke |
 | **Payloads** | laufende, gespeicherte und auf USB liegende Payloads, Profile, Payloads herunterladen |
 | **System** | Konsole, Speicher, Netzwerk, Diagnose |
@@ -321,7 +321,7 @@ Dieses Projekt steht auf den Schultern der PS5-Homebrew-Gemeinschaft. **Vielen D
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) und die Mitwirkenden von [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- und PFSC-Abbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): Vorlage für den UFS2-/ffpkg-Schreiber.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-Asset-Packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) und [dlc_emu](https://github.com/drakmor/dlc_emu) (eingebettete Fassungen, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest (die zwei neuesten Fassungen 0.5.1 und 0.5.0 eingebettet, neuere lädt die App auf Knopfdruck). Dazu [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): das Programm hinter dem Reiter „FPKGMount“ (unverändert als ELF eingebettet).
+- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest (die zwei neuesten Fassungen 0.5.1 und 0.5.0 eingebettet, neuere lädt die App auf Knopfdruck). Dazu [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): das Programm hinter dem Reiter „KrakenMount“ (unverändert als ELF eingebettet).
 - **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): Bauweise der Starter-Kachel als nativer Titel.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): Aufbau der Pakete und Ablauf des Installierens (eigener Code nach diesem Vorbild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): Profilfunktion und Format des Profilbilds.

@@ -571,7 +571,7 @@ detect_mods(lib_game_t *g) {
   m->backport = m->extra_libs > 0 || (eb && pj && eb < pj);
 }
 
-/* A game Kraken Mount (FPKGMount) plays from a .pkg has no folder of its own to look into. Kraken Mount unpacks what it runs with into its
+/* A game Kraken Mount (KrakenMount) plays from a .pkg has no folder of its own to look into. Kraken Mount unpacks what it runs with into its
    cache, <cache>/<TITLE_ID> (mounted as /system_ex/app/<TITLE_ID>): the eboot.bin - a backport's over the package's - and the fakelib it put
    together, the backport's or else the game's, plus the emulators it brings itself: ampr-emu-ng always (libSceAmpr.sprx), pgo_stub
    (libScePlayGo.sprx) for a game that uses PlayGo, the three files of dlc_emu when a dlc_emu.ini lies beside the game. So the cache says
@@ -1730,7 +1730,7 @@ ps5tm_library_json(void) {
   const int smp_can_remount = ps5tm_smp_can("mount_game") && ps5tm_smp_can("unmount_game");
   /* Also before the lock: whether a job of the app works asks the job modules (and ShadowMountPlus's storage status over HTTP). */
   const int hold_paused = ps5tm_smphold_count() > 0 && ps5tm_smphold_paused();
-  /* And the games Kraken Mount (FPKGMount) lists - a copy kept for 10 s, an HTTP question to it when that is older (17.11.2026): a title among
+  /* And the games Kraken Mount (KrakenMount) lists - a copy kept for 10 s, an HTTP question to it when that is older (17.11.2026): a title among
      them that is neither ShadowMountPlus's nor PS4Mount's carries the mark "fpkgmount", as a PS4Mount game carries "ps4mount". */
   ps5tm_kraken_game_t *kraken = calloc(PS5TM_KRAKEN_MAX, sizeof(*kraken));          /* 120 KB: not on a thread's stack */
   const int kraken_n = kraken ? ps5tm_kraken_games(kraken, PS5TM_KRAKEN_MAX) : 0;
@@ -1783,7 +1783,7 @@ ps5tm_library_json(void) {
                (unsigned)(g->param_sdk >> 48) & 0xFF);
       cJSON_AddStringToObject(e, "sdk", v);
     }
-    /* Kraken Mount's entry for a game it plays from a .pkg (FPKGMount): a game ShadowMountPlus holds as an image or a folder stays what it
+    /* Kraken Mount's entry for a game it plays from a .pkg (KrakenMount): a game ShadowMountPlus holds as an image or a folder stays what it
        is, and so does a PS4Mount game (17.11.2026) */
     const ps5tm_kraken_game_t *kg = NULL;
     if(!g->ps4mount && (!g->format[0] || !strcmp(g->format, "pkg")))

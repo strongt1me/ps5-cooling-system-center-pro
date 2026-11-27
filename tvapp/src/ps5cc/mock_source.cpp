@@ -1564,7 +1564,7 @@ class MockSource final : public Source
             msg = "Das Spiel ist gelöscht.";
         }
         if (!msg.empty())
-            notice(Notice::Kind::success, "FPKGMount", msg);
+            notice(Notice::Kind::success, "KrakenMount", msg);
         changed();
     }
 
