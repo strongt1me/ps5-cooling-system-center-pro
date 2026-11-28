@@ -49,7 +49,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Raffreddamento</h3>
-      Regolazione silenziosa della ventola su una temperatura obiettivo (50–91 °C), modalità, profili per gioco, modalità notte con obiettivo più silenzioso, autotest della ventola, rampa di sicurezza e guardiano della ventola.
+      Regolazione silenziosa della ventola su una temperatura obiettivo (50–91 °C), modalità, profili per gioco (con suggerimenti dalle tue sessioni e il loro effetto misurato), modalità notte con obiettivo più silenzioso, autotest della ventola, rampa di sicurezza e guardiano della ventola.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Valori</h3>
@@ -235,7 +235,7 @@ L'ELF è compilato con il PS5 payload SDK **v0.50**, il cui codice di avvio cono
 
 | Pagina | Contenuto |
 | --- | --- |
-| **Raffreddamento** | Stato, andamento, sensori, temperatura obiettivo, modalità, profili per gioco |
+| **Raffreddamento** | Stato, andamento, sensori, temperatura obiettivo, modalità, profili per gioco con suggerimenti |
 | **Giochi** | Libreria, tempo di gioco, salvataggi, pacchetti, PS4 PKG da USB, KrakenMount, Disc (con unità disco), backup, cronologia |
 | **File manager** | Cartelle della console e delle unità (anche NTFS), ricerca |
 | **Payload** | Payload in esecuzione, salvati e su USB, profili, scarica payload |

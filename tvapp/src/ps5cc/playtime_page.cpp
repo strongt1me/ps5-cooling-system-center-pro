@@ -276,6 +276,22 @@ class PlaytimePage final : public Page
         return t;
     }
 
+    // Since 28.11.2026 the app measures, while the automatic mode regulates, how long a session was
+    // above the target and how often the fan jumped clearly; a session under five minutes says
+    // nothing by it, and older ones do not have it. Short words, and in place of the temperatures:
+    // the row has one line (the hottest point of each game stays in "Meistgespielt").
+    static std::string measured(const PlaySession &s)
+    {
+        if (s.auto_s < 300 || s.over_s < 0 || s.jumps < 0)
+            return {};
+        const std::string out = s.over_s >= 60
+                                    ? std::to_string((s.over_s + 30) / 60) + " Min. über Ziel"
+                                : s.over_s > 0 ? std::string("kurz über Ziel")
+                                               : std::string("nie über Ziel");
+        return out + " · " +
+               (s.jumps == 1 ? std::string("1 Sprung") : std::to_string(s.jumps) + " Sprünge");
+    }
+
     std::vector<ui::ListItem> items() const
     {
         std::vector<ui::ListItem> out;
@@ -357,7 +373,8 @@ class PlaytimePage final : public Page
             ui::ListItem item;
             item.title = s.name;
             std::string sub = play_range(s.start, s.end, tz_);
-            const std::string t = temps(s);
+            const std::string m = measured(s);
+            const std::string t = m.empty() ? temps(s) : m;
             if (!t.empty())
                 sub += " · " + t;
             item.subtitle = sub;

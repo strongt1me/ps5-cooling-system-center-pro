@@ -49,7 +49,7 @@ Dieselbe App, zwei Arten der Bedienung. Die Vollbild-App kann fast alles, was di
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Kühlung</h3>
-      Ruhige Lüfterregelung auf eine Zieltemperatur (50–91 °C), Betriebsarten, Profile pro Spiel, Nachtmodus mit leiserem Ziel, Lüfter-Selbsttest, Sicherheitsrampe und Lüfterwächter.
+      Ruhige Lüfterregelung auf eine Zieltemperatur (50–91 °C), Betriebsarten, Profile pro Spiel (mit Vorschlägen aus den eigenen Sitzungen und ihrer gemessenen Wirkung), Nachtmodus mit leiserem Ziel, Lüfter-Selbsttest, Sicherheitsrampe und Lüfterwächter.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Messwerte</h3>
@@ -235,7 +235,7 @@ Die ELF ist mit dem PS5-Payload-SDK **v0.50** gebaut, dessen Startcode jede Firm
 
 | Seite | Inhalt |
 | --- | --- |
-| **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Profile pro Spiel |
+| **Kühlung** | Status, Verlauf, Sensoren, Zieltemperatur, Betriebsart, Profile pro Spiel mit Vorschlägen |
 | **Spiele** | Bibliothek, Spielzeit, Spielstände, Pakete, PS4 PKG von USB, KrakenMount, Disc (mit Laufwerk), Sicherungen, Verlauf |
 | **Dateimanager** | Ordner der Konsole und der Laufwerke (auch NTFS), Suche |
 | **Payloads** | laufende, gespeicherte und auf USB liegende Payloads, Profile, Payloads herunterladen |

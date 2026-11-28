@@ -1475,6 +1475,14 @@ void ps5tm_history_reset(void);
 typedef struct {
   int cpu_c, soc_c, fan_pct;
   int safety, warning;       /* the emergency mode / the warning is active */
+  /* Since 28.11.2026, for the profile suggestions: whether the automatic mode regulates, the temperature it regulates
+     (the moving average of the hotter sensor, tenths of a degree, -1 none), the target and profile in force and
+     whether a game's rule set them. */
+  int automatic;
+  int avg_c10;
+  int target_c;
+  int profile;
+  int rule;
 } ps5tm_playtime_sample_t;
 
 /* Starts the recorder (playtime.c); once is enough. */
@@ -1489,6 +1497,81 @@ void ps5tm_playtime_step(int64_t wall_s, uint64_t mono_ms, int fresh,
 struct cJSON *ps5tm_playtime_json(unsigned max);
 /* Deletes the saved sessions; a running one is kept. 0 on success. */
 int  ps5tm_playtime_reset(void);
+
+/* A finished session as sessions.csv keeps it. The measured fields (auto_s .. profile) exist since 28.11.2026; older
+   rows have measured = 0 and -1 in them. */
+#define PS5TM_PT_F_SAFETY     0x01u   /* the emergency mode was active at some point               */
+#define PS5TM_PT_F_WARNING    0x02u   /* the temperature warning was                               */
+#define PS5TM_PT_F_ESTIMATED  0x04u   /* the end is the last note before the payload stopped        */
+#define PS5TM_PT_F_RULE       0x08u   /* a game's own rule set target and profile                  */
+#define PS5TM_PT_F_MIXED      0x10u   /* target, profile or rule changed during the session          */
+#define PS5TM_PT_JUMP_PCT     10      /* a "jump": the fan moved this many points from where it was */
+
+typedef struct {
+  int64_t  start, end;
+  unsigned play, flags;
+  int      cpu_max, cpu_avg, soc_max, soc_avg, fan_avg, fan_max;
+  int      measured;                  /* the row carries the fields below                          */
+  int      auto_s, over_s, jumps;     /* s under the automatic mode, s of it 1 K or more above the
+                                         target, fan jumps                                         */
+  int      target_c, profile;         /* in force at the end of the session                         */
+  char     title[16];
+  char     name[96];
+} ps5tm_pt_row_t;
+
+/* The rows of sessions.csv that can be read, oldest first, at most the newest `max`. *out is malloc'd (the caller
+   frees it, also when 0 rows); returns the count, -1 when out of memory. */
+int  ps5tm_playtime_rows(ps5tm_pt_row_t **out, unsigned max);
+
+
+/* --------------------------------------------------------- profile suggestions */
+
+/* What a group of a game's measured sessions shows, per hour under the automatic mode. -1 where nothing. */
+typedef struct {
+  int n;
+  int over_min_h, jumps_h, hot_c, fan_avg;
+} ps5tm_cs_stats_t;
+
+typedef enum {
+  PS5TM_CS_COLLECTING = 0,   /* not enough sessions yet                         */
+  PS5TM_CS_FINE,             /* enough, nothing to suggest                      */
+  PS5TM_CS_SUGGEST,          /* a profile is suggested                          */
+  PS5TM_CS_MEASURING,        /* a profile is kept, its effect not yet measured  */
+  PS5TM_CS_EFFECT            /* ... and measured                                */
+} ps5tm_cs_state_t;
+
+typedef struct {
+  char             title[16];
+  char             name[96];
+  ps5tm_cs_state_t state;
+  int              n, over_n, warn_n;    /* sessions in the window; often above the target; with the warning */
+  ps5tm_cs_stats_t now;                  /* the window without a rule                                         */
+  int              kind;                 /* 1 peaks (suggest cool), 2 jumpy (suggest comfort), 0 none        */
+  int              profile, target_c;    /* the suggestion                                                    */
+  int              has_rule, rule_profile, rule_target_c;
+  ps5tm_cs_stats_t before, after;        /* without the kept rule / with exactly it                          */
+  int64_t          last;                 /* end of the newest session, for the order                         */
+} ps5tm_cs_game_t;
+
+#define PS5TM_CS_MIN_SESSIONS  3
+#define PS5TM_CS_MIN_AFTER     2
+#define PS5TM_CS_MIN_PLAY_S    600
+#define PS5TM_CS_WINDOW        10        /* the newest sessions per group that count */
+#define PS5TM_CS_MAX_AGE_S     (120LL * 86400)
+#define PS5TM_CS_OVER_PCT      20        /* share of the time above the target that suggests "cool" */
+#define PS5TM_CS_JUMPS_H       20        /* jumps per hour that suggest "comfort"                    */
+#define PS5TM_CS_MAX_GAMES     64
+
+/* Pure: the games of `rows` (oldest first) with what they suggest, given the kept rules and the global setting. Fills
+   at most `max` entries, newest game first; returns the count. */
+unsigned ps5tm_cs_eval(const ps5tm_pt_row_t *rows, unsigned nrows,
+                       const ps5tm_game_rule_t *rules, unsigned nrules,
+                       unsigned global_target_c, int global_profile, int64_t now_s,
+                       ps5tm_cs_game_t *out, unsigned max);
+/* GET /api/v1/cooling/suggestions; the caller frees it. */
+struct cJSON *ps5tm_cs_json(void);
+/* POST: the game's current suggestion is not shown again (a different one later is). 0 on success. */
+int  ps5tm_cs_hide(const char *title_id);
 
 
 /* ------------------------------------------------------------ saved games */
@@ -2211,6 +2294,10 @@ typedef struct {
       degree, and the highest value since the start. 0 = none (flat or falling temperature, target below 85 °C). */
    int             lead_c100;
    int             lead_max_c100;
+   /* The profile in force (ps5tm_profile_t, after a game's own rule) and whether such a rule is in force: the play-time
+      recorder keeps them per session, so the effect of a kept profile can be told apart (coolsuggest.c). */
+   int             effective_profile;
+   int             rule_active;
 } ps5tm_snapshot_t;
 
 /* 0 when the controller thread runs (or already did), -1 when it could not be

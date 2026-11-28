@@ -49,7 +49,7 @@ Una sola aplicación, dos formas de usarla. La aplicación a pantalla completa h
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Refrigeración</h3>
-      Regulación silenciosa del ventilador hacia una temperatura objetivo (50–91 °C), modos, perfiles por juego, modo nocturno con objetivo más silencioso, autotest del ventilador, rampa de seguridad y vigilante del ventilador.
+      Regulación silenciosa del ventilador hacia una temperatura objetivo (50–91 °C), modos, perfiles por juego (con sugerencias a partir de tus propias sesiones y su efecto medido), modo nocturno con objetivo más silencioso, autotest del ventilador, rampa de seguridad y vigilante del ventilador.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Mediciones</h3>
@@ -235,7 +235,7 @@ El ELF se compila con el PS5 payload SDK **v0.50**, cuyo código de arranque con
 
 | Página | Contenido |
 | --- | --- |
-| **Refrigeración** | Estado, historial, sensores, temperatura objetivo, modo, perfiles por juego |
+| **Refrigeración** | Estado, historial, sensores, temperatura objetivo, modo, perfiles por juego con sugerencias |
 | **Juegos** | Biblioteca, tiempo de juego, partidas, paquetes, PS4 PKG desde USB, KrakenMount, Disc (con unidad de disco), copias, historial |
 | **Gestor de archivos** | Carpetas de la consola y de las unidades (también NTFS), búsqueda |
 | **Payloads** | Payloads en marcha, guardados y en USB, perfiles, descargar payloads |

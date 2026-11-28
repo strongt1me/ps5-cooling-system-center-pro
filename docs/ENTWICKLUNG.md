@@ -537,7 +537,8 @@ src/iopolicy.c      Lesen und Schreiben gleichzeitig nur zwischen zwei Laufwerke
 src/ioerr.h         die Worte für einen gescheiterten Zugriff: abgemeldetes Laufwerk (ENXIO/ENODEV), EIO, sonst strerror()
 src/klog.c          Kernel-Log live: Kopie von kern.msgbuf, neue Zeilen über einen Anker aus den letzten sechs Zeilen
 src/klogfiles.c     Kernel-Log in Dateien: Auszüge von der Seite, Aufnahme (eigener Thread liest ps5tm_klog_fetch), Ordner klog-live-log leeren
-src/playtime.c      Spielzeit: Sitzungen je Spiel mit Temperaturen (sessions.csv, session-open.csv), eigener Thread
+src/playtime.c      Spielzeit: Sitzungen je Spiel mit Temperaturen (sessions.csv, session-open.csv), eigener Thread; seit 28.11.2026 je Sitzung Zeit über dem Ziel, Lüftersprünge, Einstellung (Zeilen „v2,“)
+src/coolsuggest.c   Profilvorschläge je Spiel und Wirkung gespeicherter Spielprofile aus den gemessenen Sitzungen (GET/POST /api/v1/cooling/suggestions, suggest-hidden.txt)
 src/pkgparse.c      Paket-Dateien lesen (PS4 CNT, PS5 FIH, geteilte PS5MPKG1): Titel, Version, Art, Bild; jede Angabe der Datei wird gegen ihre Größe geprüft
 src/pkgscan.c       Pakete suchen (Wurzel und Ordner pkg der Laufwerke, im Hintergrund), Liste mit Kennungen, geteilte Pakete als ein Eintrag
 src/pkgsplit.c      ein Paket in Teile (PS5MPKG1) aufteilen: Zwischennamen, Zurücklesen mit SHA-256, Namen erst am Ende, Abbruch räumt auf

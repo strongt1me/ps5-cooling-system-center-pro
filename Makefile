@@ -92,6 +92,7 @@ SRCS += src/iopolicy.c
 SRCS += src/powerguard.c
 SRCS += src/klog.c
 SRCS += src/playtime.c
+SRCS += src/coolsuggest.c
 SRCS += src/savebackup.c
 SRCS += src/savesfo.c
 SRCS += src/savezip.c

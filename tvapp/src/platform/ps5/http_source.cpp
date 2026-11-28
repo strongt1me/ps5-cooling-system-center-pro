@@ -684,6 +684,18 @@ void HttpSource::remove_game_rule(const std::string &title_id)
     push({Request::Kind::rule, 0, title_id, text});
     cJSON_free(text);
 }
+void HttpSource::hide_suggestion(const std::string &title_id)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "title_id", title_id.c_str());
+    cJSON_AddBoolToObject(o, "hide", 1);
+    char *text = cJSON_PrintUnformatted(o);
+    cJSON_Delete(o);
+    if (text == nullptr)
+        return;
+    push({Request::Kind::suggest_hide, 0, title_id, text});
+    cJSON_free(text);
+}
 
 void HttpSource::selftest(bool start)
 {
@@ -1453,7 +1465,10 @@ void HttpSource::run()
             last_config = now;
             poll_config();
             if (page == Watch::settings)
+            {
                 poll_rules();
+                poll_suggestions();
+            }
         }
         poll_language();
         if (page == Watch::settings)
@@ -2014,6 +2029,17 @@ void HttpSource::handle(const Request &request)
             notice(Notice::Kind::error, "Spielprofil nicht geändert",
                    message_of(body, "Die App hat nicht geantwortet."));
         poll_rules();
+        poll_suggestions(); // a kept profile turns the game's suggestion into its effect
+        break;
+    case Request::Kind::suggest_hide:
+        if (exchange("POST", "/api/v1/cooling/suggestions", request.text, &status, &body) ==
+                Net::ok &&
+            status < 300)
+            notice(Notice::Kind::success, "Vorschlag ausgeblendet");
+        else
+            notice(Notice::Kind::error, "Vorschlag nicht ausgeblendet",
+                   message_of(body, "Die App hat nicht geantwortet."));
+        poll_suggestions();
         break;
     case Request::Kind::selftest:
         if (exchange("POST", "/api/v1/fan/selftest",
@@ -3147,6 +3173,69 @@ void HttpSource::poll_rules()
     ++data_.serial;
 }
 
+// GET /api/v1/cooling/suggestions: per game a suggested profile, or the effect of the kept one. An
+// app without the route (older) answers 404: then there is simply nothing to show.
+void HttpSource::poll_suggestions()
+{
+    int status = 0;
+    std::string body;
+    if (exchange("GET", "/api/v1/cooling/suggestions", {}, &status, &body) != Net::ok ||
+        status != 200)
+        return;
+    cJSON *root = cJSON_Parse(body.c_str());
+    if (root == nullptr)
+        return;
+    const auto stats = [](const cJSON *o)
+    {
+        CoolStats s;
+        if (o == nullptr)
+            return s;
+        s.n = static_cast<int>(num(o, "n", 0));
+        s.over_min_h = static_cast<int>(num(o, "over_min_h", -1));
+        s.jumps_h = static_cast<int>(num(o, "jumps_h", -1));
+        s.hot_c = static_cast<int>(num(o, "hot_c", -1));
+        s.fan_avg = static_cast<int>(num(o, "fan_avg", -1));
+        return s;
+    };
+    std::vector<CoolSuggestion> list;
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(root, "games"))
+    {
+        CoolSuggestion g;
+        g.id = str(item, "id");
+        g.name = str(item, "name");
+        g.state = str(item, "state");
+        g.n = static_cast<int>(num(item, "n", 0));
+        g.over_n = static_cast<int>(num(item, "over_n", 0));
+        g.warn_n = static_cast<int>(num(item, "warn_n", 0));
+        g.now = stats(cJSON_GetObjectItemCaseSensitive(item, "now"));
+        g.hidden = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(item, "hidden"));
+        if (const cJSON *s = cJSON_GetObjectItemCaseSensitive(item, "suggest"); cJSON_IsObject(s))
+        {
+            g.kind = str(s, "kind");
+            g.profile = str(s, "profile");
+            g.target_c = static_cast<int>(num(s, "target_c", 0));
+        }
+        if (const cJSON *r = cJSON_GetObjectItemCaseSensitive(item, "rule"); cJSON_IsObject(r))
+        {
+            g.has_rule = true;
+            g.rule_profile = str(r, "profile");
+            g.rule_target_c = static_cast<int>(num(r, "target_c", 0));
+        }
+        g.before = stats(cJSON_GetObjectItemCaseSensitive(item, "before"));
+        g.after = stats(cJSON_GetObjectItemCaseSensitive(item, "after"));
+        if (!g.id.empty())
+            list.push_back(std::move(g));
+    }
+    const int min_after = static_cast<int>(num(root, "min_after", 2));
+    cJSON_Delete(root);
+    std::lock_guard<std::mutex> lock(mutex_);
+    data_.suggestions = std::move(list);
+    data_.suggest_min_after = min_after > 0 ? min_after : 2;
+    data_.suggestions_loaded = true;
+    ++data_.serial;
+}
+
 // GET /api/v1/payload-profiles (unless only the run is asked for) and .../status.
 void HttpSource::poll_profiles(bool status_only)
 {
@@ -3971,6 +4060,9 @@ void HttpSource::poll_playtime()
         s.soc_max = static_cast<int>(num(o, "soc_max", -1));
         s.fan_avg = static_cast<int>(num(o, "fan_avg", -1));
         s.flags = static_cast<int>(num(o, "flags"));
+        s.auto_s = static_cast<int>(num(o, "auto_s", -1));
+        s.over_s = static_cast<int>(num(o, "over_s", -1));
+        s.jumps = static_cast<int>(num(o, "jumps", -1));
         return s;
     };
     const cJSON *o = nullptr;

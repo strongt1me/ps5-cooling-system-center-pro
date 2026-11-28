@@ -6299,6 +6299,34 @@ ps5tm_api_handle(int fd, ps5tm_request_t *req) {
     return;
   }
 
+  /* Profile suggestions per game from the measured sessions (coolsuggest.c, 28.11.2026). POST {"title_id":…,"hide":true}
+     hides the game's current suggestion; nothing else is written. */
+  if(!strcmp(req->path, "/api/v1/cooling/suggestions")) {
+    if(is_get) {
+      cJSON *j = ps5tm_cs_json();
+      if(!j) { ps5tm_http_send_error(fd, 500, "alloc_failed", "Kein Speicher."); return; }
+      send_cjson(fd, 200, j);
+      return;
+    }
+    if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed", "Nur GET und POST erlaubt."); return; }
+    cJSON *root = req->body ? cJSON_Parse(req->body) : NULL;
+    const cJSON *tid = root ? cJSON_GetObjectItem(root, "title_id") : NULL;
+    int hide = root ? cJSON_IsTrue(cJSON_GetObjectItem(root, "hide")) : 0;
+    char id[16] = "";
+    if(cJSON_IsString(tid)) snprintf(id, sizeof(id), "%s", tid->valuestring);
+    cJSON_Delete(root);
+    if(!hide || !id[0]) {
+      ps5tm_http_send_error(fd, 400, "bad_request", "Erwartet: {\"title_id\":…, \"hide\":true}.");
+      return;
+    }
+    int rc = ps5tm_cs_hide(id);
+    if(rc == -EINVAL) { ps5tm_http_send_error(fd, 400, "missing_title", "title_id fehlt oder ist ungültig."); return; }
+    if(rc == -ENOENT) { ps5tm_http_send_error(fd, 404, "no_suggestion", "Für dieses Spiel gibt es gerade keinen Vorschlag."); return; }
+    if(rc != 0) { ps5tm_http_send_error(fd, 500, "write_failed", "Die Auswahl ließ sich nicht speichern."); return; }
+    ps5tm_http_send_json(fd, 200, "{\"ok\":true}");
+    return;
+  }
+
   if(!strcmp(req->path, "/api/v1/playtime/reset")) {
     if(!is_post) { ps5tm_http_send_error(fd, 405, "method_not_allowed",
                                          "Nur POST erlaubt."); return; }

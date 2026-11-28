@@ -2000,6 +2000,8 @@ fan_worker(void *arg) {
     g_snapshot.lightbar_supported  = ps5tm_pad_lightbar_supported();
     g_snapshot.lightbar_state      = safety_active ? 2 : lightbar_state;
     g_snapshot.night_active        = night_now;
+    g_snapshot.effective_profile   = (int)cfg.profile;
+    g_snapshot.rule_active         = g_rule_active;
     g_snapshot.floor_idle_pct      = floor_value(&floor_t[0]);
     g_snapshot.floor_game_pct      = floor_value(&floor_t[1]);
     g_snapshot.model_gain_x10      = ff_gain;

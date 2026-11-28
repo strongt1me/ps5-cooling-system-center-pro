@@ -2286,15 +2286,97 @@
 
   const profileLabel = { comfort: "Leise", balanced: "Ausgewogen", cool: "Kühl" };
 
+  /* Vorschläge und Wirkung (GET /api/v1/cooling/suggestions, coolsuggest.c): aus den gemessenen Sitzungen je Spiel. Der
+     Takt (alle 15 s) fragt höchstens einmal pro Minute nach – die Antwort ändert sich erst, wenn eine Sitzung endet. */
+  let sgAt = 0;
+  const loadSuggest = async (quiet) => {
+    if (quiet && state.sg && Date.now() - sgAt < 60000) return state.sg;
+    try { state.sg = await api("/api/v1/cooling/suggestions"); } catch { state.sg = state.sg || null; }
+    sgAt = Date.now();
+    return state.sg;
+  };
+  const sgGame = (id) => (state.sg && state.sg.games || []).find((g) => g.id === id);
+  /* „a → b“, grün, wenn der Wert gesunken ist (weniger Zeit über dem Ziel, weniger Sprünge, kühler) */
+  const sgPair = (label, a, b, unit, judge = true) => {
+    if (!(a >= 0) || !(b >= 0)) return "";
+    const cls = !judge || a === b ? "" : b < a ? " good" : " bad";
+    return `<span>${esc(label)} <b class="sg-v${cls}">${num(a)} → ${num(b)}${unit}</b></span>`;
+  };
+  const sgEffect = (g) => {
+    if (!g || !g.rule) return "";
+    const b = g.before || { n: 0 }, a = g.after || { n: 0 };
+    const need = (state.sg && state.sg.min_after) || 2;
+    if (a.n < need)
+      return `<div class="sg-eff"><span class="sg-eff-h">Wirkung wird gemessen: ${a.n} von ${need} Sitzungen mit diesem Profil.</span></div>`;
+    if (b.n < need)
+      return `<div class="sg-eff"><span class="sg-eff-h">Mit diesem Profil (${a.n} Sitzungen):</span>
+        <span>Zeit über dem Ziel <b class="sg-v">${num(a.over_min_h)} Min./Std.</b></span>
+        <span>Lüftersprünge <b class="sg-v">${num(a.jumps_h)} pro Std.</b></span>
+        <span>heißeste Stelle <b class="sg-v">${num(a.hot_c)} °C</b></span>
+        <span class="sg-eff-h">Zum Vergleich fehlen Sitzungen ohne das Profil.</span></div>`;
+    return `<div class="sg-eff"><span class="sg-eff-h">Wirkung, ${b.n} Sitzungen vorher, ${a.n} nachher:</span>
+      ${sgPair("Zeit über dem Ziel", b.over_min_h, a.over_min_h, " Min./Std.")}
+      ${sgPair("Lüftersprünge", b.jumps_h, a.jumps_h, " pro Std.")}
+      ${sgPair("heißeste Stelle", b.hot_c, a.hot_c, " °C")}
+      ${sgPair("Lüfter Ø", b.fan_avg, a.fan_avg, " %", false)}</div>`;
+  };
+  const sgRender = () => {
+    const list = ((state.sg && state.sg.games) || []).filter((g) => g.state === "suggest" && !g.hidden && g.suggest);
+    $("#sg-box").hidden = !list.length;
+    /* Name und Kennung sind Daten des Spiels: durch esc(), auch in den data-Attributen, die die Knöpfe zurücklesen. */
+    $("#sg-list").innerHTML = list.map((g) => {
+      const s = g.suggest, w = g.now || {};
+      const why = [];
+      if (s.kind === "peaks") {
+        why.push(`In ${g.over_n} von ${g.n} Sitzungen über dem Ziel, im Schnitt ${num(w.over_min_h)} Min. pro Stunde.`);
+        if (g.warn_n > 0) why.push(`Die Temperaturwarnung kam in ${g.warn_n} von ${g.n} Sitzungen.`);
+        why.push("„Kühl“ reagiert früher und kräftiger: weniger Zeit über dem Ziel, dafür ein etwas lauterer Lüfter.");
+      } else {
+        why.push(`Der Lüfter springt im Schnitt ${num(w.jumps_h)}-mal pro Stunde um mindestens 10 Prozentpunkte.`);
+        why.push("„Leise“ ändert die Drehzahl in kleineren Schritten: weniger Sprünge, das Ziel bleibt.");
+      }
+      return `<div class="sg-item">
+        <div class="sg-main"><b>${esc(g.name || g.id)}</b>
+          <small>Vorschlag: ${esc(profileLabel[s.profile] || s.profile)} bei ${esc(s.target_c)} °C</small>
+          ${why.map((t) => `<p class="sg-why">${esc(t)}</p>`).join("")}</div>
+        <div class="sg-act">
+          <button class="btn primary" data-sg-take="${esc(g.id)}">Übernehmen</button>
+          <button class="btn ghost" data-sg-hide="${esc(g.id)}">Ausblenden</button></div>
+      </div>`;
+    }).join("");
+    $$("#sg-list [data-sg-take]").forEach((b) => b.addEventListener("click", async () => {
+      const g = sgGame(b.dataset.sgTake);
+      if (!g || !g.suggest) return;
+      try {
+        await api("/api/v1/games", { method: "PUT", body: JSON.stringify({
+          title_id: g.id, title_name: g.name || g.id,
+          target_temp_c: g.suggest.target_c, profile: g.suggest.profile }) });
+        toast(`Profil für ${g.name || g.id} gespeichert.`);
+        sgAt = 0;
+        loadRules();
+      } catch (e) { toast(e.message, "error"); }
+    }));
+    $$("#sg-list [data-sg-hide]").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        await api("/api/v1/cooling/suggestions", { method: "POST",
+          body: JSON.stringify({ title_id: b.dataset.sgHide, hide: true }) });
+        sgAt = 0;
+        loadRules();
+      } catch (e) { toast(e.message, "error"); }
+    }));
+  };
+
   let ruleSig = "";
   const loadRules = async (quiet) => {
     let d;
     try { d = await api("/api/v1/games"); } catch { return; }
+    const sg = await loadSuggest(quiet);
     state.rules = d.rules || [];
     /* der Takt (quiet) baut die Liste nur neu, wenn sich etwas geändert hat */
-    const sig = JSON.stringify(d);
+    const sig = JSON.stringify(d) + JSON.stringify(sg);
     if (quiet && sig === ruleSig) return;
     ruleSig = sig;
+    sgRender();
 
     /* Title name and id are free text: a game's own metadata, or a profile
        file imported from anywhere. Both go through esc(), also inside the
@@ -2303,7 +2385,7 @@
       <div class="rule${r.title_id === d.active ? " live" : ""}">
         <div><b>${esc(r.title_name || r.title_id)}</b>
           <small>${esc(r.target_temp_c)} °C · ${esc(profileLabel[r.profile] || r.profile)}
-            · ${esc(r.title_id)}</small></div>
+            · ${esc(r.title_id)}</small>${sgEffect(sgGame(r.title_id))}</div>
         <button data-remove="${esc(r.title_id)}">Entfernen</button>
       </div>`).join("")
       : `<div class="empty-state"><img src="/img/empty-profiles.png" alt="">
@@ -8207,6 +8289,15 @@
   };
 
   const ptSessions = (n) => `${n} ${n === 1 ? "Sitzung" : "Sitzungen"}`;
+  /* Seit 28.11.2026 misst die App je Sitzung die Zeit über dem Ziel und die deutlichen Lüftersprünge (mindestens
+     10 Prozentpunkte), nur solange die Automatik regelt (auto_s). Ältere Sitzungen haben die Werte nicht. */
+  const ptMeasured = (r) => {
+    if (!(r.auto_s >= 300) || !(r.jumps >= 0) || !(r.over_s >= 0)) return "";   /* unter 5 Min. sagen sie nichts */
+    const over = r.over_s >= 60 ? `${Math.round(r.over_s / 60)} Min. über dem Ziel`
+               : r.over_s > 0 ? "kurz über dem Ziel" : "nie über dem Ziel";
+    const jumps = r.jumps === 1 ? "1 Lüftersprung" : `${r.jumps} Lüftersprünge`;
+    return `<small class="pt-meas">${esc(over)} · ${esc(jumps)}</small>`;
+  };
 
   /* Oben: Hinweise, laufende Sitzung, Summen, Tage — alles, was sich während des
      Spielens bewegt. Wird bei jeder Abfrage neu gebaut, ist klein und lässt die
@@ -8316,7 +8407,7 @@
           <small>${esc(ptWhen(r.start, r.end))}</small>${badges ? `<div>${badges}</div>` : ""}</div>
         <div class="pt-side"><b>${esc(ptDur(r.play))}</b>
           <small>CPU bis ${esc(ptTemp(r.cpu_max))} · SoC bis ${esc(ptTemp(r.soc_max))}${
-            r.fan_avg >= 0 ? ` · Lüfter Ø ${r.fan_avg} %` : ""}</small></div>
+            r.fan_avg >= 0 ? ` · Lüfter Ø ${r.fan_avg} %` : ""}</small>${ptMeasured(r)}</div>
       </div>`;
     }).join("") : `<p class="pt-empty">Noch keine Sitzung.</p>`;
     $("#pt-more").hidden = d.sessions.length <= pt.shown;

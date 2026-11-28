@@ -89,6 +89,17 @@ So arbeitet die Regelung:
 - **Profile pro Spiel**: Läuft ein Spiel, speichert „Aktuelle Einstellung merken“ Ziel und Betriebsart für diesen Titel; die
   App schaltet dann automatisch um. Voraussetzung ist die Spielerkennung unter *System → Zusatzabfragen*. Export und Import
   der Spielprofile stehen auf der Seite Profil.
+- **Vorschläge aus deinen Sitzungen** (seit 28.11.2026, `src/coolsuggest.c`): Die Spielzeit misst je Sitzung, nur solange die
+  Automatik regelt, wie lange der geregelte Wert (Mittel des wärmeren Sensors) 1 °C oder mehr über dem Ziel lag und wie oft
+  der Lüfter um mindestens 10 Prozentpunkte sprang, dazu Ziel, Betriebsart und ob ein Spielprofil galt. Es zählen Sitzungen ab
+  10 Minuten, zu mindestens 80 % in der Automatik, ohne Wechsel der Einstellung (z. B. Nachtmodus mitten im Spiel), aus den
+  letzten 120 Tagen, je Spiel die neuesten zehn. Ab drei solchen Sitzungen ohne Spielprofil: **Kühl** (gleiches Ziel), wenn 20 %
+  der Zeit oder mehr über dem Ziel lagen oder die Temperaturwarnung kam; sonst **Leise**, wenn der Lüfter 20-mal pro Stunde oder
+  öfter sprang. Was schon global gilt, wird nicht vorgeschlagen, und „Leise“ nie gegen Spitzen. *Übernehmen* legt das Spielprofil
+  an, *Ausblenden* verbirgt diesen Vorschlag (ein anderer für dasselbe Spiel erscheint wieder; `suggest-hidden.txt` im
+  Datenordner). Bei einem gespeicherten Profil zeigt die Karte ab zwei Sitzungen mit genau diesem Profil die **Wirkung**:
+  Zeit über dem Ziel, Lüftersprünge, typische Höchsttemperatur (Median) und Lüfter-Mittel, vorher → nachher. Die App
+  schaltet nie selbst um. Vollbild-App: Kühlung → Einstellungen → Spielprofile, rechts die Messwerte.
 
 ### Schwelle statt Drehzahl
 
@@ -800,7 +811,8 @@ Der Reiter **Spielzeit** zeigt, wann gespielt wurde, wie lange und wie warm die 
   vorn werden nicht gespeichert.
 - **Anzeige:** das laufende Spiel, Summen für *Heute*, *7* und *30 Tage* und *Insgesamt*, die letzten 14 Tage als Balken,
   *Meistgespielt* (mit Anteil und höchster Temperatur) und die letzten Sitzungen mit CPU- und SoC-Höchstwert und mittlerer
-  Lüfterdrehzahl. Marken: **Notfallmodus**/**Warnung** (die Regelung kam in diesen Zustand) und **Ende geschätzt** (App oder
+  Lüfterdrehzahl, ab 5 Minuten auch die Zeit über dem Ziel und die Lüftersprünge (Grundlage der Profilvorschläge, siehe
+  Kühlung). Marken: **Notfallmodus**/**Warnung** (die Regelung kam in diesen Zustand) und **Ende geschätzt** (App oder
   Konsole endete während des Spiels; als Ende gilt der letzte Zwischenstand, alle 30 s).
 - **Tage und Uhr:** Die Zuordnung zu Tagen folgt der Ortszeit des Browsers (über Mitternacht anteilig auf beide Tage), „jetzt“
   der Uhr der Konsole; weicht sie mehr als zehn Minuten vom Gerät ab, steht ein Hinweis da.

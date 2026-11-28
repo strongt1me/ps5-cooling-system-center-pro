@@ -281,6 +281,7 @@ class MockSource final : public Source
                             {"PPSA02433", "Crash Bandicoot 4: It's About Time", 66, "cool"}};
         data_.active_rule = "PPSA02433";
         data_.rules_loaded = true;
+        fill_suggestions();
         fill_backdrops();
         fill_packages();
         fill_ps4mount();
@@ -539,6 +540,18 @@ class MockSource final : public Source
 
     void save_game_rule(const GameRule &rule) override
     {
+        // as the app: a kept profile turns the game's suggestion into its effect, measured from now on
+        for (CoolSuggestion &s : data_.suggestions)
+        {
+            if (s.id != rule.title_id)
+                continue;
+            s.state = "measuring";
+            s.has_rule = true;
+            s.rule_profile = rule.profile;
+            s.rule_target_c = rule.target_c;
+            s.before = s.now;
+            s.after = CoolStats{};
+        }
         for (GameRule &r : data_.game_rules)
         {
             if (r.title_id == rule.title_id)
@@ -551,6 +564,17 @@ class MockSource final : public Source
         }
         data_.game_rules.push_back(rule);
         notice(Notice::Kind::success, "Spielprofil gespeichert", rule.title_name);
+        changed();
+    }
+
+    void hide_suggestion(const std::string &title_id) override
+    {
+        for (CoolSuggestion &s : data_.suggestions)
+        {
+            if (s.id == title_id)
+                s.hidden = true;
+        }
+        notice(Notice::Kind::success, "Vorschlag ausgeblendet");
         changed();
     }
 
@@ -3191,6 +3215,79 @@ class MockSource final : public Source
         }
     }
 
+    // The profile suggestions (GET /api/v1/cooling/suggestions): two games with a suggestion (often
+    // above the target; a fan that jumps often), the two kept profiles with their effect (measured)
+    // and while it is measured, one game that needs nothing.
+    void fill_suggestions()
+    {
+        const auto stats = [](int n, int over, int jumps, int hot, int fan)
+        {
+            CoolStats s;
+            s.n = n;
+            s.over_min_h = over;
+            s.jumps_h = jumps;
+            s.hot_c = hot;
+            s.fan_avg = fan;
+            return s;
+        };
+        std::vector<CoolSuggestion> list;
+        CoolSuggestion a;
+        a.id = "CUSA18842";
+        a.name = "Iron Tide";
+        a.state = "suggest";
+        a.n = 5;
+        a.over_n = 4;
+        a.warn_n = 1;
+        a.now = stats(5, 14, 9, 81, 44);
+        a.kind = "peaks";
+        a.profile = "cool";
+        a.target_c = 68;
+        list.push_back(a);
+        CoolSuggestion b;
+        b.id = "PPSA07001";
+        b.name = "Sky Drifters";
+        b.state = "suggest";
+        b.n = 4;
+        b.over_n = 1;
+        b.now = stats(4, 3, 24, 74, 37);
+        b.kind = "jumpy";
+        b.profile = "comfort";
+        b.target_c = 68;
+        list.push_back(b);
+        CoolSuggestion c;
+        c.id = "PPSA01284";
+        c.name = "ASTRO BOT";
+        c.state = "effect";
+        c.n = 8;
+        c.has_rule = true;
+        c.rule_profile = "balanced";
+        c.rule_target_c = 72;
+        c.before = stats(5, 16, 21, 82, 41);
+        c.after = stats(3, 4, 8, 78, 47);
+        list.push_back(c);
+        CoolSuggestion d;
+        d.id = "PPSA02433";
+        d.name = "Crash Bandicoot 4: It's About Time";
+        d.state = "measuring";
+        d.n = 4;
+        d.has_rule = true;
+        d.rule_profile = "cool";
+        d.rule_target_c = 66;
+        d.before = stats(3, 2, 19, 72, 35);
+        d.after = stats(1, 1, 6, 71, 33);
+        list.push_back(d);
+        CoolSuggestion e;
+        e.id = "PPSA01325";
+        e.name = "Lantern Pass";
+        e.state = "fine";
+        e.n = 6;
+        e.now = stats(6, 0, 3, 68, 33);
+        list.push_back(e);
+        data_.suggestions = std::move(list);
+        data_.suggest_min_after = 2;
+        data_.suggestions_loaded = true;
+    }
+
     // PS4Mount on, three games on the USB drive: one ready with an update and add-ons, one taken
     // out of the library, one installed on the console as well.
     void fill_kraken()
@@ -3417,6 +3514,10 @@ class MockSource final : public Source
             x.cpu_max = s.cpu;
             x.soc_max = s.cpu - 3;
             x.fan_avg = 34;
+            // measured under the automatic mode: hotter sessions spend longer above the target
+            x.auto_s = x.play;
+            x.over_s = s.cpu >= 70 ? x.play * (s.cpu - 66) / 30 : 0;
+            x.jumps = x.play / 600 + (s.cpu >= 70 ? 4 : 1);
             p.sessions.insert(p.sessions.begin(), x);
         }
         p.total = static_cast<int>(p.sessions.size());
@@ -3429,6 +3530,9 @@ class MockSource final : public Source
         p.current.play = 2280;
         p.current.cpu_max = 69;
         p.current.soc_max = 66;
+        p.current.auto_s = 2280;
+        p.current.over_s = 120;
+        p.current.jumps = 5;
 
         Saves &s = data_.saves;
         s.loaded = true;

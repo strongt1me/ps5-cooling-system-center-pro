@@ -41,7 +41,14 @@
  *
  *   sessions.csv      one line per finished session, newest last, trimmed to
  *                     the last PT_KEEP_LINES. Appended to, never rewritten
- *                     except by the trim.
+ *                     except by the trim. Since 28.11.2026 a line starts with
+ *                     "v2," and carries after the flags what the profile
+ *                     suggestions need (coolsuggest.c): the seconds under the
+ *                     automatic mode, the seconds of them 1 K or more above the
+ *                     target, the fan's jumps and the target and profile in
+ *                     force. A version before that skips such lines when it
+ *                     shows the list (the trim keeps them), and this one reads
+ *                     the old lines as before.
  *   session-open.csv  the session in progress, rewritten every PT_SAVE_MS. A
  *                     console switched off mid-game, or a payload replaced
  *                     while one runs, loses nothing but the last few seconds:
@@ -98,13 +105,12 @@
 #define PT_SPAN_MAX     (400LL * 86400)
 
 #define PT_HEADER \
-  "# start_s,end_s,play_s,cpu_max,cpu_avg,soc_max,soc_avg,fan_avg,fan_max,flags,title,name\n"
+  "# v2,start_s,end_s,play_s,cpu_max,cpu_avg,soc_max,soc_avg,fan_avg,fan_max,flags,auto_s,over_s,jumps,target_c,profile,title,name\n"
 
-/* flags */
-#define PT_F_SAFETY     0x01u     /* the emergency mode was active at some point  */
-#define PT_F_WARNING    0x02u     /* the temperature warning was                  */
-#define PT_F_ESTIMATED  0x04u     /* the end is the last note before the payload
-                                     stopped, not an observed end                 */
+/* flags (ps5tm.h) */
+#define PT_F_SAFETY     PS5TM_PT_F_SAFETY
+#define PT_F_WARNING    PS5TM_PT_F_WARNING
+#define PT_F_ESTIMATED  PS5TM_PT_F_ESTIMATED
 
 typedef struct {
   char     title[16];
@@ -120,6 +126,11 @@ typedef struct {
   uint32_t cpu_n,   soc_n,   fan_n;
   unsigned flags;
   int      in_front;              /* only in a record read back: in front when saved */
+  /* Since 28.11.2026 (the profile suggestions): only counted while the automatic mode regulates. */
+  uint64_t auto_ms, over_ms;      /* under it / of that 1 K or more above the target */
+  unsigned jumps;                 /* the fan moved PS5TM_PT_JUMP_PCT points from its level */
+  int      level;                 /* the level the next jump is counted from, -1 none */
+  int      target_c, profile, rule; /* in force on the last pass, -1 none          */
 } session_t;
 
 static pthread_mutex_t g_lock      = PTHREAD_MUTEX_INITIALIZER;   /* the session   */
@@ -211,12 +222,14 @@ format_line(const session_t *s, unsigned extra, char *out, size_t n) {
   uint64_t play = s->play_ms / 1000;
   if(play < PT_MIN_PLAY_S) return 0;
   int64_t end = s->front_s >= s->start_s ? s->front_s : s->start_s;
-  snprintf(out, n, "%lld,%lld,%llu,%d,%d,%d,%d,%d,%d,%u,%s,%s\n",
+  snprintf(out, n, "v2,%lld,%lld,%llu,%d,%d,%d,%d,%d,%d,%u,%llu,%llu,%u,%d,%d,%s,%s\n",
            (long long)s->start_s, (long long)end, (unsigned long long)play,
            s->cpu_max, avg_of(s->cpu_sum, s->cpu_n),
            s->soc_max, avg_of(s->soc_sum, s->soc_n),
            avg_of(s->fan_sum, s->fan_n), s->fan_max,
-           s->flags | extra, s->title, s->name);
+           s->flags | extra,
+           (unsigned long long)(s->auto_ms / 1000), (unsigned long long)(s->over_ms / 1000), s->jumps,
+           s->target_c, s->profile, s->title, s->name);
   return 1;
 }
 
@@ -226,14 +239,16 @@ format_line(const session_t *s, unsigned extra, char *out, size_t n) {
    kernel's ring has scrolled past the last focus change. */
 static void
 format_open(const session_t *s, int front, char *out, size_t n) {
-  snprintf(out, n, "v2,%lld,%lld,%lld,%llu,%d,%d,%d,%llu,%u,%llu,%u,%llu,%u,%u,%d,%s,%s\n",
+  snprintf(out, n, "v3,%lld,%lld,%lld,%llu,%d,%d,%d,%llu,%u,%llu,%u,%llu,%u,%u,%d,%llu,%llu,%u,%d,%d,%d,%d,%s,%s\n",
            (long long)s->start_s, (long long)s->seen_s, (long long)s->front_s,
            (unsigned long long)s->play_ms,
            s->cpu_max, s->soc_max, s->fan_max,
            (unsigned long long)s->cpu_sum, s->cpu_n,
            (unsigned long long)s->soc_sum, s->soc_n,
            (unsigned long long)s->fan_sum, s->fan_n,
-           s->flags, front ? 1 : 0, s->title, s->name);
+           s->flags, front ? 1 : 0,
+           (unsigned long long)s->auto_ms, (unsigned long long)s->over_ms, s->jumps, s->level,
+           s->target_c, s->profile, s->rule, s->title, s->name);
 }
 
 
@@ -248,8 +263,18 @@ parse_open(const char *line, session_t *s) {
   unsigned cn, sn, fn, flags;
   int cmax, smax, fmax, front = 0, pos = 0, n;
   char title[16];
+  unsigned long long am = 0, om = 0;
+  unsigned jumps = 0;
+  int level = -1, target = -1, profile = -1, rule = -1;
 
-  if(!strncmp(line, "v2,", 3)) {
+  if(!strncmp(line, "v3,", 3)) {
+    n = sscanf(line, "v3,%lld,%lld,%lld,%llu,%d,%d,%d,%llu,%u,%llu,%u,%llu,%u,%u,%d,%llu,%llu,%u,%d,%d,%d,%d,%15[^,],%n",
+               &start, &seen, &front_s, &play, &cmax, &smax, &fmax,
+               &cs, &cn, &ss, &sn, &fs, &fn, &flags, &front,
+               &am, &om, &jumps, &level, &target, &profile, &rule, title, &pos);
+    if(n != 23 || pos <= 0) return 0;
+    if(am > play || om > am) am = om = 0;          /* damage: the measured part is dropped, not the session */
+  } else if(!strncmp(line, "v2,", 3)) {
     n = sscanf(line, "v2,%lld,%lld,%lld,%llu,%d,%d,%d,%llu,%u,%llu,%u,%llu,%u,%u,%d,%15[^,],%n",
                &start, &seen, &front_s, &play, &cmax, &smax, &fmax,
                &cs, &cn, &ss, &sn, &fs, &fn, &flags, &front, title, &pos);
@@ -278,37 +303,50 @@ parse_open(const char *line, session_t *s) {
   s->fan_sum = fs; s->fan_n = fn;
   s->flags = flags;
   s->in_front = front ? 1 : 0;
+  s->auto_ms = am; s->over_ms = om; s->jumps = jumps;
+  s->level = level >= 0 && level <= 100 ? level : -1;
+  s->target_c = target; s->profile = profile; s->rule = rule;
   return 1;
 }
 
 
-typedef struct {
-  int64_t  start, end;
-  unsigned play, flags;
-  int      cpu_max, cpu_avg, soc_max, soc_avg, fan_avg, fan_max;
-  char     title[16];
-  char     name[PT_NAME];
-} row_t;
+typedef ps5tm_pt_row_t row_t;
 
 
 static int
 parse_row(const char *line, row_t *r) {
   long long start, end;
-  unsigned long long play;
-  unsigned flags;
-  int cm, ca, sm, sa, fa, fm, pos = 0;
+  unsigned long long play, as = 0, os = 0;
+  unsigned flags, jumps = 0;
+  int cm, ca, sm, sa, fa, fm, target = -1, profile = -1, pos = 0, n, measured = 0;
   char title[16];
 
-  int n = sscanf(line, "%lld,%lld,%llu,%d,%d,%d,%d,%d,%d,%u,%15[^,],%n",
-                 &start, &end, &play, &cm, &ca, &sm, &sa, &fa, &fm, &flags,
-                 title, &pos);
-  if(n != 11 || pos <= 0 || !title_ok(title)) return 0;
+  if(!strncmp(line, "v2,", 3)) {
+    n = sscanf(line, "v2,%lld,%lld,%llu,%d,%d,%d,%d,%d,%d,%u,%llu,%llu,%u,%d,%d,%15[^,],%n",
+               &start, &end, &play, &cm, &ca, &sm, &sa, &fa, &fm, &flags,
+               &as, &os, &jumps, &target, &profile, title, &pos);
+    if(n != 16 || pos <= 0) return 0;
+    measured = as <= play && os <= as;            /* damage drops the measured part, not the row */
+  } else {
+    n = sscanf(line, "%lld,%lld,%llu,%d,%d,%d,%d,%d,%d,%u,%15[^,],%n",
+               &start, &end, &play, &cm, &ca, &sm, &sa, &fa, &fm, &flags,
+               title, &pos);
+    if(n != 11 || pos <= 0) return 0;
+  }
+  if(!title_ok(title)) return 0;
   if(start < PT_T_MIN || start > PT_T_MAX || end < start || end - start > PT_SPAN_MAX ||
      play > (unsigned long long)PT_SPAN_MAX) return 0;
 
+  memset(r, 0, sizeof(*r));
   r->start = start; r->end = end; r->play = (unsigned)play; r->flags = flags;
   r->cpu_max = cm; r->cpu_avg = ca; r->soc_max = sm; r->soc_avg = sa;
   r->fan_avg = fa; r->fan_max = fm;
+  r->measured = measured;
+  r->auto_s   = measured ? (int)as : -1;
+  r->over_s   = measured ? (int)os : -1;
+  r->jumps    = measured ? (int)jumps : -1;
+  r->target_c = measured ? target : -1;
+  r->profile  = measured ? profile : -1;
   snprintf(r->title, sizeof(r->title), "%s", title);
   char nm[PT_NAME * 2];
   snprintf(nm, sizeof(nm), "%s", line + pos);
@@ -526,6 +564,7 @@ begin_locked(int64_t wall_s, const ps5tm_gamestate_t *gs) {
   set_name(&g_cur, gs->title_name);
   g_cur.start_s = g_cur.seen_s = g_cur.front_s = wall_s;
   g_cur.cpu_max = g_cur.soc_max = g_cur.fan_max = -1;
+  g_cur.level = g_cur.target_c = g_cur.profile = g_cur.rule = -1;
   g_open = 1; g_front = 0; g_gone = 0;
   g_save_now = 1;                         /* write the record at once */
 
@@ -559,9 +598,40 @@ finish_locked(unsigned extra) {
 }
 
 
+/* What the profile suggestions need (coolsuggest.c), counted only while the automatic mode regulates: the time, the
+   time 1 K or more above the target in force (the regulated temperature is the moving average of the hotter sensor, as
+   the controller sees it; 1 K, because the controller's dead band is that wide), and the fan's jumps: a move of
+   PS5TM_PT_JUMP_PCT points away from the level it was counted from. A slow climb of 30 points is three of them (the
+   ear hears each), and a fan that swings up and down collects them fastest. A change of target, profile or rule
+   within the session marks it, so that it counts for neither setting. */
 static void
-add_sample(session_t *s, const ps5tm_playtime_sample_t *p) {
+add_measure(session_t *s, const ps5tm_playtime_sample_t *p, uint64_t step_ms) {
+  if(!p->automatic) { s->level = -1; return; }   /* the console regulates: no jump to count on the way back */
+  s->auto_ms += step_ms;
+  if(p->avg_c10 >= 0 && p->target_c > 0 && p->avg_c10 >= (p->target_c + 1) * 10) s->over_ms += step_ms;
+  if(p->fan_pct >= 0) {
+    if(s->level < 0) s->level = p->fan_pct;
+    else if(p->fan_pct >= s->level + PS5TM_PT_JUMP_PCT || p->fan_pct <= s->level - PS5TM_PT_JUMP_PCT) {
+      s->jumps++;
+      s->level = p->fan_pct;
+    }
+  }
+  if(p->target_c > 0) {
+    if(s->target_c >= 0 &&
+       (s->target_c != p->target_c || s->profile != p->profile || s->rule != (p->rule ? 1 : 0)))
+      s->flags |= PS5TM_PT_F_MIXED;
+    s->target_c = p->target_c;
+    s->profile  = p->profile;
+    s->rule     = p->rule ? 1 : 0;
+    if(p->rule) s->flags |= PS5TM_PT_F_RULE;
+  }
+}
+
+
+static void
+add_sample(session_t *s, const ps5tm_playtime_sample_t *p, uint64_t step_ms) {
   if(!p) return;
+  add_measure(s, p, step_ms);
   if(p->cpu_c >= 0) {
     if(p->cpu_c > s->cpu_max) s->cpu_max = p->cpu_c;
     s->cpu_sum += (unsigned)p->cpu_c; s->cpu_n++;
@@ -659,9 +729,10 @@ ps5tm_playtime_step(int64_t wall_s, uint64_t mono_ms, int fresh,
        remembered focus. */
     g_front = gs->foreground ? 1 : gs->suspended ? 0 : g_front;
     if(g_front) {
-      g_cur.play_ms += dt < PT_STEP_MAX_MS ? dt : PT_STEP_MAX_MS;
+      uint64_t step = dt < PT_STEP_MAX_MS ? dt : PT_STEP_MAX_MS;
+      g_cur.play_ms += step;
       g_cur.front_s  = g_cur.seen_s;
-      add_sample(&g_cur, smp);
+      add_sample(&g_cur, smp, step);
     }
   } else if(g_open) {
     g_front = 0;
@@ -702,7 +773,7 @@ playtime_pass(void) {
   int fresh = ps5tm_gamestate_measured() &&
               ps5tm_gamestate_age_ms() <= PT_STALE_MS;
 
-  ps5tm_playtime_sample_t smp = { -1, -1, -1, 0, 0 };
+  ps5tm_playtime_sample_t smp = { -1, -1, -1, 0, 0, 0, -1, 0, 0, 0 };
   ps5tm_fan_snapshot(&snap);
   uint64_t now = ps5tm_now_ms();
   if(snap.sampled_at_ms && now >= snap.sampled_at_ms &&
@@ -712,6 +783,11 @@ playtime_pass(void) {
     if(snap.sensors.fan_duty_valid) smp.fan_pct = snap.sensors.fan_duty_pct;
     smp.safety  = snap.safety_active  ? 1 : 0;
     smp.warning = snap.warning_active ? 1 : 0;
+    smp.automatic = snap.automatic ? 1 : 0;
+    smp.avg_c10   = snap.avg_temp_c10;
+    smp.target_c  = snap.effective_target_c;
+    smp.profile   = snap.effective_profile;
+    smp.rule      = snap.rule_active ? 1 : 0;
   }
 
   ps5tm_playtime_step((int64_t)(now / 1000), ps5tm_mono_ms(), fresh, &gs, &smp);
@@ -778,6 +854,57 @@ add_live(cJSON *root) {
   cJSON_AddNumberToObject(o, "fan_avg", avg_of(cur.fan_sum, cur.fan_n));
   cJSON_AddNumberToObject(o, "fan_max", cur.fan_max);
   cJSON_AddNumberToObject(o, "flags", cur.flags);
+  cJSON_AddNumberToObject(o, "auto_s", (double)(cur.auto_ms / 1000));
+  cJSON_AddNumberToObject(o, "over_s", (double)(cur.over_ms / 1000));
+  cJSON_AddNumberToObject(o, "jumps", cur.jumps);
+}
+
+
+/* The rows of sessions.csv into a ring of `cap`; returns how many there were in all (the ring holds the newest). */
+static unsigned
+read_rows(row_t *ring, unsigned cap) {
+  unsigned total = 0;
+  pthread_mutex_lock(&g_file_lock);
+  FILE *f = fopen(PT_PATH, "r");
+  if(f) {
+    char line[PT_LINE_MAX];
+    int  skipping = 0;
+    while(fgets(line, sizeof(line), f)) {
+      size_t len      = strlen(line);
+      int    complete = len && line[len - 1] == '\n';
+      /* The rest of a line that was too long, and a last line that is still
+         being written, are not rows. */
+      if(skipping) { if(complete) skipping = 0; continue; }
+      if(!complete) { if(len == sizeof(line) - 1) skipping = 1; continue; }
+      if(line[0] == '#') continue;
+      row_t r;
+      if(!parse_row(line, &r)) continue;
+      ring[total % cap] = r;
+      total++;
+    }
+    fclose(f);
+  }
+  pthread_mutex_unlock(&g_file_lock);
+  return total;
+}
+
+
+int
+ps5tm_playtime_rows(ps5tm_pt_row_t **out, unsigned max) {
+  *out = NULL;
+  if(max < 1) max = 1;
+  if(max > PT_RING) max = PT_RING;
+  row_t *ring = calloc(max, sizeof(*ring));
+  if(!ring) return -1;
+  unsigned total = read_rows(ring, max);
+  unsigned have  = total < max ? total : max;
+  row_t *rows = malloc((have ? have : 1) * sizeof(*rows));
+  if(!rows) { free(ring); return -1; }
+  for(unsigned i = 0; i < have; i++)           /* oldest first */
+    rows[i] = ring[(total - have + i) % max];
+  free(ring);
+  *out = rows;
+  return (int)have;
 }
 
 
@@ -802,28 +929,7 @@ ps5tm_playtime_json(unsigned max) {
   row_t *ring = calloc(PT_RING, sizeof(*ring));
   if(!ring) { cJSON_Delete(root); return NULL; }
 
-  unsigned total = 0;
-  pthread_mutex_lock(&g_file_lock);
-  FILE *f = fopen(PT_PATH, "r");
-  if(f) {
-    char line[PT_LINE_MAX];
-    int  skipping = 0;
-    while(fgets(line, sizeof(line), f)) {
-      size_t len      = strlen(line);
-      int    complete = len && line[len - 1] == '\n';
-      /* The rest of a line that was too long, and a last line that is still
-         being written, are not rows. */
-      if(skipping) { if(complete) skipping = 0; continue; }
-      if(!complete) { if(len == sizeof(line) - 1) skipping = 1; continue; }
-      if(line[0] == '#') continue;
-      row_t r;
-      if(!parse_row(line, &r)) continue;
-      ring[total % PT_RING] = r;
-      total++;
-    }
-    fclose(f);
-  }
-  pthread_mutex_unlock(&g_file_lock);
+  unsigned total = read_rows(ring, PT_RING);
 
   unsigned have = total < PT_RING ? total : PT_RING;
   unsigned show = have < max ? have : max;
@@ -850,6 +956,13 @@ ps5tm_playtime_json(unsigned max) {
     cJSON_AddNumberToObject(o, "fan_avg", r->fan_avg);
     cJSON_AddNumberToObject(o, "fan_max", r->fan_max);
     cJSON_AddNumberToObject(o, "flags", r->flags);
+    if(r->measured) {
+      cJSON_AddNumberToObject(o, "auto_s", r->auto_s);
+      cJSON_AddNumberToObject(o, "over_s", r->over_s);
+      cJSON_AddNumberToObject(o, "jumps",  r->jumps);
+      cJSON_AddNumberToObject(o, "target", r->target_c);
+      cJSON_AddNumberToObject(o, "profile", r->profile);
+    }
     cJSON_AddItemToArray(sessions, o);
 
     /* Newest first, so the first name seen for a title is its latest. */

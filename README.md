@@ -49,7 +49,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Cooling</h3>
-      Quiet fan control towards a target temperature (50–91 °C), modes, per-game profiles, a quieter target at night, a fan self-test, a safety ramp and a fan guard.
+      Quiet fan control towards a target temperature (50–91 °C), modes, per-game profiles (with suggestions from your own sessions and their measured effect), a quieter target at night, a fan self-test, a safety ramp and a fan guard.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Readings</h3>
@@ -235,7 +235,7 @@ The ELF is built with PS5 payload SDK **v0.50**, whose start-up code knows every
 
 | Page | Contents |
 | --- | --- |
-| **Cooling** | Status, history, sensors, target temperature, mode, per-game profiles |
+| **Cooling** | Status, history, sensors, target temperature, mode, per-game profiles with suggestions |
 | **Games** | Library, play time, saves, packages, PS4 PKG from USB, KrakenMount, Disc (with a drive), backups, history |
 | **File manager** | Folders of the console and the drives (NTFS too), search |
 | **Payloads** | Running, saved and USB payloads, profiles, download payloads |

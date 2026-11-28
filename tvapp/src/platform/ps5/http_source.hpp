@@ -36,6 +36,7 @@ class HttpSource final : public Source
     void save_config(const std::string &patch) override;
     void save_game_rule(const GameRule &rule) override;
     void remove_game_rule(const std::string &title_id) override;
+    void hide_suggestion(const std::string &title_id) override;
     void selftest(bool start) override;
     void power(const std::string &action) override;
     void start_payload(const PayloadFile &file) override;
@@ -118,6 +119,7 @@ class HttpSource final : public Source
             reload,
             config,
             rule,
+            suggest_hide,
             selftest,
             power,
             payload_start,
@@ -194,6 +196,7 @@ class HttpSource final : public Source
     void poll_config();
     void poll_selftest();
     void poll_rules();
+    void poll_suggestions();
     void poll_payloads();
     void poll_profiles(bool status_only);
     void poll_store();

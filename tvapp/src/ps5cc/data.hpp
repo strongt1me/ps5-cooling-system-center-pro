@@ -246,6 +246,39 @@ struct GameRule
     std::string profile = "comfort"; // comfort, balanced, cool
 };
 
+// What a group of a game's measured sessions shows (GET /api/v1/cooling/suggestions): per hour of
+// play the minutes above the target and the clear fan jumps (at least 10 points), the hottest
+// point that is typical for it and the mean fan speed. -1 where there is nothing to say.
+struct CoolStats
+{
+    int n = 0; // sessions
+    int over_min_h = -1;
+    int jumps_h = -1;
+    int hot_c = -1;
+    int fan_avg = -1;
+};
+
+// One game in that answer: a suggested profile, or the effect of the one that is kept.
+struct CoolSuggestion
+{
+    std::string id;
+    std::string name;
+    std::string state; // suggest, effect, measuring, collecting, fine
+    int n = 0;         // measured sessions in the window
+    int over_n = 0;    // ... of them often above the target
+    int warn_n = 0;    // ... with the temperature warning
+    CoolStats now;     // the sessions without a profile
+    std::string kind;  // peaks (often above the target) or jumpy (the fan jumps often)
+    std::string profile;
+    int target_c = 0;
+    bool hidden = false;
+    bool has_rule = false;
+    std::string rule_profile;
+    int rule_target_c = 0;
+    CoolStats before; // without the kept profile
+    CoolStats after;  // with it
+};
+
 // GET /api/v1/fan/selftest
 struct SelfTest
 {
@@ -494,6 +527,10 @@ struct PlaySession
     int soc_max = -1;
     int fan_avg = -1;
     int flags = 0; // 1 safety mode, 2 warning, 4 end estimated
+    // measured since 28.11.2026, only while the automatic mode regulates; -1 in older sessions
+    int auto_s = -1; // seconds under the automatic mode
+    int over_s = -1; // ... of them above the target
+    int jumps = -1;  // clear fan jumps (at least 10 points)
 };
 
 struct Playtime
@@ -1322,6 +1359,9 @@ struct Snapshot
     std::vector<GameRule> game_rules;
     std::string active_rule; // the title id whose profile is in force, "" for none
     bool rules_loaded = false;
+    std::vector<CoolSuggestion> suggestions; // per game: a suggested profile, or a kept one's effect
+    int suggest_min_after = 2;               // sessions with a profile before its effect is shown
+    bool suggestions_loaded = false;
     SelfTest selftest;
     std::vector<PayloadFile> payload_files;
     std::vector<PayloadProfile> payload_profiles;
@@ -1431,6 +1471,9 @@ class Source
     // PUT /api/v1/games: keep the current setting for a game, or forget a game's profile.
     virtual void save_game_rule(const GameRule &rule) = 0;
     virtual void remove_game_rule(const std::string &title_id) = 0;
+    // POST /api/v1/cooling/suggestions {"title_id":…,"hide":true}: the game's suggestion is not
+    // shown again (until it suggests something else).
+    virtual void hide_suggestion(const std::string &title_id) = 0;
     virtual void selftest(bool start) = 0;
     // POST /api/v1/power: "standby", "reboot", "off" or "safemode".
     virtual void power(const std::string &action) = 0;

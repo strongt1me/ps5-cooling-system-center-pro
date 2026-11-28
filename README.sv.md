@@ -49,7 +49,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Kylning</h3>
-      Tyst fläktstyrning mot en måltemperatur (50–91 °C), driftlägen, profiler per spel, ett tystare mål på natten, ett fläkttest, en säkerhetsramp och en fläktvakt.
+      Tyst fläktstyrning mot en måltemperatur (50–91 °C), driftlägen, profiler per spel (med förslag utifrån dina egna sessioner och deras uppmätta effekt), ett tystare mål på natten, ett fläkttest, en säkerhetsramp och en fläktvakt.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Mätvärden</h3>
@@ -235,7 +235,7 @@ ELF-filen är byggd med PS5-payload-SDK **v0.50**, vars startkod känner till al
 
 | Sida | Innehåll |
 | --- | --- |
-| **Kylning** | Status, historik, sensorer, måltemperatur, driftläge, profiler per spel |
+| **Kylning** | Status, historik, sensorer, måltemperatur, driftläge, profiler per spel med förslag |
 | **Spel** | Bibliotek, speltid, spelsparningar, paket, PS4 PKG från USB, KrakenMount, Skiva (med skivenhet), säkerhetskopior, historik |
 | **Filhanterare** | Mappar på konsolen och enheterna (även NTFS), sökning |
 | **Payloads** | Pågående, sparade och USB-payloads, profiler, hämta payloads |

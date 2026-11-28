@@ -42,7 +42,8 @@ enum Row
     kBgPause,
     kRuleSave,
     kRuleNone,
-    kRuleBase = 100, // + index of the kept game profile
+    kRuleBase = 100,    // + index of the kept game profile
+    kSuggestBase = 200, // + index of the suggestion shown
 };
 
 const char *profile_word(const std::string &profile)
@@ -52,6 +53,19 @@ const char *profile_word(const std::string &profile)
     if (profile == "balanced")
         return "Ausgewogen";
     return "Leise";
+}
+
+// "a → b" for the effect of a kept profile; "–" where a side has nothing
+std::string pair(int a, int b, const char *unit)
+{
+    if (a < 0 || b < 0)
+        return "–";
+    return std::to_string(a) + " → " + std::to_string(b) + unit;
+}
+
+std::string single(int v, const char *unit)
+{
+    return v < 0 ? "–" : std::to_string(v) + unit;
 }
 
 constexpr float kSaveDelay = 0.6f;
@@ -126,6 +140,9 @@ class SettingsPage final : public Page
         info_.style.max_lines = 1;
         info_.set_bounds({kRightX + 30.0f, kTop + 200.0f, kRightW - 60.0f, 220.0f});
 
+        game_info_.style = info_.style;
+        game_info_.set_bounds({kRightX + 30.0f, kTop + 180.0f, kRightW - 60.0f, 260.0f});
+
         chart_.style.theme = theme;
         chart_.style.readout = false;
         chart_.style.legend = ui::LegendPlacement::none;
@@ -153,9 +170,17 @@ class SettingsPage final : public Page
             for (const GameRule &r : data.game_rules)
                 rules += "|" + r.title_id + ":" + r.title_name + ":" + std::to_string(r.target_c) +
                          ":" + r.profile;
+            for (const CoolSuggestion &s : data.suggestions)
+                rules += "|" + s.id + ":" + s.state + ":" + s.profile + ":" +
+                         std::to_string(s.target_c) + (s.hidden ? ":h" : ":") +
+                         std::to_string(s.after.n) + ":" + std::to_string(s.before.n) + ":" +
+                         std::to_string(s.now.over_min_h) + ":" + std::to_string(s.now.jumps_h) +
+                         ":" + std::to_string(s.after.over_min_h);
             if (rules != rules_key_)
             {
                 rules_key_ = rules;
+                suggestions_ = data.suggestions;
+                min_after_ = data.suggest_min_after;
                 game_id_ = data.status.game_id;
                 game_name_ = data.status.game_name;
                 rules_ = data.game_rules;
@@ -199,6 +224,16 @@ class SettingsPage final : public Page
 
     void handle(const InputFrame &input, ui::Feedback &feedback) override
     {
+        // Square hides the focused suggestion (nothing is deleted, so nothing is asked)
+        if (input.is_pressed(Action::west))
+        {
+            if (const CoolSuggestion *s = suggestion_at(form_.focus_id()); s != nullptr)
+            {
+                source().hide_suggestion(s->id);
+                feedback.play(audio::Cue::select, 1.0f, 0.0f, 0.6f);
+                return;
+            }
+        }
         const ui::Event event = form_.handle(input, feedback);
         if (event == ui::Event::changed)
             changed(form_.changed_id());
@@ -215,6 +250,19 @@ class SettingsPage final : public Page
             rule.profile = config_.profile;
             source().save_game_rule(rule);
         }
+        else if (event == ui::Event::activated && form_.changed_id() >= kSuggestBase)
+        {
+            // the suggested setting becomes the game's profile, as "Übernehmen" on the web page
+            if (const CoolSuggestion *s = suggestion_at(form_.changed_id()); s != nullptr)
+            {
+                GameRule rule;
+                rule.title_id = s->id;
+                rule.title_name = s->name.empty() ? s->id : s->name;
+                rule.target_c = s->target_c;
+                rule.profile = s->profile;
+                source().save_game_rule(rule);
+            }
+        }
         else if (event == ui::Event::activated && form_.changed_id() >= kRuleBase)
         {
             // at once, nothing asked twice
@@ -228,6 +276,8 @@ class SettingsPage final : public Page
     {
         form_.update(dt);
         info_.update(dt);
+        show_game(form_.focus_id());
+        game_info_.update(dt);
         chart_.update(dt);
         if (save_in_ > 0.0f)
         {
@@ -246,6 +296,11 @@ class SettingsPage final : public Page
         const Rect card{kRightX, kTop + 10.0f, kRightW, kBottom - kTop - 10.0f};
         ui::Painter paint(list, fonts, theme_);
         paint.panel(card);
+        if (const CoolSuggestion *g = game_at(form_.focus_id()); g != nullptr)
+        {
+            draw_game(canvas, card, *g);
+            return;
+        }
         ui::text(list, fonts.semibold, "Lüfter-Selbsttest", card.x + 30.0f, card.y + 50.0f, 26.0f,
                  kInk);
         ui::text(list, fonts.semibold, verdict_text(test_), card.x + 30.0f, card.y + 100.0f, 30.0f,
@@ -282,6 +337,13 @@ class SettingsPage final : public Page
             out[1] = {ui::Button::cross, "Für dieses Spiel merken"};
             return 2;
         }
+        if (suggestion_at(form_.focus_id()) != nullptr)
+        {
+            // two, not three: with the shell's own hints a third would run into "Menü"
+            out[0] = {ui::Button::cross, "Übernehmen"};
+            out[1] = {ui::Button::square, "Ausblenden"};
+            return 2;
+        }
         if (form_.focus_id() >= kRuleBase)
         {
             out[1] = {ui::Button::cross, "Spielprofil entfernen"};
@@ -291,6 +353,137 @@ class SettingsPage final : public Page
     }
 
   private:
+    // The suggestion behind a row of the form, or nullptr.
+    const CoolSuggestion *suggestion_at(int id) const
+    {
+        if (id < kSuggestBase)
+            return nullptr;
+        const std::size_t row = static_cast<std::size_t>(id - kSuggestBase);
+        return row < shown_.size() && shown_[row] < suggestions_.size() ? &suggestions_[shown_[row]]
+                                                                         : nullptr;
+    }
+
+    // What the right card shows for a focused row: a suggestion, or what was measured for a kept
+    // profile (when the app has numbers for it). nullptr: the self-test.
+    const CoolSuggestion *game_at(int id) const
+    {
+        if (const CoolSuggestion *s = suggestion_at(id); s != nullptr)
+            return s;
+        if (id < kRuleBase || id >= kSuggestBase)
+            return nullptr;
+        const std::size_t index = static_cast<std::size_t>(id - kRuleBase);
+        if (index >= rules_.size())
+            return nullptr;
+        for (const CoolSuggestion &s : suggestions_)
+        {
+            if (s.id == rules_[index].title_id && s.has_rule)
+                return &s;
+        }
+        return nullptr;
+    }
+
+    // The rows of the right card, set only when they change (set_items starts the list's entrance).
+    void show_game(int focus)
+    {
+        const CoolSuggestion *g = game_at(focus);
+        std::string key = g == nullptr ? std::string() : g->id + ":" + g->state;
+        if (g != nullptr)
+            key += ":" + std::to_string(g->now.over_min_h) + ":" + std::to_string(g->after.n) +
+                   ":" + std::to_string(g->before.n);
+        if (key == game_key_)
+            return;
+        game_key_ = key;
+        std::vector<ui::DetailItem> items;
+        game_note_.clear();
+        if (g == nullptr)
+        {
+            game_info_.set_items(items);
+            return;
+        }
+        const auto add = [&](const char *label, const std::string &value)
+        {
+            ui::DetailItem item;
+            item.label = label;
+            item.value = value;
+            items.push_back(std::move(item));
+        };
+        // green where the kept profile lowered the value (less time above the target, fewer jumps,
+        // cooler); the fan speed is not judged: more of it is the price of "Kühl"
+        const auto judge = [&](int before, int after)
+        {
+            if (before >= 0 && after >= 0 && after < before)
+                items.back().color = kGood;
+        };
+        if (!g->has_rule)
+        {
+            add("Sitzungen", std::to_string(g->n) + " gemessen");
+            add("Über dem Ziel", single(g->now.over_min_h, " Min. pro Std."));
+            add("Lüftersprünge", single(g->now.jumps_h, " pro Std."));
+            add("Heißeste Stelle", single(g->now.hot_c, " °C"));
+            if (g->warn_n > 0)
+                add("Temperaturwarnung",
+                    "in " + std::to_string(g->warn_n) + " von " + std::to_string(g->n));
+            game_note_ = g->kind == "peaks"
+                             ? "„Kühl“ reagiert früher und kräftiger: weniger Zeit über dem Ziel, "
+                               "dafür ein etwas lauterer Lüfter."
+                             : "„Leise“ ändert die Drehzahl in kleineren Schritten: weniger "
+                               "Sprünge, das Ziel bleibt.";
+        }
+        else
+        {
+            add("Sitzungen", std::to_string(g->before.n) + " vorher · " +
+                                 std::to_string(g->after.n) + " nachher");
+            if (g->after.n >= min_after_ && g->before.n >= min_after_)
+            {
+                add("Über dem Ziel", pair(g->before.over_min_h, g->after.over_min_h, " Min./Std."));
+                judge(g->before.over_min_h, g->after.over_min_h);
+                add("Lüftersprünge", pair(g->before.jumps_h, g->after.jumps_h, " pro Std."));
+                judge(g->before.jumps_h, g->after.jumps_h);
+                add("Heißeste Stelle", pair(g->before.hot_c, g->after.hot_c, " °C"));
+                judge(g->before.hot_c, g->after.hot_c);
+                add("Lüfter Ø", pair(g->before.fan_avg, g->after.fan_avg, " %"));
+            }
+            else if (g->after.n >= min_after_)
+            {
+                add("Über dem Ziel", single(g->after.over_min_h, " Min./Std."));
+                add("Lüftersprünge", single(g->after.jumps_h, " pro Std."));
+                add("Heißeste Stelle", single(g->after.hot_c, " °C"));
+                game_note_ = "Zum Vergleich fehlen Sitzungen ohne das Profil.";
+            }
+            else
+                game_note_ = "Wird gemessen: " + std::to_string(g->after.n) + " von " +
+                             std::to_string(min_after_) + " Sitzungen mit diesem Profil.";
+        }
+        game_info_.set_items(items);
+    }
+
+    void draw_game(ui::Canvas &canvas, const Rect &card, const CoolSuggestion &g) const
+    {
+        gfx::DrawList &list = canvas.list;
+        const ui::Fonts &fonts = canvas.fonts;
+        ui::text(list, fonts.semibold, g.has_rule ? "Wirkung des Spielprofils" : "Vorschlag",
+                 card.x + 30.0f, card.y + 50.0f, 26.0f, kInk);
+        const std::string name = g.name.empty() ? g.id : g.name;
+        const auto lines = fonts.semibold.font->wrap(name, 30.0f, card.w - 60.0f);
+        ui::text(list, fonts.semibold, lines.empty() ? name : lines.front(), card.x + 30.0f,
+                 card.y + 100.0f, 30.0f, kBlue);
+        const std::string what =
+            g.has_rule ? std::to_string(g.rule_target_c) + " °C · " + profile_word(g.rule_profile)
+                       : std::string(profile_word(g.profile)) + " bei " +
+                             std::to_string(g.target_c) + " °C";
+        ui::text(list, fonts.regular, what, card.x + 30.0f, card.y + 140.0f, 22.0f, kMuted);
+        game_info_.draw(canvas);
+        float y = card.y + 200.0f + 42.0f * static_cast<float>(game_info_.items().size()) + 40.0f;
+        int n = 0;
+        for (const std::string &line : fonts.regular.font->wrap(game_note_, 21.0f, card.w - 60.0f))
+        {
+            if (++n > 4)
+                break;
+            ui::text(list, fonts.regular, line, card.x + 30.0f, y, 21.0f, kMuted);
+            y += 30.0f;
+        }
+    }
+
     static std::string config_key(const Config &c)
     {
         char text[240];
@@ -371,6 +564,20 @@ class SettingsPage final : public Page
                                      "laufende Spiel; dafür muss die Spielerkennung an sein."
                                    : "Ziel und Betriebsart von jetzt gelten künftig, sobald dieses "
                                      "Spiel läuft.";
+        }
+        shown_.clear();
+        for (std::size_t i = 0; i < suggestions_.size(); ++i)
+        {
+            const CoolSuggestion &s = suggestions_[i];
+            if (s.state != "suggest" || s.hidden || s.profile.empty())
+                continue;
+            ui::FormRow &row = form_.add_action(kSuggestBase + static_cast<int>(shown_.size()),
+                                                "Vorschlag: " + (s.name.empty() ? s.id : s.name));
+            row.text = std::to_string(s.target_c) + " °C · " + profile_word(s.profile);
+            row.description = s.kind == "peaks"
+                                  ? "Oft über dem Ziel. X-Taste: übernehmen, Viereck: ausblenden."
+                                  : "Der Lüfter springt oft. X-Taste: übernehmen, Viereck: ausblenden.";
+            shown_.push_back(i);
         }
         for (std::size_t i = 0; i < rules_.size(); ++i)
         {
@@ -581,6 +788,12 @@ class SettingsPage final : public Page
     std::string rules_key_;
     std::string game_id_, game_name_;
     std::vector<GameRule> rules_;
+    std::vector<CoolSuggestion> suggestions_; // as the app sent them
+    std::vector<std::size_t> shown_;          // the suggestion behind row kSuggestBase + i
+    int min_after_ = 2;
+    ui::DetailList game_info_; // the right card while a suggestion or a kept profile is focused
+    std::string game_key_;
+    std::string game_note_; // the sentence under it
     std::string active_rule_;
     bool rules_loaded_ = false;
     std::string test_key_;
