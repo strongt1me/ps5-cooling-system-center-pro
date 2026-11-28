@@ -1,36 +1,40 @@
-# PS5 Cooling & System Center – Pro v1.98.0
+# PS5 Cooling & System Center – Pro v1.99.0
 
 ## Highlights
-- **Kraken Mount 0.4.2** is built in. It now also mounts game images (`.exfat`, `.ffpkg`, `.ffpfs`, `.ffpfsc`, read-only), so game folders, images and debug packages count the same. The tab is called **"KrakenMount"** now (it was "FPKGMount").
-- **Folder "Kraken-Games" instead of "FPKG-Games":** the old name sounded as if only FPKG belonged there. The app renames the folder (internal storage and every plugged-in drive) by itself the next time it starts Kraken Mount – only by renaming, nothing is copied or overwritten.
-- **Convert and copy with three targets** (web and fullscreen): **A · Playable with ShadowMountPlus**, **B · Playable with Kraken Mount** and **C · Backup**.
+- **Kraken Mount plays ShadowMountPlus's games while ShadowMountPlus is not running.** If ShadowMountPlus is not loaded (after a restart, for example), the app gives Kraken Mount the folders ShadowMountPlus searches after a minute: `homebrew` and `etaHEN/games` (internal and on every drive) and the main folder of every drive. Kraken Mount then registers and plays the games there: folders, images (`.exfat`, `.ffpkg`, `.ffpfs`, `.ffpfsc`) and `.pkg` files. When ShadowMountPlus starts, the app gives the folders back within seconds; Kraken Mount releases its mounts and images by itself.
+- **A lamp in the KrakenMount tab** (web and fullscreen) shows at a glance which case applies: green and breathing = Kraken Mount has the folders, amber blinking = it takes them over shortly or is giving them back, blue = ShadowMountPlus has them, grey = a folder list changed by hand.
+- **"Delete" in the game list now really deletes a game of Kraken Mount.** It used to run as an installed game: the console removed only the tile, the data stayed, and Kraken Mount registered the game again at its next scan. Now Kraken Mount deletes it itself (unmount, data, tile, cache, checksum file).
 
 ## What's new
-- **Eject:** While Kraken Mount has an image of a drive mounted, the app refuses to eject that drive and names the image – the console would otherwise pull the drive away from under it. Kraken Mount's own "Eject" frees it.
-- **KrakenMount tab:** An image game is shown as "Image (exfat)" and so on; "Delete game" and "Source" name the image file.
-- **FPKG:** Target B is chosen from the start (ShadowMountPlus does not mount a `.pkg`). PS4 games cannot go to B: Kraken Mount plays PS5 games. No debug FPKG is offered for the image of a PS4 game any more.
-- **Copy to B:** If Kraken Mount does not search the `Kraken-Games` folder of the chosen drive (its folder list was changed on its own page), the copy window says so, as the check before a conversion already did.
-- **Renaming the folder only when it is safe:** Kraken Mount really stopped, no game and no job running, and nothing mounted from an old `FPKG-Games` folder any more. Otherwise the app waits for the next start and writes that once to the log.
-- **Fullscreen app:** The row "Target" offers only the kinds that fit the game and format; "C · Backup" could be unreachable before.
-- **Duplicate images** (ShadowMountPlus) no longer counts what lies in Kraken Mount's folders; an image set aside there earlier stays listed and can be taken back.
-- **ShadowMountPlus:** If Kraken Mount answers on ShadowMountPlus's port, the app only sends it requests again once ShadowMountPlus itself answers there.
-- New messages translated into all six languages; manual and FAQ in seven languages updated.
+- No restart of Kraken Mount is needed for the switch. Every start of Kraken Mount by the app begins without ShadowMountPlus's folders, so that a ShadowMountPlus from the autostart has time when the console is switched on. A folder list changed by hand on Kraken Mount's own page is left alone.
+- ShadowMountPlus counts as running when its process runs or it answered on its port in the last minute. If the switch fails once, the app tries again after 5 s.
+- While Kraken Mount has the folders, the game list shows the real path and format of those games (no more dead `/mnt/shadowmnt` paths), so copying and converting work. The app's own tiles never appear in the KrakenMount tab.
+- "Original afterwards": deleting goes through Kraken Mount when it plays the original; moving such an original is refused up front. `Kraken-Games` is no target for moving an original any more.
+- "Set image aside" is refused while Kraken Mount has the image mounted. The Packages tab names the real reason when Kraken Mount plays a `.pkg` without installing it. The duplicate warning does not count the hand-over between the two as a conflict.
+- Delete refusals name the real reason: Kraken Mount switched off, busy, or not listing the game yet. Long paths are no longer cut.
+- Translations in six languages, manual in seven languages.
+- **Shorter manual and FAQ** in all seven languages (about 40 % shorter, 45 instead of 62 questions), checked against the code; `docs/HANDBUCH.md` reorganised and half as long; READMEs, LIESMICH and the developer documents brought up to date.
+- **Credits** (web and fullscreen): ps5-app-dumper (Echo Stretch and slopmaster33), idlesauce (ps5-self-pager), Daniel Nylander (Swedish translation), OffAct, np-fake-signin, Dump Forge, PS4FFPFSC and Transmission added.
 
 ## Notes
-- **Tried on the console (Slim):** the folder move FPKG-Games → Kraken-Games, image games mounted by Kraken Mount (internal storage and USB), the refused eject and Kraken Mount's own eject, and copying and converting a game (Asterix & Obelix: Heroes, 1.74 GB) to target B – the copy once more with this release's state. On the Pro the folder move was confirmed. Tested on the PC: 47 host tests with the fan simulation, 396 tests of the fullscreen app.
-- **If Kraken Mount is running while you update the app,** it keeps its old folder list until it is started again. The KrakenMount tab says so: switch Kraken Mount off and on once, then the app renames the folder.
+- **Tried on the console:**
+  - On the Pro, after a restart without ShadowMountPlus: switch-over after 60 s, 14 games ready without conflicts, games started through Kraken Mount, the game list with real paths, the hand-back to ShadowMountPlus in 2 s.
+  - With a 6 GB test copy: moving refused up front, the original deleted through Kraken Mount after a conversion, "set image aside" refused, the copy deleted from the game list.
+  - On the Slim: a delete through Kraken Mount (1.74 GB test copy).
+- **Tested on the PC:** 47 host tests with the fan simulation and 396 tests of the fullscreen app.
+- A `.pkg` in a drive's main folder is played by Kraken Mount without installing it while ShadowMountPlus is not running; to keep it playable with ShadowMountPlus too, put it into `Kraken-Games`.
 - Send the new ELF to port 9021 and copy the tiles FAKE86921 and FAKE86922 from this release again (the fullscreen app must be closed for that). After that, reload an open web page once.
 
 ## Downloads
 | File | What it is for |
 |---|---|
-| `PS5_Cooling_System_Center_v1.98.0.elf` | The main program (send it to port 9021) |
+| `PS5_Cooling_System_Center_v1.99.0.elf` | The main program (send it to port 9021) |
 | `FAKE86921.zip` | Fullscreen tile: copy the folder to `/data/homebrew/` |
 | `FAKE86922.zip` | Browser tile: copy the folder to `/data/homebrew/` |
 | `LIESMICH.txt` | Instructions (German) |
 | `payload-manager.json` | List for itsPLK's Payload Manager: enter `https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest/download/payload-manager.json` as the source, and it downloads the app from GitHub (with a SHA-256 check) |
 
 ## Thanks
-To everyone whose work is in the app or makes it possible – the full list is in the app under "Credits" or Profile → Thanks. Especially **quer3q** for Kraken Mount, Dump Forge and AMPR EMU NG, **abcde6543** for PS5-NTFS-BROWSER, **gasb07** for PS4Mount, **drakmor** for ShadowMountPlus, **itsPLK** for the Payload Manager and the payload mirror, and **John Törnblom** and the contributors of the PS5 payload SDK.
+To everyone whose work is in the app or makes it possible – the full list is in the app under "Credits" or Profile → Thanks. Especially **quer3q** for Kraken Mount, Dump Forge and AMPR EMU NG, **drakmor** for ShadowMountPlus, **abcde6543** for PS5-NTFS-BROWSER, **gasb07** for PS4Mount, **itsPLK** for the Payload Manager and the payload mirror, and **John Törnblom** and the contributors of the PS5 payload SDK.
 
-**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.97.0...v1.98.0
+**Full Changelog**: https://github.com/strongt1me/ps5-cooling-system-center-pro/compare/v1.98.0...v1.99.0
