@@ -325,6 +325,16 @@ ps5tm_smp_last_known_up(void) {
   return up;
 }
 
+/* ShadowMountPlus answered on its port (not Kraken Mount in its place) at the last ask, and that ask is at most ms old. Sends nothing: kraken.c
+   looks every few seconds and must not ask ShadowMountPlus itself (28.11.2026). */
+int
+ps5tm_smp_answered_recently(unsigned ms) {
+  pthread_mutex_lock(&g_lock);
+  const int up = g_games_ms != 0 && g_count >= 0 && ps5tm_mono_ms() - g_games_ms <= ms;
+  pthread_mutex_unlock(&g_lock);
+  return up;
+}
+
 int
 ps5tm_smp_available(char *version, size_t version_len) {
   pthread_mutex_lock(&g_lock);

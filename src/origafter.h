@@ -87,6 +87,16 @@ ps5tm_orig_smp_finds(const char *game_path, const char *mount) {
   return d >= 0 && d <= 2;                              /* the roots of USB and M.2 drives, two levels deep */
 }
 
+/* 1 when Kraken Mount would find it there: its own folder Kraken-Games on that drive (the app gives it that one; it registers what lies in it, also one
+   level deeper). Moving the original there made it a second source of the same title (review 28.11.2026). */
+static inline int
+ps5tm_orig_kraken_finds(const char *game_path, const char *mount) {
+  char r[320];
+  /* the name written out: a macro defined here before ps5tm.h would skip its block that also names the old folder (review 28.11.2026) */
+  snprintf(r, sizeof(r), "%s/Kraken-Games", mount);
+  return ps5tm_orig_under(game_path, r);
+}
+
 /* "9,4 GB" / "512 MB" / "0 MB": German decimal comma, as the app shows sizes. */
 static inline void
 ps5tm_orig_fmt_bytes(char *out, size_t n, uint64_t bytes) {

@@ -5857,7 +5857,7 @@
       + row("delete", "Löschen", ctx.kind === "unpack"
           ? "Erst wenn das Spiel im Zielordner liegt und ShadowMountPlus das Entpacken als gelungen meldet. Die App fragt vorher und nennt den Namen."
           : "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher und nennt den Namen.", delWhy)
-      + row("move", "Verschieben", "An einen Ort, den ShadowMountPlus nicht durchsucht.", movWhy)
+      + row("move", "Verschieben", "An einen Ort, den weder ShadowMountPlus noch Kraken Mount durchsucht.", movWhy)
       + (og.after === "move" && !movWhy ? ogMoveHtml(p) : "");
     const warn = og.after === "delete" && !delWhy
       ? `<div class="cp-warn"><span aria-hidden="true">⚠</span> ${size
@@ -8731,17 +8731,22 @@
       : sf.list === "app_smp" ? "Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk, dazu, solange ShadowMountPlus nicht läuft, homebrew und etaHEN/games (intern und auf jedem Laufwerk) sowie der Hauptordner jedes Laufwerks."
       : isOwn ?"Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel (dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die Quere; die App meldet es dann."
       : roots ? `Suchordner: ${roots.join(", ")}`
+      : k && !d.settings ? ""                       /* it runs and did not tell its settings this time: nothing is said rather than "switched off" (review 28.11.2026) */
       : d.settings ? "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege Spiele für Kraken Mount besser in den Ordner Kraken-Games (/data/Kraken-Games oder Kraken-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein."
       : "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner Kraken-Games ein: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk.");
+    /* ShadowMountPlus runs and the list still has its folders: the app is giving them back (a few seconds; longer while Kraken Mount is busy).
+       Checked first, so that the page never says "läuft nicht" while it runs (review 28.11.2026). */
+    const back = sf.smp === "running" && sf.list === "app_smp";
     const smpTxt = !k || d.stopping ? ""
+      : back ? "ShadowMountPlus läuft: Die App gibt ihm homebrew und etaHEN/games gerade zurück."
       : sf.list === "app_smp" ? "ShadowMountPlus läuft nicht: Kraken Mount spielt auch die Spiele aus homebrew und etaHEN/games. Startet ShadowMountPlus, gibt die App ihm diese Ordner sofort zurück."
       : sf.smp === "gone" && sf.list === "app" && sf.in_s > 0 ? `ShadowMountPlus läuft nicht: In ${sf.in_s} s übernimmt Kraken Mount auch homebrew und etaHEN/games.`
-      : sf.smp === "gone" && sf.list === "hand" ? "ShadowMountPlus läuft nicht. Die Suchordner von Kraken Mount wurden auf seiner Seite geändert; die App gibt ihm homebrew und etaHEN/games deshalb nicht von selbst."
-      : sf.smp === "running" && sf.list === "app" ? "ShadowMountPlus läuft: homebrew und etaHEN/games gehören ihm. Läuft es nicht, übernimmt Kraken Mount diese Ordner nach einer Minute."
+      : sf.smp === "gone" && sf.list === "hand" ? "ShadowMountPlus läuft nicht. Die Suchordner von Kraken Mount wurden von Hand geändert; die App ergänzt sie deshalb nicht."
+      : sf.smp === "running" && sf.list === "app" ? "ShadowMountPlus läuft und hat homebrew und etaHEN/games. Läuft es nicht, übernimmt Kraken Mount sie nach einer Minute."
       : "";
     /* das Lämpchen davor (Wunsch des Users, 28.11.2026: „damit man gleich darauf aufmerksam wird“): grün = Kraken Mount spielt
-       homebrew und etaHEN/games, gelb = übernimmt sie gleich, blau = ShadowMountPlus hat sie, grau = eigene Ordnerliste */
-    const lamp = sf.list === "app_smp" ? "on" : sf.smp === "gone" && sf.list === "app" ? "wait" : sf.smp === "running" ? "smp" : "hand";
+       homebrew und etaHEN/games, gelb = übernimmt sie gleich oder gibt sie gerade zurück, blau = ShadowMountPlus hat sie, grau = eigene Ordnerliste */
+    const lamp = back ? "wait" : sf.list === "app_smp" ? "on" : sf.smp === "gone" && sf.list === "app" ? "wait" : sf.smp === "running" ? "smp" : "hand";
     $("#fp-smp").hidden = !smpTxt;
     $("#fp-lamp").className = `fp-lamp ${lamp}`;
     txt("#fp-smp-text", smpTxt);

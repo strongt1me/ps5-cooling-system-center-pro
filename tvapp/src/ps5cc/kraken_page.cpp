@@ -431,6 +431,8 @@ class KrakenPage final : public Page
     // page).
     std::string roots_text() const
     {
+        if (state_.running && !state_.settings_known)
+            return {}; // it did not tell its settings this time: nothing rather than a wrong text
         if (state_.scanpaths.empty())
         {
             // Not running: its setting is not known, the app writes the folder Kraken-Games at the
@@ -479,11 +481,16 @@ class KrakenPage final : public Page
     }
 
     // ShadowMountPlus's folders (kraken.c, 28.11.2026): whether Kraken Mount searches homebrew and
-    // etaHEN/games because ShadowMountPlus does not run - the same texts as the web page
+    // etaHEN/games because ShadowMountPlus does not run - the texts of the web page, the green one
+    // without its second sentence (three lines at most fit here)
     std::string smp_text() const
     {
         if (!state_.running || state_.stopping)
             return {};
+        // ShadowMountPlus runs and the list still has its folders: they are being given back (checked
+        // first: never "läuft nicht" while it runs, review 28.11.2026)
+        if (giving_back())
+            return "ShadowMountPlus läuft: Die App gibt ihm homebrew und etaHEN/games gerade zurück.";
         if (state_.smp_list == "app_smp")
             return "ShadowMountPlus läuft nicht: Kraken Mount spielt auch die Spiele aus homebrew "
                    "und etaHEN/games.";
@@ -491,13 +498,17 @@ class KrakenPage final : public Page
             return "ShadowMountPlus läuft nicht: In " + std::to_string(state_.smp_in_s) +
                    " s übernimmt Kraken Mount auch homebrew und etaHEN/games.";
         if (state_.smp == "gone" && state_.smp_list == "hand")
-            return "ShadowMountPlus läuft nicht. Die Suchordner von Kraken Mount wurden auf seiner "
-                   "Seite geändert; die App gibt ihm homebrew und etaHEN/games deshalb nicht von "
-                   "selbst.";
+            return "ShadowMountPlus läuft nicht. Die Suchordner von Kraken Mount wurden von Hand "
+                   "geändert; die App ergänzt sie deshalb nicht.";
         if (state_.smp == "running" && state_.smp_list == "app")
-            return "ShadowMountPlus läuft: homebrew und etaHEN/games gehören ihm. Läuft es nicht, "
-                   "übernimmt Kraken Mount diese Ordner nach einer Minute.";
+            return "ShadowMountPlus läuft und hat homebrew und etaHEN/games. Läuft es nicht, "
+                   "übernimmt Kraken Mount sie nach einer Minute.";
         return {};
+    }
+
+    bool giving_back() const
+    {
+        return state_.smp == "running" && state_.smp_list == "app_smp";
     }
 
     // The line about ShadowMountPlus's folders with a round lamp in front of it (user, 28.11.2026:
@@ -513,7 +524,12 @@ class KrakenPage final : public Page
             return y;
         Color core = Color::rgb(0x6b7896);
         float glow = -1.0f; // < 0: no light around it
-        if (state_.smp_list == "app_smp")
+        if (giving_back())
+        {
+            core = kWarning;
+            glow = 0.5f + 0.5f * std::sin(canvas.time * 6.0f);
+        }
+        else if (state_.smp_list == "app_smp")
         {
             core = Color::rgb(0x2fd44a);
             glow = 0.5f + 0.5f * std::sin(canvas.time * 2.6f);

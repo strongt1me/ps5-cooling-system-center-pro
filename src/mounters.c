@@ -29,6 +29,9 @@ ps5tm_mounters_conflicts(void) {
     char path[256] = "";
     ps5tm_smp_game_t sg;
     if(ps5tm_smp_find(kg[i].title_id, &sg) == 0 && strcmp(sg.source_type, "pkg") != 0) {
+      /* One and the same folder or image at both: the hand-over while Kraken Mount gives ShadowMountPlus's folders back (it lets go at its next
+         pass). Not two sources fighting; and fpkgdup.c must not take it away from ShadowMountPlus then (review 28.11.2026). */
+      if(!strcmp(kg[i].image[0] ? kg[i].image : kg[i].path, sg.path) && ps5tm_kraken_smp_handover()) continue;
       by = "smp";
       snprintf(path, sizeof(path), "%s", sg.path);
     } else if(ps4m_title_managed(kg[i].title_id)) {

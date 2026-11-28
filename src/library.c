@@ -135,6 +135,7 @@ typedef struct {
   int      smp_can_move;
   int      smp_can_unpack;
   int      ps4mount;            /* an installed package that PS4Mount serves from a USB drive (29.10.2026) */
+  int      kraken_held;         /* Kraken Mount plays it from a folder or an image that ShadowMountPlus does not list (kraken_source, 28.11.2026) */
 } lib_game_t;
 
 /* The folder checks read the USB drive; their result is kept per title and
@@ -586,6 +587,28 @@ kraken_own_lib(const char *nm, int dlc_ini) {
                      !strcasecmp(nm, "libSceNpEntitlementAccess.sprx"));
 }
 
+/* A title that ShadowMountPlus does not list and that Kraken Mount plays from a folder or an image (it has ShadowMountPlus's folders while that does
+   not run): its source is Kraken Mount's live mount and its data the folder or the image file Kraken Mount names, not the mount.lnk ShadowMountPlus
+   wrote once (Kraken Mount writes none). Without this, such an image game pointed at a dead /mnt/shadowmnt/... and was "not mounted", and copying
+   or converting it had no source (review 28.11.2026). kr: a copy of Kraken Mount's list taken before the round. */
+static void
+kraken_source(lib_game_t *g, const ps5tm_kraken_game_t *kr, int n) {
+  ps5tm_smp_game_t s;
+  /* only a title with a mount.lnk of ShadowMountPlus: one from Kraken-Games has none and stays as before (the mark KrakenMount, its cache) */
+  if(!kr || n <= 0 || !g->source[0] || ps5tm_smp_find(g->title_id, &s) == 0) return;
+  for(int i = 0; i < n; i++) {
+    const ps5tm_kraken_game_t *k = &kr[i];
+    if(strcmp(k->title_id, g->title_id) || k->duplicate) continue;      /* the copy it does not play is never the source */
+    if(strcmp(k->kind, "folder") || !k->path[0]) return;                /* it plays a .pkg: as before */
+    /* the copy holds 191 bytes of a path: one that fills it may be cut, and a wrong path is worse than none */
+    if(strlen(k->path) >= sizeof(k->path) - 1 || strlen(k->image) >= sizeof(k->image) - 1 || strlen(k->path) >= sizeof(g->source)) return;
+    snprintf(g->source, sizeof(g->source), "%s", k->path);
+    snprintf(g->real_path, sizeof(g->real_path), "%s", k->image[0] ? k->image : k->path);
+    g->kraken_held = 1;
+    return;
+  }
+}
+
 static void
 kraken_cache_mods(lib_game_t *g) {
   if(g->platform != 0 || g->source[0] || g->format[0] || g->mods.state != MODS_NONE) return;
@@ -775,6 +798,16 @@ detect_storage(lib_game_t *g) {
     else if(!strcmp(s.image_type, "pfsc"))              fmt = "ffpfsc";
     else                                                fmt = "image";
     if(!strcmp(fmt, "pkg") && sl) g->real_path[sl - s.path] = 0;       /* an installed package: its folder, like the branch below */
+  } else if(g->kraken_held) {
+    /* Kraken Mount plays it (kraken_source set real_path): a folder, or the image file, whose format its name tells */
+    const char *ext = strrchr(g->real_path, '.'), *sl = strrchr(g->real_path, '/');
+    if(ext && sl && ext < sl) ext = NULL;
+    if(!strcmp(g->real_path, g->source))      fmt = "folder";
+    else if(ext && !strcasecmp(ext, ".exfat"))  fmt = "exfat";
+    else if(ext && !strcasecmp(ext, ".ffpkg"))  fmt = "ffpkg";
+    else if(ext && !strcasecmp(ext, ".ffpfs"))  fmt = "ffpfs";
+    else if(ext && !strcasecmp(ext, ".ffpfsc")) fmt = "ffpfsc";
+    else                                        fmt = "image";
   } else if(g->source[0] && strncmp(g->source, "/mnt/shadowmnt", 14)) {
     snprintf(g->real_path, sizeof(g->real_path), "%s", g->source);
     fmt = "folder";
@@ -1282,6 +1315,8 @@ refresh(void) {
   qsort(list, (size_t)n, sizeof(lib_game_t), by_recent);        /* by_recent reads only the order and the title id */
   if(n > LIBRARY_MAX) { n = LIBRARY_MAX; truncated = 1; }       /* the most recently used stay (audit F-253): the rows read were not only games */
   int cut_off = 0;
+  ps5tm_kraken_game_t *krg = calloc(PS5TM_KRAKEN_MAX, sizeof(*krg));   /* 170 KB, heap: Kraken Mount's list for kraken_source (one ask, 10 s cache) */
+  const int krn = krg ? ps5tm_kraken_games(krg, PS5TM_KRAKEN_MAX) : 0;
   for(int i = 0; i < n; i++) {                                  /* the slow checks only for the games that stay on the list */
     /* These checks look at the drives (a stat, a walk down a game's folder). Through the gate (drivegate.c, 21.11.2026): a game's checks that have begun are
        waited for by an eject, and when an eject comes the pass ends here and the last good list stays - a list with half of its games unchecked would show
@@ -1289,11 +1324,13 @@ refresh(void) {
     int gate = ps5tm_drive_enter_any();
     if(gate == 0) { cut_off = 1; break; }
     read_mount_source(list[i].title_id, list[i].source, sizeof(list[i].source));
+    kraken_source(&list[i], krg, krn);                          /* before the mods: they are read from the live source */
     detect_mods(&list[i]);
     detect_storage(&list[i]);
     kraken_cache_mods(&list[i]);                                /* after the storage: only for a game with no folder, image or package */
     ps5tm_drive_leave(gate);
   }
+  free(krg);
   if(cut_off) {
     snprintf(err, sizeof(err), "Ein Laufwerk wird gerade ausgeworfen; die Spieleliste bleibt, wie sie war.");
     pthread_mutex_lock(&g_lock);
@@ -1786,7 +1823,7 @@ ps5tm_library_json(void) {
     /* Kraken Mount's entry for a game it plays from a .pkg (KrakenMount): a game ShadowMountPlus holds as an image or a folder stays what it
        is, and so does a PS4Mount game (17.11.2026) */
     const ps5tm_kraken_game_t *kg = NULL;
-    if(!g->ps4mount && (!g->format[0] || !strcmp(g->format, "pkg")))
+    if(!g->ps4mount && (g->kraken_held || !g->format[0] || !strcmp(g->format, "pkg")))
       for(int k = 0; k < kraken_n; k++)
         if(!strcmp(kraken[k].title_id, g->title_id)) { kg = &kraken[k]; break; }
     if(g->mods.state == MODS_UNREACHABLE) {

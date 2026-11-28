@@ -5,7 +5,8 @@
  * app carries the released ELF (third_party/kraken_mount, packed by tools/gen_blob.py), starts it through the loader on
  * 127.0.0.1:9021 and runs the page on top of its interface on 127.0.0.1:8097 (docs/DESIGN of the project: GET /api/state, POST
  * /api/rescan, /api/rebuild/<TID>, /api/rebuild-all, /api/delete/<TID>, /api/quit, GET /icon/<TID>). Nothing of its source is in
- * this app; the app never changes its settings (they stay in its own page on port 8097). The tile of its own that the program makes at
+ * this app; the app changes none of its settings but its own list of search folders (Kraken-Games, and ShadowMountPlus's folders while that does
+ * not run: smp_watch_thread), the rest stays in its own page on port 8097. The tile of its own that the program makes at
  * every start is kept away (keep_tile_away): there is only the page in the app, as with PS4Mount.
  *
  * A newer release comes only when the person presses the button: the release list of the project (api.github.com), the ELF and
@@ -16,6 +17,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +35,7 @@
 #include "krakenboot.h"
 #include "krakenmig.h"
 #include "lhttp.h"
+#include "titleid.h"
 #include "ps5tm.h"
 #include "sha256.h"
 #include "third_party/cJSON.h"
@@ -430,8 +433,11 @@ kr_drop_installed(cJSON *k) {
   if(!cJSON_IsArray(games)) return 0;
   int dropped = 0;
   for(int i = cJSON_GetArraySize(games) - 1; i >= 0; i--) {
-    const cJSON *kd = cJSON_GetObjectItem(cJSON_GetArrayItem(games, i), "kind");
+    const cJSON *g = cJSON_GetArrayItem(games, i), *kd = cJSON_GetObjectItem(g, "kind"), *t = cJSON_GetObjectItem(g, "title_id");
     if(cJSON_IsString(kd) && !strcmp(kd->valuestring, "installed")) { cJSON_DeleteItemFromArray(games, i); dropped++; }
+    /* The app's own tiles (FAKE86921, FAKE86922): Kraken Mount registers them like any homebrew in /data/homebrew while it has ShadowMountPlus's
+       folders. They are the app, never a game of its page: no "delete", no "rebuild", no duplicate warning (review 28.11.2026). Not counted. */
+    else if(cJSON_IsString(t) && ps5tm_is_own_tile(t->valuestring)) cJSON_DeleteItemFromArray(games, i);
   }
   return dropped;
 }
@@ -455,7 +461,7 @@ store_games(const cJSON *k, uint64_t now) {
     }
     const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *nm = cJSON_GetObjectItem(g, "title_name"),
                 *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind"), *bp = cJSON_GetObjectItem(g, "backport"),
-                *im = cJSON_GetObjectItem(g, "image");
+                *im = cJSON_GetObjectItem(g, "image"), *stt = cJSON_GetObjectItem(g, "status");
     if(!cJSON_IsString(t) || !valid_tid(t->valuestring)) continue;
     ps5tm_kraken_game_t *e = &tmp[n++];
     memset(e, 0, sizeof(*e));
@@ -465,6 +471,7 @@ store_games(const cJSON *k, uint64_t now) {
     snprintf(e->kind, sizeof(e->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
     snprintf(e->backport, sizeof(e->backport), "%s", cJSON_IsString(bp) ? bp->valuestring : "");   /* null: none applied */
     snprintf(e->image, sizeof(e->image), "%s", cJSON_IsString(im) ? im->valuestring : "");          /* null or absent (before 0.4.2): no image game */
+    e->duplicate = cJSON_IsString(stt) && !strcmp(stt->valuestring, "duplicate");
   }
   /* where the caches lie: an absolute path without "..", else the last one stays */
   const cJSON *cache = k ? cJSON_GetObjectItem(k, "cache") : NULL, *cp = cache ? cJSON_GetObjectItem(cache, "path") : NULL;
@@ -653,10 +660,20 @@ port_refused(void) {
   sa.sin_family = AF_INET;
   sa.sin_port = htons(KR_PORT);
   sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  struct timeval tv = { 2, 0 };
-  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
-  const int rc = connect(fd, (struct sockaddr *)&sa, sizeof sa);
-  const int refused = rc != 0 && errno == ECONNREFUSED;
+  /* non-blocking with a 2-s wait: SO_SNDTIMEO does not bound connect(), and a full backlog is retried by the kernel for over a minute (review
+     28.11.2026) */
+  const int fl = fcntl(fd, F_GETFL, 0);
+  if(fl < 0 || fcntl(fd, F_SETFL, fl | O_NONBLOCK) != 0) { close(fd); return 0; }
+  int refused = 0;
+  if(connect(fd, (struct sockaddr *)&sa, sizeof sa) != 0) {
+    if(errno == ECONNREFUSED) refused = 1;
+    else if(errno == EINPROGRESS) {
+      struct pollfd pf = { fd, POLLOUT, 0 };
+      int err = 0;
+      socklen_t el = sizeof err;
+      if(poll(&pf, 1, 2000) == 1 && getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &el) == 0) refused = err == ECONNREFUSED;
+    }
+  }
   close(fd);
   return refused;
 }
@@ -790,11 +807,13 @@ seed_config(void) {
 #define KR_SMP_LOOK_SEC  5
 #define KR_SMP_CHECK_MS  30000u                  /* while Kraken Mount's list is as wanted: one look at it every 30 s (it may have been restarted) */
 
-enum { KR_LIST_UNKNOWN = 0, KR_LIST_APP, KR_LIST_APP_SMP, KR_LIST_OLD, KR_LIST_HAND };
+enum { KR_LIST_UNKNOWN = 0, KR_LIST_APP, KR_LIST_APP_SMP, KR_LIST_OLD, KR_LIST_HAND, KR_LIST_DEFAULT };
 
 static int      g_smp_runs = -1;                 /* the last look: 1 a process "shadowmountplus.elf" runs, 0 none, -1 not looked yet */
 static uint64_t g_smp_gone_ms;                   /* since when none runs (with g_smp_runs 0) */
 static int      g_smp_recheck;                   /* the app (re)started Kraken Mount: look at its list at once */
+static int      g_smp_list_kind;                 /* the list kind at the watcher's last look (KR_LIST_*) */
+static uint64_t g_smp_back_ms;                   /* when the watcher took ShadowMountPlus's folders out again (0: never) */
 
 /* What Kraken Mount's settings (GET /api/settings) say it searches: the app's own list with or without ShadowMountPlus's folders, the app's list under
    the old name, another list (changed by hand on its page, or empty = its defaults), or nothing known (no answer). */
@@ -803,6 +822,7 @@ classify_list(const cJSON *set) {
   const cJSON *sp = set ? cJSON_GetObjectItem(set, "scanpath") : NULL;
   if(!cJSON_IsArray(sp)) return KR_LIST_UNKNOWN;
   const int n = cJSON_GetArraySize(sp);
+  if(n == 0) return KR_LIST_DEFAULT;                    /* its own defaults: ShadowMountPlus's folders anyway (the page's folder line says so) */
   int app = n == ps5tm_krmig_roots_n(0), smp = n == ps5tm_krmig_roots_n(1), old = app;
   for(int i = 0; i < n && (app || smp || old); i++) {
     const cJSON *p = cJSON_GetArrayItem(sp, i);
@@ -819,9 +839,12 @@ classify_list(const cJSON *set) {
 static void
 smp_look(void) {
   const int pid = ps5tm_procmgr_pid_by_name(KR_SMP_PROCESS);
+  /* A copy loaded under another process name is still found when it answered on its port in the last minute (smp.c asks whenever a page or a
+     job needs it; no question is sent from here). A process table that cannot be read changes nothing (review 28.11.2026). */
+  const int answered = ps5tm_smp_answered_recently(60000);
   const uint64_t now = ps5tm_mono_ms();
   pthread_mutex_lock(&g_lock);
-  if(pid >= 0) {
+  if(pid >= 0 || answered) {
     g_smp_runs = 1;
     g_smp_gone_ms = 0;
   } else if(pid == -1) {
@@ -871,6 +894,11 @@ smp_folders_apply(int want) {
   st = kr_http("POST", "/api/settings", txt, strlen(txt), 5000, NULL, NULL);
   free(txt);
   if(st == 204 || st == 200) {
+    if(!want) {
+      pthread_mutex_lock(&g_lock);
+      g_smp_back_ms = ps5tm_mono_ms();
+      pthread_mutex_unlock(&g_lock);
+    }
     if(want) PS5TM_INFO("kraken_smp_folders", "ShadowMountPlus läuft nicht: Kraken Mount sucht jetzt auch in homebrew und etaHEN/games (intern, USB, M.2).");
     else PS5TM_INFO("kraken_smp_folders", "ShadowMountPlus läuft: Kraken Mount sucht wieder nur in Kraken-Games; homebrew und etaHEN/games gehören ShadowMountPlus.");
     return want ? KR_LIST_APP_SMP : KR_LIST_APP;
@@ -902,6 +930,12 @@ smp_watch_thread(void *arg) {
     if(want >= 0 && (want != last_want || recheck || last_list == KR_LIST_UNKNOWN || now - checked_ms >= KR_SMP_CHECK_MS)) {
       last_list = smp_folders_apply(want);
       checked_ms = now;
+      /* the app's own list, and still not the wanted one (the POST failed or Kraken Mount was busy): again at the next look, not in 30 s - while
+         ShadowMountPlus runs, both would search the same folders meanwhile (review 28.11.2026) */
+      if((last_list == KR_LIST_APP || last_list == KR_LIST_APP_SMP) && (last_list == KR_LIST_APP_SMP) != (want == 1)) checked_ms = 0;
+      pthread_mutex_lock(&g_lock);
+      g_smp_list_kind = last_list;
+      pthread_mutex_unlock(&g_lock);
     }
     last_want = want;
     sleep(KR_SMP_LOOK_SEC);
@@ -913,6 +947,11 @@ smp_watch_thread(void *arg) {
    once none has run for long enough. Only the app's own list is changed. */
 static void
 smp_folders_reset(void) {
+  pthread_mutex_lock(&g_lock);
+  g_smp_recheck = 1;
+  pthread_mutex_unlock(&g_lock);
+  /* only when nothing listens on its port: a Kraken Mount that hangs or answers too much may still save its config (review 28.11.2026) */
+  if(!port_refused()) return;
   unsigned char *raw = NULL;
   size_t len = 0;
   if(read_file(KR_CONFIG, &raw, &len, 256 * 1024) != 0) return;
@@ -925,9 +964,14 @@ smp_folders_reset(void) {
   free(from);
   free(to);
   free(raw);
+}
+
+int
+ps5tm_kraken_smp_handover(void) {
   pthread_mutex_lock(&g_lock);
-  g_smp_recheck = 1;
+  const int yes = (g_smp_runs == 1 && g_smp_list_kind == KR_LIST_APP_SMP) || (g_smp_back_ms && ps5tm_mono_ms() - g_smp_back_ms < 60000u);
   pthread_mutex_unlock(&g_lock);
+  return yes;
 }
 
 /* For the page: whether ShadowMountPlus runs and what Kraken Mount's list is (its settings as the page's own ask got them). */
@@ -941,7 +985,7 @@ add_smp_folders(cJSON *o, const cJSON *set) {
   uint64_t in_ms = 0;
   const int want = smp_folders_wanted(&in_ms);
   const int list = classify_list(set);
-  static const char *const names[] = { "unknown", "app", "app_smp", "old", "hand" };
+  static const char *const names[] = { "unknown", "app", "app_smp", "old", "hand", "default" };
   cJSON_AddStringToObject(sf, "smp", runs == 1 ? "running" : runs == 0 ? "gone" : "unknown");
   cJSON_AddStringToObject(sf, "list", names[list]);
   cJSON_AddBoolToObject(sf, "active", list == KR_LIST_APP_SMP);
@@ -1117,17 +1161,45 @@ simple_post(const char *path, const char *body, const char *ok_msg, char *msg, s
    (0.4.2) registered the title again at its next pass. gamedelete.c asks here instead, and Kraken Mount deletes it as its own page does (unmount,
    source, tile, cache). */
 
-/* Kraken Mount's entry of this title (not a duplicate, not an installed game), asked afresh: 1 found, 0 it runs and does not list it, -1 no answer. */
-int
-ps5tm_kraken_game_of(const char *tid, ps5tm_kraken_game_t *out) {
-  memset(out, 0, sizeof(*out));
-  if(!valid_tid(tid)) return 0;
+/* GET /api/state for a delete: the parsed answer, or NULL and *how -1 when nothing listens (switched off), -2 when it listens and does not answer
+   in time or answers something unreadable: busy with a scan or a rebuild. "Busy" used to read as "off" (review 28.11.2026). */
+static cJSON *
+state_for_delete(int *how) {
   unsigned char *body = NULL;
   size_t bn = 0;
-  int st = kr_http("GET", "/api/state", NULL, 0, 3000, &body, &bn);
+  const int st = kr_http("GET", "/api/state", NULL, 0, 5000, &body, &bn);
   cJSON *k = (st == 200 && body) ? cJSON_Parse((char *)body) : NULL;
   free(body);
-  if(!cJSON_IsObject(k)) { cJSON_Delete(k); return -1; }
+  if(cJSON_IsObject(k)) { *how = 1; return k; }
+  cJSON_Delete(k);
+  *how = st == -1 && port_refused() ? -1 : -2;
+  return NULL;
+}
+
+static void
+entry_from(const cJSON *g, const char *tid, ps5tm_kraken_entry_t *out) {
+  const cJSON *nm = cJSON_GetObjectItem(g, "title_name"), *p = cJSON_GetObjectItem(g, "path"), *kd = cJSON_GetObjectItem(g, "kind"),
+              *im = cJSON_GetObjectItem(g, "image");
+  snprintf(out->title_id, sizeof(out->title_id), "%s", tid);
+  snprintf(out->name, sizeof(out->name), "%s", cJSON_IsString(nm) ? nm->valuestring : "");
+  const char *path = cJSON_IsString(p) ? p->valuestring : "", *image = cJSON_IsString(im) ? im->valuestring : "";
+  /* Kraken Mount's own page takes a path up to 1000 bytes; a longer one is not cut here, it is named too long (review 28.11.2026: a cut path
+     never matched its list again) */
+  out->too_long = strlen(path) >= 1000 || strlen(image) >= 1000;
+  snprintf(out->path, sizeof(out->path), "%s", out->too_long ? "" : path);
+  snprintf(out->image, sizeof(out->image), "%s", out->too_long ? "" : image);
+  snprintf(out->kind, sizeof(out->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
+}
+
+/* Kraken Mount's entry of this title (not a duplicate, not an installed game, not one of the app's tiles), asked afresh: 1 found, 0 it answers and
+   does not list it, -1 switched off, -2 busy. */
+int
+ps5tm_kraken_game_of(const char *tid, ps5tm_kraken_entry_t *out) {
+  memset(out, 0, sizeof(*out));
+  if(!valid_tid(tid)) return 0;
+  int how = 0;
+  cJSON *k = state_for_delete(&how);
+  if(!k) return how;
   kr_drop_installed(k);
   int found = 0;
   const cJSON *games = cJSON_GetObjectItem(k, "games"), *g;
@@ -1135,12 +1207,7 @@ ps5tm_kraken_game_of(const char *tid, ps5tm_kraken_game_t *out) {
     const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *p = cJSON_GetObjectItem(g, "path"), *stt = cJSON_GetObjectItem(g, "status");
     if(!cJSON_IsString(t) || strcmp(t->valuestring, tid) || !cJSON_IsString(p) || !p->valuestring[0]) continue;
     if(cJSON_IsString(stt) && !strcmp(stt->valuestring, "duplicate")) continue;     /* the copy it does not play */
-    const cJSON *nm = cJSON_GetObjectItem(g, "title_name"), *kd = cJSON_GetObjectItem(g, "kind"), *im = cJSON_GetObjectItem(g, "image");
-    snprintf(out->title_id, sizeof(out->title_id), "%s", tid);
-    snprintf(out->name, sizeof(out->name), "%s", cJSON_IsString(nm) ? nm->valuestring : "");
-    snprintf(out->path, sizeof(out->path), "%s", p->valuestring);
-    snprintf(out->kind, sizeof(out->kind), "%s", cJSON_IsString(kd) && !strcmp(kd->valuestring, "pkg") ? "pkg" : "folder");
-    snprintf(out->image, sizeof(out->image), "%s", cJSON_IsString(im) ? im->valuestring : "");
+    entry_from(g, tid, out);
     found = 1;
     break;
   }
@@ -1148,13 +1215,55 @@ ps5tm_kraken_game_of(const char *tid, ps5tm_kraken_game_t *out) {
   return found;
 }
 
-/* Kraken Mount deletes the title (POST /api/delete/<TID>, body = the path its list names: for an image game the folder in its mount). It answers when
-   it is done; a big folder takes a while, so the wait is long. 200 when deleted; else an HTTP-like code and msg. */
+/* Is this file or folder (src) a source of the title in Kraken Mount's list - the one it plays or a duplicate? 1 and kpath = the path its list
+   names (for an image: the folder in its mount), which its delete takes; 0 no; -1 switched off; -2 busy; -3 named with a path too long. For the
+   original of a game after a copy
+   or a conversion (gamedelete.c run_orig), while Kraken Mount has ShadowMountPlus's folders (review 28.11.2026). */
+int
+ps5tm_kraken_find_source(const char *tid, const char *src, char *kpath, size_t n) {
+  kpath[0] = 0;
+  if(!valid_tid(tid) || !src || !src[0]) return 0;
+  int how = 0;
+  cJSON *k = state_for_delete(&how);
+  if(!k) return how;
+  kr_drop_installed(k);
+  int found = 0;
+  const cJSON *games = cJSON_GetObjectItem(k, "games"), *g;
+  cJSON_ArrayForEach(g, games) {
+    const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *p = cJSON_GetObjectItem(g, "path"), *im = cJSON_GetObjectItem(g, "image");
+    if(!cJSON_IsString(t) || strcmp(t->valuestring, tid) || !cJSON_IsString(p) || !p->valuestring[0]) continue;
+    if(strcmp(p->valuestring, src) && !(cJSON_IsString(im) && !strcmp(im->valuestring, src))) continue;
+    if(strlen(p->valuestring) < n) { snprintf(kpath, n, "%s", p->valuestring); found = 1; }
+    else found = -3;                                     /* named, but its path does not fit: not deleted by guess */
+    break;
+  }
+  cJSON_Delete(k);
+  return found;
+}
+
+/* Kraken Mount deletes the title (POST /api/delete/<TID>, body = the path its list names: for an image game the folder in its mount; a duplicate's
+   path deletes only that copy). It answers when it is done; a big folder takes a while, so the wait is long. 200 when deleted; else an HTTP-like
+   code and msg. */
 int
 ps5tm_kraken_delete_game(const char *tid, const char *path, char *msg, size_t n) {
   msg[0] = 0;
   if(!valid_tid(tid) || !path || !path[0] || strlen(path) > 1000) { snprintf(msg, n, "Titel-ID oder Pfad fehlen."); return 400; }
-  if(!game_known(tid, path)) { snprintf(msg, n, "Kraken Mount führt das Spiel nicht (mehr) so. Es wurde nichts gelöscht."); return 409; }
+  int how = 0;
+  cJSON *k = state_for_delete(&how);
+  if(!k) {
+    if(how == -1) snprintf(msg, n, "Kraken Mount läuft nicht. Es wurde nichts gelöscht.");
+    else snprintf(msg, n, "Kraken Mount antwortet gerade nicht (es sucht oder baut auf). Bitte gleich noch einmal versuchen.");
+    return 409;
+  }
+  kr_drop_installed(k);                                    /* an installed game or one of the app's tiles is never deleted from here */
+  int known = 0;
+  const cJSON *games = cJSON_GetObjectItem(k, "games"), *g;
+  cJSON_ArrayForEach(g, games) {
+    const cJSON *t = cJSON_GetObjectItem(g, "title_id"), *p = cJSON_GetObjectItem(g, "path");
+    if(cJSON_IsString(t) && cJSON_IsString(p) && !strcmp(t->valuestring, tid) && !strcmp(p->valuestring, path)) { known = 1; break; }
+  }
+  cJSON_Delete(k);
+  if(!known) { snprintf(msg, n, "Kraken Mount führt das Spiel nicht (mehr) so. Es wurde nichts gelöscht."); return 409; }
   char route[40];
   snprintf(route, sizeof route, "/api/delete/%s", tid);
   unsigned char *reply = NULL;
@@ -1167,20 +1276,30 @@ ps5tm_kraken_delete_game(const char *tid, const char *path, char *msg, size_t n)
   }
   free(reply);
   if(st == 204 || st == 200) { PS5TM_INFO("kraken_delete", "Spiel %s über Kraken Mount gelöscht (Seite Spiele): %s", tid, path); return 200; }
-  if(st == LHTTP_NO_ANSWER) snprintf(msg, n, "Kraken Mount hat in 30 Minuten nicht geantwortet; es löscht vermutlich noch. Bitte später in der Liste nachsehen.");
+  /* no answer in time, an answer cut off or too long, a connection that broke while it worked: what happened is not known (review 28.11.2026) */
+  if(st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) snprintf(msg, n, "Kraken Mount hat das Löschen nicht bestätigt (keine Antwort). Bitte in der Liste nachsehen, ob das Spiel weg ist.");
   else if(st < 0) snprintf(msg, n, "Kraken Mount läuft nicht. Es wurde nichts gelöscht.");
   else if(st == 409) snprintf(msg, n, "Kraken Mount kann das Spiel gerade nicht löschen (es arbeitet oder ein Spiel läuft).%s%s", why[0] ? " " : "", why);
   else snprintf(msg, n, "Kraken Mount hat das Löschen abgelehnt (%d)%s%s.", st, why[0] ? ": " : "", why);
-  return st == 409 || st == LHTTP_NO_ANSWER ? 409 : 502;
+  return st == 409 || st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG ? 409 : 502;
 }
 
-/* While Kraken Mount is off: the source its cache stamp names for this title (<cache dir>/<TID>/.done, {"kind", "source"}), when the title is one of
-   its own (not an installed game) and the source is still there. 1 and out filled, else 0. The delete then asks to switch it on first: the
-   console's uninstall alone would be undone at its next start. */
+/* The source Kraken Mount's cache stamp names for this title (<cache dir>/<TID>/.done, {"kind", "source"}), when the title is one of its own (not
+   an installed game: the stamp's kind, a source in /user/app, or a copy of the title installed on the console) and the source is still there.
+   1 and out filled, else 0. While Kraken Mount is off, busy or has not listed the title yet, a delete refuses then: the console's uninstall alone
+   would be undone at its next pass. */
 int
 ps5tm_kraken_source_of(const char *tid, char *out, size_t n) {
   out[0] = 0;
   if(!valid_tid(tid)) return 0;
+  struct stat st;
+  char inst[64];
+  /* installed on the console (as Kraken Mount's installed.rs looks): not Kraken Mount's, whatever an old stamp says (review 28.11.2026) */
+  static const char *const app[] = { "/user/app/%s/app.pkg", "/mnt/ext0/user/app/%s", "/mnt/ext1/user/app/%s" };
+  for(size_t i = 0; i < sizeof(app) / sizeof(app[0]); i++) {
+    snprintf(inst, sizeof inst, app[i], tid);
+    if(lstat(inst, &st) == 0) return 0;
+  }
   char dir[sizeof(g_cache_dir)], stamp[sizeof(g_cache_dir) + 32];
   ps5tm_kraken_cache_dir(dir, sizeof dir);
   snprintf(stamp, sizeof stamp, "%s/%s/.done", dir, tid);
@@ -1190,12 +1309,42 @@ ps5tm_kraken_source_of(const char *tid, char *out, size_t n) {
   cJSON *j = cJSON_ParseWithLength((const char *)raw, len);
   free(raw);
   const cJSON *kd = j ? cJSON_GetObjectItem(j, "kind") : NULL, *src = j ? cJSON_GetObjectItem(j, "source") : NULL;
-  struct stat st;
   int ok = cJSON_IsString(src) && src->valuestring[0] == '/' && !(cJSON_IsString(kd) && !strcmp(kd->valuestring, "installed")) &&
            strncmp(src->valuestring, "/user/app/", 10) && lstat(src->valuestring, &st) == 0;
   if(ok) snprintf(out, n, "%s", src->valuestring);
   cJSON_Delete(j);
   return ok;
+}
+
+/* 1 when Kraken Mount has this image file mounted now: a record /data/krakenmount/images/<name> = "<unit>\n<image>" names it and
+   /mnt/krakenmount/<name> is a mount point (as usbeject.c reads them). For setting an image aside (dupimg.c), review 28.11.2026. */
+int
+ps5tm_kraken_image_held(const char *path) {
+  if(!path || path[0] != '/') return 0;
+  int count = getfsstat(NULL, 0, MNT_NOWAIT);
+  if(count <= 0) return 0;
+  struct statfs *list = malloc(sizeof(*list) * (size_t)(count + 16));
+  if(!list) return 0;
+  count = getfsstat(list, (long)(sizeof(*list) * (size_t)(count + 16)), MNT_NOWAIT);
+  int held = 0;
+  for(int i = 0; i < count && !held; i++) {
+    const char *on = list[i].f_mntonname;
+    if(strncmp(on, "/mnt/krakenmount/", 17) || !on[17] || strchr(on + 17, '/')) continue;
+    char rec[sizeof(PS5TM_KRAKEN_DATA "/images/") + sizeof(list[0].f_mntonname)], buf[1100];
+    snprintf(rec, sizeof rec, PS5TM_KRAKEN_DATA "/images/%s", on + 17);
+    int fd = open(rec, O_RDONLY | O_NONBLOCK);
+    ssize_t got = fd >= 0 ? read(fd, buf, sizeof(buf) - 1) : -1;
+    if(fd >= 0) close(fd);
+    if(got <= 0) continue;
+    buf[got] = 0;
+    char *img = strchr(buf, '\n');
+    if(!img) continue;
+    img++;
+    for(size_t l = strlen(img); l && (img[l - 1] == '\n' || img[l - 1] == '\r' || img[l - 1] == ' '); l--) img[l - 1] = 0;
+    held = !strcmp(img, path);
+  }
+  free(list);
+  return held;
 }
 
 /* ------------------------------------------------------------------ download of a newer release */
@@ -1462,7 +1611,8 @@ ps5tm_kraken_boot(void) {
     boot_pending_done();
     PS5TM_WARN("kraken_boot_thread", "Kraken Mount lässt sich nicht mit der App starten: der Faden ließ sich nicht anlegen.");
   }
-  /* the folders of ShadowMountPlus while it does not run (28.11.2026): also while Kraken Mount is off (the page says whether ShadowMountPlus runs) */
+  /* the folders of ShadowMountPlus while it does not run (28.11.2026): the watcher looks also while Kraken Mount is off, so that the minute without
+     ShadowMountPlus counts from the app's start */
   if(pthread_create(&th, &at, smp_watch_thread, NULL) != 0)
     PS5TM_WARN("kraken_smp_folders", "Die App kann nicht beobachten, ob ShadowMountPlus läuft: Kraken Mount bekommt homebrew und etaHEN/games nicht von selbst.");
   pthread_attr_destroy(&at);

@@ -569,6 +569,45 @@ typedef struct {
   char    note[300];        /* one more sentence for the page (what stays, for a PS4Mount game) */
 } plan_t;
 
+/* Is title id a game of Kraken Mount? 1 when it is: then p is its plan (kind "kraken", the data that goes: the image file of an image game, else
+   the folder or the .pkg its list names), or p->why says why it cannot be deleted now - Kraken Mount switched off, busy, or not listing the title
+   at this moment while its cache stamp names it (review 28.11.2026: "busy" and "not listed yet" fell through to the console's uninstall, which
+   Kraken Mount undid at its next pass). 0: not its game. *kr: the answer of ps5tm_kraken_game_of. */
+static int
+kraken_owns(const char *id, int *kr, char *ksrc, size_t ksrc_len, plan_t *p) {
+  ps5tm_kraken_entry_t *kg = malloc(sizeof(*kg));                  /* 2 KB of paths: not on the request thread's stack */
+  if(!kg) return 0;
+  *kr = ps5tm_kraken_game_of(id, kg);
+  if(*kr != 1 && !ps5tm_kraken_source_of(id, ksrc, ksrc_len)) { free(kg); return 0; }
+  snprintf(p->kind, sizeof(p->kind), "kraken");
+  if(*kr != 1) {
+    snprintf(p->path, sizeof(p->path), "%s", ksrc);
+    if(*kr == -1)
+      snprintf(p->why, sizeof(p->why), "Das Spiel gehört zu Kraken Mount, und Kraken Mount ist gerade aus. Schalte es im Reiter KrakenMount ein; dann lässt sich das Spiel hier löschen (sonst meldete Kraken Mount es beim nächsten Start wieder an).");
+    else if(*kr == -2)
+      snprintf(p->why, sizeof(p->why), "Kraken Mount antwortet gerade nicht (es sucht oder baut auf). Bitte gleich noch einmal versuchen.");
+    else
+      snprintf(p->why, sizeof(p->why), "Das Spiel gehört zu Kraken Mount, steht aber gerade nicht in seiner Liste (es sucht vielleicht noch). Bitte gleich noch einmal versuchen; sonst im Dateimanager löschen.");
+    free(kg);
+    return 1;
+  }
+  const char *data = kg->image[0] ? kg->image : kg->path;
+  if(kg->too_long || strlen(data) >= sizeof(p->path)) {
+    snprintf(p->why, sizeof(p->why), "Der Pfad des Spiels ist zu lang zum Löschen über die Spieleliste. Lösche es im Reiter KrakenMount.");
+    free(kg);
+    return 1;
+  }
+  snprintf(p->path, sizeof(p->path), "%s", data);
+  free(kg);
+  if(!deletable_root(p->path)) {
+    snprintf(p->why, sizeof(p->why), "Die Spieldaten liegen an einem Ort, an dem die App nichts löscht: %.200s", p->path);
+    return 1;
+  }
+  int64_t sz = size_of(p->path);
+  if(sz >= 0) p->size = sz;
+  return 1;
+}
+
 /* What deleting kind/id would do. 0 when there is such a thing (why says if it cannot be deleted now), 404 when
    there is not, 400 for a request that names nothing. */
 static int
@@ -578,7 +617,6 @@ make_plan(const char *kind, const char *id, plan_t *p) {
   if(!kind || !id) return 400;
   if(!strcmp(kind, "game")) {
     if(!title_id_ok(id)) return 400;
-    ps5tm_kraken_game_t kg;
     char ksrc[320];
     int kr = 0;
     ps5tm_libdel_t li;
@@ -620,22 +658,9 @@ make_plan(const char *kind, const char *id, plan_t *p) {
       }
       int64_t sz = size_of(s.path);
       if(sz >= 0) p->size = sz;
-    } else if((kr = ps5tm_kraken_game_of(id, &kg)) == 1 || (kr < 0 && ps5tm_kraken_source_of(id, ksrc, sizeof(ksrc)))) {
-      /* A game of Kraken Mount (28.11.2026): it deletes it itself. Shown is the data that goes: the image file of an image game, else the folder or
-         the .pkg its list names. */
-      snprintf(p->kind, sizeof(p->kind), "kraken");
-      if(kr != 1) {
-        snprintf(p->path, sizeof(p->path), "%s", ksrc);
-        snprintf(p->why, sizeof(p->why), "Das Spiel gehört zu Kraken Mount, und Kraken Mount ist gerade aus. Schalte es im Reiter KrakenMount ein; dann lässt sich das Spiel hier löschen (sonst meldete Kraken Mount es beim nächsten Start wieder an).");
-        return 0;
-      }
-      snprintf(p->path, sizeof(p->path), "%s", kg.image[0] ? kg.image : kg.path);
-      if(!deletable_root(p->path)) {
-        snprintf(p->why, sizeof(p->why), "Die Spieldaten liegen an einem Ort, an dem die App nichts löscht: %.200s", p->path);
-        return 0;
-      }
-      int64_t sz = size_of(p->path);
-      if(sz >= 0) p->size = sz;
+    } else if(kraken_owns(id, &kr, ksrc, sizeof(ksrc), p)) {
+      /* A game of Kraken Mount (28.11.2026): it deletes it itself (kraken_owns filled the plan, or why it cannot be done now). */
+      if(p->why[0]) return 0;
     } else {
       /* Everything else on the list the system uninstalls itself, as its own menu "Löschen" does: an installed
          package, a title without app.pkg (06.10.2026: Styx, a PS4 title with no file the app recognised), and one
@@ -783,8 +808,9 @@ typedef struct {
 static void *
 sampler_thread(void *arg) {
   sampler_t *s = arg;
+  const int ticks = s->path[0] ? 30 : 10;            /* a folder Kraken Mount deletes: walked every 3 s, it competes with the delete for the drive */
   for(;;) {
-    for(int i = 0; i < 10; i++) {
+    for(int i = 0; i < ticks; i++) {
       if(__atomic_load_n(&s->stop, __ATOMIC_ACQUIRE)) return NULL;
       usleep(100 * 1000);
     }
@@ -1025,11 +1051,21 @@ run_smp(const dl_args_t *a) {
 /* A game of Kraken Mount (28.11.2026): Kraken Mount deletes it as its own page does. The bar follows the data shrinking while it works. */
 static void
 run_kraken(const dl_args_t *a) {
-  ps5tm_kraken_game_t kg;
-  if(ps5tm_kraken_game_of(a->id, &kg) != 1 || strcmp(kg.image[0] ? kg.image : kg.path, a->path)) {
+  ps5tm_kraken_entry_t *kg = malloc(sizeof(*kg));
+  const int kr = kg ? ps5tm_kraken_game_of(a->id, kg) : 0;
+  if(kr == -2) {
+    free(kg);
+    job_end(DL_FAILED, "Kraken Mount antwortet gerade nicht (es sucht oder baut auf). Bitte gleich noch einmal versuchen.", NULL);
+    return;
+  }
+  if(kr != 1 || strcmp(kg->image[0] ? kg->image : kg->path, a->path)) {
+    free(kg);
     job_end(DL_FAILED, "Kraken Mount führt das Spiel nicht mehr so oder läuft nicht. Es wurde nichts gelöscht.", NULL);
     return;
   }
+  char kpath[sizeof(kg->path)];
+  snprintf(kpath, sizeof(kpath), "%s", kg->path);
+  free(kg);
   job_phase("Kraken Mount löscht das Spiel");
   const int64_t initial = size_of(a->path);
   sampler_t smp = { "", initial > 0 ? (uint64_t)initial : 0, 0, "" };
@@ -1042,7 +1078,7 @@ run_kraken(const dl_args_t *a) {
   const int sampling = smp.initial > 0 && pthread_create(&sth, &sat, sampler_thread, &smp) == 0;
   pthread_attr_destroy(&sat);
   char msg[400];
-  const int rc = ps5tm_kraken_delete_game(a->id, kg.path, msg, sizeof(msg));
+  const int rc = ps5tm_kraken_delete_game(a->id, kpath, msg, sizeof(msg));
   if(sampling) { __atomic_store_n(&smp.stop, 1, __ATOMIC_RELEASE); pthread_join(sth, NULL); }
   ps5tm_library_forget();
   if(rc != 200) {
@@ -1132,8 +1168,35 @@ run_orig(const dl_args_t *a) {
     return;
   }
   ps5tm_smp_game_t s;
+  const int smp_has = ps5tm_smp_find(a->id, &s) == 0 && !strcmp(s.path, a->path);
   /* only when it lists exactly this data: for the title's new copy it lists, the uninstall would take that one off instead */
-  if(ps5tm_smp_find(a->id, &s) == 0 && !strcmp(s.path, a->path) && smp_unregister(a) != 0) return;
+  if(smp_has && smp_unregister(a) != 0) return;
+  /* Kraken Mount plays it (it has ShadowMountPlus's folders while that does not run, or the original lies in Kraken-Games): it deletes it itself, so
+     that nothing of it stays mounted from data that is gone (review 28.11.2026). Its delete of a duplicate takes only that copy. */
+  /* Not when ShadowMountPlus lists the title at all (its new copy, say): Kraken Mount's delete takes the tile too, the one they share then. */
+  ps5tm_smp_game_t any;
+  if(!smp_has && a->id[0] && ps5tm_smp_find(a->id, &any) != 0) {
+    char kp[1024];
+    const int kf = ps5tm_kraken_find_source(a->id, a->path, kp, sizeof(kp));
+    if(kf == -2) { job_end(DL_FAILED, "Kraken Mount antwortet gerade nicht (es sucht oder baut auf). Bitte gleich noch einmal versuchen.", NULL); return; }
+    if(kf == -3) { job_end(DL_FAILED, "Der Pfad des Spiels ist zu lang zum Löschen über die Spieleliste. Lösche es im Reiter KrakenMount.", NULL); return; }
+    if(kf == 1) {
+      job_phase("Kraken Mount löscht das Original");
+      char msg[400];
+      if(ps5tm_kraken_delete_game(a->id, kp, msg, sizeof(msg)) != 200) {
+        PS5TM_WARN("game_delete_failed", "Löschen des Originals von %s über Kraken Mount: %.150s", a->id, msg);
+        job_end(DL_FAILED, msg, NULL);
+        return;
+      }
+      char sums[400];                                         /* the checksum file next to it, as the app's own delete takes it */
+      struct stat sb;
+      if(snprintf(sums, sizeof(sums), "%s" PS5TM_SUMS_EXT, a->path) < (int)sizeof(sums) && lstat(sums, &sb) == 0 && S_ISREG(sb.st_mode)) unlink(sums);
+      ps5tm_library_forget();
+      PS5TM_INFO("game_delete_done", "%s: Original über Kraken Mount gelöscht: %s.", a->id, a->path);
+      job_end(DL_DONE, NULL, NULL);
+      return;
+    }
+  }
   uint64_t files = 0, bytes = 0;
   char why[640] = "";
   int rc = delete_game_folder(a->path, &files, &bytes, why, sizeof(why));
@@ -1410,6 +1473,14 @@ original_start(const char *id, const char *name, const char *path, const struct 
   if(rename_to && (rename_to[0] != '/' || strlen(rename_to) >= sizeof(((dl_args_t *)0)->rename_to) || !deletable_root(rename_to))) {
     snprintf(err, err_len, "Das Ziel gibt es nicht.");
     return 400;
+  }
+  /* A move under Kraken Mount's mount: it would keep the title registered on a path that is gone (review 28.11.2026). Deleting goes through it. */
+  if(rename_to && id && id[0]) {
+    char kp[1024];
+    const int kf = ps5tm_kraken_find_source(id, path, kp, sizeof(kp));
+    if(kf == 1) { snprintf(err, err_len, "Kraken Mount spielt das Original gerade; verschieben lässt es sich so nicht. Löschen geht."); return 409; }
+    if(kf == -2) { snprintf(err, err_len, "Kraken Mount antwortet gerade nicht (es sucht oder baut auf). Bitte gleich noch einmal versuchen."); return 409; }
+    if(kf == -3) { snprintf(err, err_len, "Kraken Mount spielt das Original gerade; verschieben lässt es sich so nicht. Löschen geht."); return 409; }
   }
   if(other_job_active(err, err_len)) return 409;
   dl_args_t *a = calloc(1, sizeof(*a));

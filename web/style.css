@@ -1253,7 +1253,8 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .fp-smp { display: flex; align-items: flex-start; gap: 10px; }
 .fp-smp[hidden] { display: none; }
 .fp-lamp { width: 12px; height: 12px; margin-top: .3em; border-radius: 50%; flex: none; background: var(--ink-muted); }
-.fp-lamp.on { background: #2fd44a; animation: fp-lamp-on 2.4s ease-in-out infinite; }
+.fp-lamp.on { background: #2fd44a; box-shadow: 0 0 6px 2px rgba(47,212,74,.85), 0 0 14px 4px rgba(47,212,74,.38);   /* the glow without motion, too */
+  animation: fp-lamp-on 2.4s ease-in-out infinite; }
 @keyframes fp-lamp-on {
   0%, 100% { box-shadow: 0 0 4px 1px rgba(47,212,74,.75), 0 0 10px 3px rgba(47,212,74,.28); }
   50%      { box-shadow: 0 0 7px 2px rgba(47,212,74,.95), 0 0 18px 6px rgba(47,212,74,.5); }
@@ -1263,6 +1264,10 @@ html.modal-open, html.modal-open body { overflow: hidden; }
 .fp-lamp.smp { background: #3880ff; box-shadow: 0 0 6px 2px rgba(56,128,255,.8), 0 0 14px 4px rgba(56,128,255,.32); }
 .fp-lamp.on, .fp-lamp.wait, .fp-lamp.smp { background-image: radial-gradient(circle at 36% 34%, rgba(255,255,255,.6) 0 16%, transparent 34%); }
 @media (prefers-reduced-motion: reduce) { .fp-lamp.on, .fp-lamp.wait { animation: none; } }
+/* the light design: darker colours, as the design does for its other marks (they stood at about 1.8:1 on the light card) */
+:root[data-theme="hell"] .fp-lamp.on { background-color: #13a82b; box-shadow: 0 0 5px 1px rgba(19,168,43,.6); animation: none; }
+:root[data-theme="hell"] .fp-lamp.wait { background-color: #c98a0a; box-shadow: 0 0 5px 1px rgba(201,138,10,.55); }
+:root[data-theme="hell"] .fp-lamp.smp { background-color: #2f6fe0; box-shadow: 0 0 5px 1px rgba(47,111,224,.55); }
 .pt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .pt-stat { min-width: 0; padding: 12px 14px; border: 1px solid var(--hairline);
   border-radius: var(--r-md); background: var(--surface-2); }

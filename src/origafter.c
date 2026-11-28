@@ -256,6 +256,11 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
              !strcmp(d->mount, "/data") ? "/data" : d->mount, PS5TM_ORIG_FOLDER);
     return -1;
   }
+  if(ps5tm_orig_kraken_finds(d->target, d->mount)) {
+    snprintf(why, wn, "Kraken Mount sucht in diesem Ordner nach Spielen und würde das Spiel dort anmelden. Bitte einen Ordner wählen, den es nicht durchsucht, zum Beispiel %s/%s.",
+             !strcmp(d->mount, "/data") ? "/data" : d->mount, PS5TM_ORIG_FOLDER);
+    return -1;
+  }
   /* what exists of the way must be plain folders (no link that carries the copy somewhere else); the deepest one that exists says on which file system the target lies */
   struct stat anc;
   int have_anc = OA_LSTAT(d->mount, &anc) == 0;

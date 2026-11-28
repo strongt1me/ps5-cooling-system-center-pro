@@ -361,7 +361,7 @@ const char *orig_way_text(int way, bool unpack)
                      "als gelungen meldet. Die App fragt vorher."
                    : "Erst nach dem Zurücklesen und Prüfen des Ergebnisses. Die App fragt vorher.";
     case kOrigMove:
-        return "An einen Ort, den ShadowMountPlus nicht durchsucht.";
+        return "An einen Ort, den weder ShadowMountPlus noch Kraken Mount durchsucht.";
     default:
         return "Das Original bleibt, wo es ist (Vorgabe).";
     }
@@ -2124,8 +2124,10 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
         y += 54.0f;
         if (!blocked.empty())
         {
+            // five lines: a refusal like "Kraken Mount ist gerade aus …" needs four or five in
+            // every language (review 28.11.2026), and there is room down to limit_end
             para_limit_ = limit_end;
-            para(blocked, kCritical, 3);
+            para(blocked, kCritical, 5);
         }
         break;
     }

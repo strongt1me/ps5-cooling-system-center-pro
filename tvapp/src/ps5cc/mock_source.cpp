@@ -3244,6 +3244,7 @@ class MockSource final : public Source
         // ShadowMountPlus does not run in the preview: the app gave Kraken Mount homebrew and
         // etaHEN/games too (kraken.c, 28.11.2026)
         k.scanpaths = {"/data/Kraken-Games", "/data/homebrew", "/data/etaHEN/games"};
+        k.settings_known = true;
         k.smp = "gone";
         k.smp_list = "app_smp";
         k.log = {"[10:12:01] scan: 3 games, 0 errors",

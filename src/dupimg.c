@@ -343,6 +343,12 @@ ps5tm_dupimg_set_aside(const char *path, int undo, char *err, size_t n) {
                "ausgehängt ist, lässt es sich beiseitelegen.");
       return 409;
     }
+    /* Kraken Mount has it mounted (it has ShadowMountPlus's folders while that does not run): a rename under its mount leaves its record on a name
+       that is gone (review 28.11.2026) */
+    if(ps5tm_kraken_image_held(path)) {
+      snprintf(err, n, "Kraken Mount hat dieses Abbild gerade eingehängt; so lässt es sich nicht beiseitelegen.");
+      return 409;
+    }
   }
   if(ps5tm_usbeject_settling(path)) { snprintf(err, n, "Das Laufwerk wird gerade ausgeworfen. Danach geht es wieder."); return 409; }
   if(rename(path, to) != 0) { snprintf(err, n, "Das Umbenennen ging nicht: %s", ps5tm_io_strerror(errno)); return 500; }

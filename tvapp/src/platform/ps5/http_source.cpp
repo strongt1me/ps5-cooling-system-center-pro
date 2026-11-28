@@ -5097,6 +5097,7 @@ void HttpSource::poll_kraken()
                 k.log.emplace_back(l->valuestring);
         }
         const cJSON *set = cJSON_GetObjectItemCaseSensitive(root, "settings");
+        k.settings_known = cJSON_IsObject(set);
         const cJSON *p = nullptr;
         cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(set, "scanpath"))
         {

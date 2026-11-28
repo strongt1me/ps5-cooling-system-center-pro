@@ -1002,6 +1002,7 @@ typedef struct {
   char kind[8];
   char backport[160];
   char image[192];
+  int  duplicate;               /* its list marks it "duplicate": the copy it does not play (28.11.2026) */
 } ps5tm_kraken_game_t;
 int ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max);
 /* The folder Kraken Mount keeps its game caches in (its /api/state names it; /data/krakenmount/caches until it has): <dir>/<TITLE_ID> holds
@@ -1012,12 +1013,26 @@ int ps5tm_kraken_searches(const char *folder);
 /* 1 when Kraken Mount's config still names the app's own folders under the old name FPKG-Games (the app moves them to Kraken-Games the next
    time it starts Kraken Mount, kraken.c migrate_folders); 0 for every other list: toggling Kraken Mount changes nothing then. */
 int ps5tm_kraken_config_old(void);
-/* A game of Kraken Mount deleted from the page Spiele (gamedelete.c, 28.11.2026): its entry (1 found, 0 not listed, -1 Kraken Mount does not answer),
-   the delete by Kraken Mount itself (200 when done, msg otherwise; it may take minutes), and while it is off the source its cache names (1 when
-   there is one and it is still there). */
-int ps5tm_kraken_game_of(const char *title_id, ps5tm_kraken_game_t *out);
+/* A game of Kraken Mount deleted from the page Spiele (gamedelete.c, 28.11.2026): its entry with full paths (1 found, 0 it answers and does not list
+   it, -1 switched off, -2 busy; too_long: a path of 1000 bytes or more, not taken), whether a given file or folder is one of its sources (the original
+   after a copy or a conversion; kpath = the path its delete takes), the delete by Kraken Mount itself (200 when done, msg otherwise; it may take
+   minutes), the source its cache stamp names (1 when the title is its own and the source still there), and whether it has an image file mounted. */
+typedef struct {
+  char title_id[12];
+  char name[96];
+  char path[1024];
+  char kind[8];
+  char image[1024];
+  int  too_long;
+} ps5tm_kraken_entry_t;
+int ps5tm_kraken_game_of(const char *title_id, ps5tm_kraken_entry_t *out);
+int ps5tm_kraken_find_source(const char *title_id, const char *src, char *kpath, size_t n);
 int ps5tm_kraken_delete_game(const char *title_id, const char *path, char *msg, size_t n);
 int ps5tm_kraken_source_of(const char *title_id, char *out, size_t n);
+int ps5tm_kraken_image_held(const char *path);
+/* 1 while ShadowMountPlus's folders go back from Kraken Mount to ShadowMountPlus (it runs and the list still has them, or they were taken out less
+   than a minute ago): one and the same source at both is the hand-over then, not two mounters fighting (mounters.c). */
+int ps5tm_kraken_smp_handover(void);
 
 /* Titles two mounters want at once (src/mounters.c, 14.11.2026): a game Kraken Mount lists that ShadowMountPlus (a folder or an image) or
    PS4Mount manages too. Both write /user/app/<ID> and mount /system_ex/app/<ID>; ShadowMountPlus also rewrites the param.json. An array of
@@ -1144,6 +1159,7 @@ int           ps5tm_smp_find(const char *title_id, ps5tm_smp_game_t *out);
 /* 1 when it answers; its version into version. */
 int           ps5tm_smp_available(char *version, size_t version_len);
 int           ps5tm_smp_last_known_up(void);   /* the last answer, no new ask (bgpause.c) */
+int           ps5tm_smp_answered_recently(unsigned ms);   /* ShadowMountPlus answered at an ask at most ms old; no new ask (kraken.c) */
 /* 1 when it answers and lists this capability ("move_game_source", ...). */
 int           ps5tm_smp_can(const char *capability);
 int           ps5tm_smp_can_cached(const char *capability);          /* the same from what is known, without asking (never refreshes); 0 when it was never asked */

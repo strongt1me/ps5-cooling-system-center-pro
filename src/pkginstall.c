@@ -388,6 +388,26 @@ param_json_version(const char *path, char *out, size_t n) {
   cJSON_Delete(j);
 }
 
+/* Kraken Mount plays the title without an install: no copy of it is installed on the console (as Kraken Mount's own installed.rs looks) and its list
+   names it (a copy, 10 s old at most). */
+static int
+kraken_plays(const char *title_id) {
+  static const char *const app[] = { "/user/app/%s/app.pkg", "/mnt/ext0/user/app/%s", "/mnt/ext1/user/app/%s" };
+  struct stat st;
+  for(size_t i = 0; i < sizeof(app) / sizeof(app[0]); i++) {
+    char p[64];
+    snprintf(p, sizeof(p), app[i], title_id);
+    if(lstat(p, &st) == 0) return 0;
+  }
+  ps5tm_kraken_game_t *kg = calloc(PS5TM_KRAKEN_MAX, sizeof(*kg));
+  if(!kg) return 0;
+  const int n = ps5tm_kraken_games(kg, PS5TM_KRAKEN_MAX);
+  int yes = 0;
+  for(int i = 0; i < n && !yes; i++) yes = !strcmp(kg[i].title_id, title_id);
+  free(kg);
+  return yes;
+}
+
 /* What is installed of a title: 1 with its newest version (normalised, "" when none can be told), 0 when the console
    does not list it, -1 when that cannot be told. The app database has the base; the patch folders and the
    metadata folders have what an update has put there. */
@@ -594,6 +614,13 @@ evaluate(const char *id, eval_t *e) {
     e->installed = installed_state(p->title_id, e->installed_ver, sizeof(e->installed_ver));
   } else {
     e->installed = installed_state(p->title_id, e->installed_ver, sizeof(e->installed_ver));
+    if(!strcmp(p->kind, "base") && e->installed == 1 && kraken_plays(p->title_id)) {
+      /* not installed: Kraken Mount registered it from this or another .pkg (a drive's main folder is one of its folders while ShadowMountPlus does
+         not run). A delete on the console would be undone at its next pass (review 28.11.2026). */
+      snprintf(e->block, sizeof(e->block), "Kraken Mount spielt dieses Spiel gerade ohne Installation (die .pkg liegt in einem seiner Suchordner). Zum Installieren die .pkg dort herausnehmen oder sie auf der Seite von Kraken Mount (Port 8097) installieren.");
+      e->http = 409;
+      return;
+    }
     if(!strcmp(p->kind, "base") && e->installed == 1) {
       if(e->installed_ver[0])
         snprintf(e->block, sizeof(e->block), "Dieses Spiel ist schon installiert (%s). Die App überschreibt nichts; zum Neuinstallieren erst an der Konsole löschen.", e->installed_ver);

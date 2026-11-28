@@ -70,6 +70,14 @@ main(void) {
   ps5tm_orig_fmt_bytes(out, sizeof(out), 512ull << 20);  CHECK(!strcmp(out, "512 MB"));
   ps5tm_orig_fmt_bytes(out, sizeof(out), 0);             CHECK(!strcmp(out, "0 MB"));
 
+  /* Kraken Mount's own folder (review 28.11.2026) */
+  CHECK(ps5tm_orig_kraken_finds("/data/Kraken-Games/PPSA23000", "/data"));
+  CHECK(ps5tm_orig_kraken_finds("/data/Kraken-Games/sub/PPSA23000", "/data"));
+  CHECK(ps5tm_orig_kraken_finds("/mnt/usb0/Kraken-Games/Game.exfat", "/mnt/usb0"));
+  CHECK(!ps5tm_orig_kraken_finds("/data/Kraken-Games-alt/PPSA23000", "/data"));
+  CHECK(!ps5tm_orig_kraken_finds("/data/PS5-Original/PPSA23000", "/data"));
+  CHECK(!ps5tm_orig_kraken_finds("/mnt/usb1/Kraken-Games/x", "/mnt/usb0"));
+
   /* names */
   CHECK(ps5tm_orig_name_ok("PPSA23000"));
   CHECK(ps5tm_orig_name_ok("Game v1.02.exfat"));
