@@ -17,13 +17,14 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 | **ps5upload** (phantomptr) — Profilfunktion (lokalen Anzeigenamen lesen und ändern, Profilbild-Dateien einsetzen) nach C übertragen; Format, Größen und Vorlage der Profilbild-Dateien im Browser-Teil | `src/profile.c`, Profilbild-Teil von `web/app.js` | GPL-3.0 (README und LICENSE des Projekts; GitHub erkennt die Datei nicht automatisch) | <https://github.com/phantomptr/ps5upload> |
 | **ps5-pkg-manager** 1.5.1 (itsPLK) — Aufbau der PS4-/PS5-Pakete (Kopf, Tabelle, `param.json`/`param.sfo`, Bild), seit 1.5.1 dazu die Erkennung der Rückportier-Patches (Kopf `LIH`, Inhaltsmarken `0x40100000`) und das Lesen der SDK-Version des Programms, das Teile-Format `PS5MPKG1` und der Ordnerplan der Suche; für das Installieren der Ablauf (die Konsole liest das Paket von einem kleinen Server auf der eigenen Adresse, ein eigener Prozess ruft die Installationsbibliothek AppInstUtil auf und fragt den Stand ab, die Wiederholung bei kurzzeitigen Fehlern) und der Aufbau der Strukturen, die diesem Aufruf übergeben werden. Die Programme `pkgparse.c`, `pkgscan.c`, `pkgsplit.c`, `pkgstream.c`, `pkginstall.c` und das Hilfsprogramm `helper/pkginst_helper.c` sind eigener Code nach diesem Wissen und nach dem öffentlich beschriebenen Paketformat; nichts davon ist eingebettet oder mitgeliefert (das Hilfsprogramm ist unser eigenes und steckt als Bytefolge in der App) | `src/pkgparse.c`, `src/pkgscan.c`, `src/pkgsplit.c`, `src/pkgstream.c`, `src/pkginstall.c`, `src/helper/pkginst_helper.c` | GPL-3.0 | <https://github.com/itsPLK/ps5-pkg-manager>, Version 1.5.1 |
 | **webhb** 0.4.1 (slopmaster33, aus ps5-app-dumper von EchoStretch gelöst) — der QR-Encoder in `src/qr.c` (Byte-Modus, Stufe M, Version 1 bis 6) ist daraus übernommen, GPL-3.0-or-later wie diese App; geändert nur der Name der Funktion und der Kopf. | `src/qr.c` | GPL-3.0-or-later | <https://github.com/slopmaster33/webhb> (seit Oktober 2026 nicht mehr erreichbar) |
+| **ps5-app-dumper** 2.10 (EchoStretch, slopmaster33) — Grundlage des Dumpens im Reiter „Disc“: übernommen und für die App neu geschrieben sind das Entschlüsseln der SELF/SPRX-Dateien eines Dumps (`decrypt.c`; Kernel-Teil und Firmware-Tabelle wie im Original, mit dem Self-Pager von idlesauce aus `ps5-self-pager`, dessen SELF-Strukturen Cryptogenics PS5-SELF-Decrypter folgen), das Schreiben als FSELF (`elf2fself.c`), das Senken der SDK-Version (die Tabellen und Regeln aus `ps4_backport.c`/`ps5_backport.c`); nach seinem Vorbild neu geschrieben sind der Ablauf eines Dumps samt DLC (`ps5_dumper.c`, `dump_job.c`, `dump_store.c`, `app_scan.c`), die Marken der Spieleliste und die Suche nach Dumps, die Warteschlange, die `sce_sys`-Dateien aus `app.pkg`/`ac.pkg` (`unpkg_ps5()`) und das Entpacken des PFS-Abbilds eines PS4-Spiels (`unpfs()`; die PS4-Aufteilung nach der Idee von ps4-app-dumper, Alazif, Scene-Collective) | `src/dump_self.c`, `src/dump_fself.c`, `src/dump_backport.c`, `src/dump_job.c`, `src/dump_lib.c`, `src/dump_queue.c`, `src/dump_unpkg.c`, `src/dump_ps4.c` | GPL-3.0-or-later | <https://github.com/EchoStretch/ps5-app-dumper>, Version 2.10 |
 | **libdeflate** 1.26 (Eric Biggers, Google LLC) — zlib-Kompression und -Dekompression sowie CRC-32, unverändert bis auf eine ergänzte Datei: `lib/crc32.c` (der Einstieg `libdeflate_crc32()`, eigen geschrieben nach dem Muster von `adler32.c`; die Tabellen und Routinen darunter sind libdeflates; siehe `README.PS5TM` dort) | `src/third_party/libdeflate/` | MIT (`COPYING` dort) | <https://github.com/ebiggers/libdeflate>, Tag `v1.26` |
-| **PS5-NTFS-BROWSER** v1.4.0 (abcde6543) — der NTFS-Treiber zum Lesen und Schreiben (`ntfs.c`, `ntfs_write.c`, Blockgerät `bdev.c`, Partitionstabellen `part.c`, UTF-16 `utf.c` mit ihren Kopfdateien), bis auf Prüfungen gegen beschädigte oder präparierte Sticks (23.11.2026, in `ORIGIN.md` einzeln genannt) unverändert; die Anbindung an den Dateimanager (`src/ntfsvol.c`, `src/fm_ntfs.inc`) ist eigener Code, Webserver, Oberfläche und Auftragsliste des Originals sind nicht übernommen | `src/third_party/ntfsb/` (Herkunft und SHA-256 in `ORIGIN.md`) | GPL-3.0-or-later (README des Projekts, Lizenztext GPL-3.0) | <https://github.com/abcde6543/PS5-NTFS-BROWSER>, Fassung v1.4.0, Commit `1ca8e2d` |
+| **PS5-NTFS-BROWSER** v1.4.0 (abcde6543) — der NTFS-Treiber zum Lesen und Schreiben (`ntfs.c`, `ntfs_write.c`, Blockgerät `bdev.c`, Partitionstabellen `part.c`, UTF-16 `utf.c` mit ihren Kopfdateien), geändert nur um Prüfungen gegen beschädigte oder präparierte Sticks (23.11.2026), einen Schreib-Cache für die Verwaltungsdaten, die Behandlung des Journals und der Schreibreihenfolge (24.11.2026, teils aus den Pull Requests #16, #17, #21 und #22 an das Projekt) und die Korrekturen der Durchsicht vom 26.11.2026 (alles in `ORIGIN.md` einzeln genannt); die Anbindung an den Dateimanager (`src/ntfsvol.c`, `src/fm_ntfs.inc`) ist eigener Code, Webserver, Oberfläche und Auftragsliste des Originals sind nicht übernommen | `src/third_party/ntfsb/` (Herkunft und SHA-256 in `ORIGIN.md`) | GPL-3.0-or-later (README des Projekts, Lizenztext GPL-3.0) | <https://github.com/abcde6543/PS5-NTFS-BROWSER>, Fassung v1.4.0, Commit `1ca8e2d` |
 | **OffAct** v0.4.2 (John Törnblom) — die Registrierungsschlüssel der Konten (Platz 1 bis 16), die Formel der Konto-ID und der Ablauf der Aktivierung (Konto-ID, Typ `np`, Kennzeichen 4098; der Name wird nicht geschrieben) nach C übertragen; `master` hat seit dieser Fassung keinen weiteren Commit (geprüft am 04.11.2026). Das fertig gebaute `OffAct.elf` wird nicht mitgeliefert | `src/account.c` | GPL-3.0-or-later | <https://github.com/ps5-payload-dev/offact> |
 | **ampr_emu** (drakmor) — das Format des AMPR-Index (`AMPRIDX3`) und die Bauregeln aus `build_ampr_index.py`, nach C übertragen | `src/amprindex.c` | GPL-3.0 | <https://github.com/drakmor/ampr_emu> |
-| **BearSSL** 0.6 (Thomas Pornin) — TLS-Client der Spiel-Updates, unverändert (nur `src/` und `inc/` des Archivs) | `src/third_party/bearssl/` | MIT (`LICENSE.txt` dort) | <https://bearssl.org/>, Archiv `bearssl-0.6.tar.gz` |
+| **BearSSL** 0.6 (Thomas Pornin) — TLS-Client der Downloads der App (Payload-Store, neuere Fassungen von Kraken Mount, Dump Forge und AMPR EMU NG; `src/upd_http.c`), unverändert (nur `src/` und `inc/` des Archivs) | `src/third_party/bearssl/` | MIT (`LICENSE.txt` dort) | <https://bearssl.org/>, Archiv `bearssl-0.6.tar.gz` |
 | **cJSON** 1.7.19 (Dave Gamble und Mitwirkende) | `src/third_party/cJSON*` | MIT | <https://github.com/DaveGamble/cJSON> |
-| **PS5-Payload-SDK** v0.50 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird; mindestens v0.42 nötig (Firmware 13.60), v0.50 kennt jede Firmware von 1.00 bis 14.22, der Bau prüft das | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
+| **PS5-Payload-SDK** v0.50 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird (die App, beide Kacheln, die Hilfsprogramme); v0.50 kennt jede Firmware von 1.00 bis 14.22, der Bau prüft diese Fälle und lehnt ein älteres SDK ab | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
 
 ## Eingebettete Fassungen, einzelne übernommene Dateien, Vorbilder und Schnittstellen (bei jedem Eintrag steht, was genau übernommen ist)
 
@@ -33,7 +34,7 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
   (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Bauarten (`test-pack`,
   `test-nopack`, `test-debug-pack`) nach <https://github.com/drakmor/ampr_emu>.
-- **ampr-emu-ng** (quer3q, GPL-3.0): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.5.1 (vom 23.11.2026) und
+- **AMPR EMU NG** (quer3q, GPL-3.0, Projekt `ampr-emu-ng`): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.5.1 (vom 23.11.2026) und
   0.5.0 (vom 20.11.2026) (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`, SHA-256 aus der `SHA256SUMS` der Veröffentlichung,
   siehe `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.5.1-ng`,
   `libSceAmpr.sprx-0.5.0-ng` und je `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
@@ -51,21 +52,32 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   27.10.2026 ist die Kachel (`FAKE86921`) eine Vollbild-App mit Controller-Bedienung (`tvapp/`), gebaut auf dem Oberflächen-Baukasten
   ps5-homebrew-ui (Zeichnen, Bedienelemente, Schriften, Klänge, Bauweg mit `libc.prx`-Shim aus der Boilerplate). Die Originale sind
   nicht mehr auf GitHub; verwendet wird die erhaltene Kopie `JMUtechnologies/ps5-homebrew-ui`, das OpenGL-SDK wird beim Bauen geladen und
-  gegen die im Baukasten fest eingetragene SHA-256-Prüfsumme geprüft. Herkunft, Änderungen und Prüfsummen: `tvapp/ORIGIN.md`, die
-  Lizenzen der Schriften und übrigen Teile: `tvapp/THIRD_PARTY_NOTICES.md`.
+  gegen die im Baukasten fest eingetragene SHA-256-Prüfsumme geprüft. Die Vollbild-App enthält dazu **stb_image** v2.30 (Sean Barrett,
+  gemeinfrei oder MIT; unverändert, nur PNG und JPEG, für Cover und Entwicklerbilder; nicht auf 2.34 gehoben, weil diese Fassung
+  progressive JPEGs falsch entschlüsselt) und **cJSON** 1.7.19 (MIT, dieselbe Fassung wie in der App). Herkunft, Änderungen und
+  Prüfsummen: `tvapp/ORIGIN.md`, die Lizenzen der Schriften und übrigen Teile (stb_truetype, stb_vorbis und weitere):
+  `tvapp/THIRD_PARTY_NOTICES.md`.
   Für die zweite Kachel, die Browser-Kachel (`FAKE86922`, `starter/browser/`), sind aus ps5-native-app-boilerplate das Linker-Skript
   (`starter/browser/title/title.ld`), die Symboltabelle (`title/symbols.map`) und `sce_module/libc.prx` (Kompatibilitäts-Stubs und
   Startcode, kein fremder Systemcode, siehe `sce_module/NOTICE.txt`) übernommen; der Bauweg (freistehendes Programm, `ps5-native-tool`,
   Signatur) folgt dem Projekt.
 - **ps-disc-detect** (GPL-3.0-or-later; „disc detect“, Archiv `ps-disc-detect-main.zip`, vom User am 21.10.2026 bereitgestellt): Vorbild und Wissen für den Reiter „Disc“ (`src/disc.c`): der Weg zum Laufwerk (`/dev/xpt0`, CAMIOCOMMAND mit GET CONFIGURATION, READ DISC STRUCTURE, SET STREAMING), die Profilnummern, wo die Titelkennung liegt (`SYSTEM.CNF`, `PARAM.SFO`, `param.json`), das Lesen von `/dev/cd0` in 128-KiB-Stücken, das Benennen nach Redump und das Schema der Redump-Datenbank. Der Code ist neu geschrieben (kein CD-Abbild, kein IRD, keine eingebettete Liste); die MD5- und SHA-1-Rechnungen sind eigene Fassungen der veröffentlichten Verfahren.
+- **PS4FFPFSC** 0.2.9 (GPL-3.0-or-later): Vorbild für das, was ein PS4-Spielordner für ein Abbild braucht (`eboot.bin` und `param.sfo`
+  mit passender Titel-ID, das Update über dem Grundspiel, eine `sce_sys/param.json` aus der `param.sfo`, eine falsche SHA-1-Fußzeile in
+  `npbind.dat` berichtigt; nach `dump_source.py`, `sfo.py`, `npbind.py`, `pipeline.py`), neu geschrieben in C (`src/dump_image.c`,
+  genutzt beim Konvertieren von PS4-Spielordnern); kein Quelltext übernommen.
+- **Transmission für die PS5** (GPL-3.0-or-later): Vorbild für zwei Sicherungen beim Auswerfen: die Frage über die Prozesstabelle
+  (`sysctl kern.proc.filedesc`), wer Dateien auf einem Laufwerk offen hat (`src/driveholders.c`, eine eigene Fassung), und die Marke eines
+  Auswerfens, das nicht zurückkam (`src/ejectmark.c`).
 - **Kraken Mount** (quer3q, GPL-3.0-or-later, Version 0.4.2 vom 27.11.2026, <https://github.com/quer3q/kraken-mount>, Tag `v0.4.2`):
-  Für den Reiter „KrakenMount“ ist die veröffentlichte `kraken-mount.elf` (7 601 584 Bytes, SHA-256
-  `4d4ec0fc2b436d7be3e9d573dc63e6c94c64eac0d72c08aa15fe54446a19201f`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert als
-  zlib-Blob eingebettet (`third_party/kraken_mount/`, `tools/gen_blob.py`) und wird bei „Kraken Mount starten“ an den ELF-Lader
-  gesendet; die App bedient es über seine Schnittstelle auf Port 8097 (`src/kraken.c`). **Geänderte Kopie:** Die eingebettete ELF (und eine von GitHub geladene Fassung) trägt zwei Änderungen von je einem Byte: die Zeichenkette `shadowmountplus.elf` (Prozessname, auf den Kraken Mount seit v0.2.0 beim Start wartet), damit es neben ShadowMountPlus arbeitet, und ab v0.3.2 die Adresse seiner eigenen Update-Abfrage (`https://` wird `xttps://`), damit seine Seite keine ungeänderte Fassung lädt, die auf ShadowMountPlus wartet, und ab v0.4.1 der Port seiner Schnittstelle für Programme, die nur ShadowMountPlus kennen (10101 wird 18097, sonst bekäme es die Verbindungen der App an ShadowMountPlus) (`tools/patch_kraken.py`, `src/kraken.c`, siehe `third_party/kraken_mount/ORIGIN.md`); Quelltext des Projekts: <https://github.com/quer3q/kraken-mount> (Tag `v0.4.2`). Aus seinem Quelltext ist nichts übernommen
+  Für den Reiter „KrakenMount“ liegt die veröffentlichte `kraken-mount.elf` (7 601 584 Bytes, SHA-256
+  `4d4ec0fc2b436d7be3e9d573dc63e6c94c64eac0d72c08aa15fe54446a19201f`, gleich der `SHA256SUMS` der Veröffentlichung) unverändert in
+  `third_party/kraken_mount/`; eingebettet wird sie mit den unten genannten Änderungen als zlib-Blob (`tools/patch_kraken.py`,
+  `tools/gen_blob.py`) und bei „Kraken Mount starten“ an den ELF-Lader gesendet; die App bedient es über seine Schnittstelle auf
+  Port 8097 (`src/kraken.c`). **Geänderte Kopie:** Die eingebettete ELF (und eine von GitHub geladene Fassung) trägt drei Änderungen, jede an zwei Stellen: die Zeichenkette `shadowmountplus.elf` (Prozessname, auf den Kraken Mount seit v0.2.0 beim Start wartet, ein Byte), damit es neben ShadowMountPlus arbeitet, ab v0.3.2 die Adresse seiner eigenen Update-Abfrage (`https://` wird `xttps://`, ein Byte), damit seine Seite keine ungeänderte Fassung lädt, die auf ShadowMountPlus wartet, und ab v0.4.1 der Port seiner Schnittstelle für Programme, die nur ShadowMountPlus kennen (10101 wird 18097, sonst bekäme es die Verbindungen der App an ShadowMountPlus) (`tools/patch_kraken.py`, `src/kraken.c`, siehe `third_party/kraken_mount/ORIGIN.md`); Quelltext des Projekts: <https://github.com/quer3q/kraken-mount> (Tag `v0.4.2`). Aus seinem Quelltext ist nichts übernommen
   (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Die ELF enthält ihrerseits ampr-emu-ng 0.5.1 (quer3q), dlc_emu 0.3 und
   pgo_stub 0.6 von drakmor (GPL-3.0; Quelltext: <https://github.com/drakmor/dlc_emu/tree/0.3>, <https://github.com/drakmor/pgo_stub/tree/0.6>)
-  sowie die Fremdbausteine, die Kraken Mount in seiner Datei `THIRD_PARTY_NOTICES` nennt (unter anderem SQLite, gemeinfrei, und ab v0.4.2 die Abbild-Leser aus PS5 Dump Forge). Eine neuere Veröffentlichung lädt die
+  sowie die Fremdbausteine, die Kraken Mount in seiner Datei `THIRD_PARTY_NOTICES` nennt (unter anderem SQLite, gemeinfrei, und ab v0.4.2 die Abbild-Leser aus Dump Forge). Eine neuere Veröffentlichung lädt die
   App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
 - **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.6.0, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.6.0`): Motor des
   Konvertierformats „FPKG (Debug-.pkg)“ und des Packens beim Konvertieren in exFAT/ffpkg. Das PS5-Programm `ps5-dump-forge-0.6.0-ps5.elf` (18 877 632 Bytes, SHA-256
@@ -78,8 +90,10 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   Herkunft: `third_party/dump_forge/ORIGIN.md`.
 - **PS4Mount** (gasb07, GPL-3.0-or-later, Version 0.8.0): Für den Reiter „PS4 PKG von USB“ (PS4-Fake-PKGs vom USB-Laufwerk ohne Installation) ist der
   Quelltext übernommen: Paket lesen und Schlüssel (`src/ps4m_pkg.c`, `src/ps4m_keys.h`), Erzeugen der Installationsdateien
-  (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`) und der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
-  (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
+  (`src/ps4m_build.c`), Kryptographie (`src/ps4m_crypto.c`), Firmware-Weiche (`src/ps4m_fw.c`), Herkunft verschobener Pakete (`src/ps4m_origin.c`),
+  das Kopieren der Zusatzinhalte (`src/ps4m_accopy.c`, seit 0.7.0), seit 0.8.0 der Paket-Index je Laufwerk (`src/ps4m_pkgindex.c`) und das
+  Zusammenfassen wiederholter Kernel-Zeilen (`src/ps4m_klogdup.c`), dazu der Kern mit Suche, Anmeldung, nullfs-Einbindung und Löschfenster
+  (`src/ps4m_core.c`, angepasst: als Faden der App statt als eigenes Payload). Seine Prüfprogramme laufen mit `sh test/ps4m/run.sh`. Die Funktionen heißen mit dem Vorsatz `p4m_`; Lizenztext und
   Vorlagen unter `third_party/ps4mount/`. Der Schlüssel in `src/ps4m_keys.h` stammt aus LibOrbisPkg (maxton, LGPL-3.0). Quelltext der
   Vorlage: <https://github.com/gasb07/ps4mount>.
 - **PatchDL** (Knutwurst, GPL-3.0) – <https://github.com/knutwurst/ps5-patchdl>. Aus 0.3.0 stammen die eigene Namensauflösung
@@ -133,8 +147,10 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 - **ShadowMountPlus** (drakmor, GPL-3.0): Seine Web-Schnittstelle liefert Format
   und Speicherort der Spiele und übernimmt Verschieben und Entpacken
   (`src/smp.c`, `src/gamemove.c`); seine README nennt die Parameter für
-  `.ffpkg`-Abbilder (`src/conv_ufs2.c`). Abgeglichen bis 1.7beta9 (Auftragsstatus
-  `operation=install`, Backport-Ordner `/data/homebrew/backports`). <https://github.com/drakmor/ShadowMountPlus>
+  `.ffpkg`-Abbilder (`src/conv_ufs2.c`). Abgeglichen bis 1.7beta12 (Auftragsstatus
+  `operation=install`, Backport-Ordner `/data/homebrew/backports`; seit 1.7beta10 Aus- und Einhängen einzelner Spiele und
+  Auswerfen von USB-Laufwerken, `src/smpremount.c`, `src/usbeject.c`; seit 1.7beta12 die `config.ini` mit Abschnitten,
+  `src/smpcfg.c`). <https://github.com/drakmor/ShadowMountPlus>
 - **exFAT Image Builder** (kerrdec97): zeigt, mit welchen UFS2Tool-Parametern ein
   `.ffpkg` für ShadowMountPlus gebaut wird (`-b 65536 -f 65536 -m 0 -S 512 -i 262144`);
   nur Wissen, nichts davon übernommen (`src/conv_ufs2.c`).
@@ -145,11 +161,12 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 - **ps5-payload-dev/websrv** (John Törnblom): der Startweg über
   `sceSystemServiceLaunchApp` (`src/library.c`).
   <https://github.com/ps5-payload-dev/websrv>
-- **ps5-payload-manager** (itsPLK, GPL-3.0): die Regel, welche Prozesse als Payload gelten
+- **Payload Manager** (itsPLK, GPL-3.0, Projekt `ps5-payload-manager`): die Regel, welche Prozesse als Payload gelten
   und beendet werden dürfen (`src/procmgr.c`), und das Vorbild für den Aufbau der
   Seite „Payloads“; seit 19.10.2026 (Fassung 0.6.3) auch für „Payloads herunterladen“
   (`src/paystore.c`, eigener Code): die Adresse der Liste, ihr Format, die Regeln für
-  Versionsvergleich, Kennung und Prüfsumme. <https://github.com/itsPLK/ps5-payload-manager>
+  Versionsvergleich, Kennung und Prüfsumme. Jede Veröffentlichung legt eine `payload-manager.json` in diesem Format bei
+  (`tools/make_payload_json.py`). <https://github.com/itsPLK/ps5-payload-manager>
 - **ps5-payloads-mirror** (itsPLK): die Liste `payloads_v2.json`, die „Payloads
   herunterladen“ zur Laufzeit von <https://itsplk.github.io/ps5-payloads-mirror/> lädt,
   samt den dort gespiegelten Dateien. Nichts davon ist Teil der App; die Payloads gehören

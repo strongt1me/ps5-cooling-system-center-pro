@@ -5,7 +5,8 @@ Thank you for contributing.
 ## Development setup
 
 1. Clone the repository and open the project folder.
-1. Ensure the PS5 payload SDK is available locally.
+1. Ensure the PS5 payload SDK **v0.50** is available locally (the build checks that it knows every
+   firmware from 1.00 to 14.22 and stops with an older one).
 1. Set the SDK environment variable before building:
 
 ```powershell
@@ -18,7 +19,8 @@ $env:PS5_PAYLOAD_SDK="C:/path/to/PS5_PAYLOAD_SDK"
 make
 ```
 
-If `PS5_PAYLOAD_SDK` is not set, the build will fail.
+If `PS5_PAYLOAD_SDK` is not set, the build will fail. On Windows without WSL, `bash tools/build-windows.sh`
+(Git Bash with GNU Make and LLVM 21) builds the app; `tools/make_starter.sh` builds the two tiles (needs WSL).
 
 ## Branching and pull requests
 
@@ -49,7 +51,7 @@ If `PS5_PAYLOAD_SDK` is not set, the build will fail.
 
 ## Translations
 
-The interface exists in German (the language of the source texts), English, Italian, Spanish, French and Russian. The dictionaries are plain
+The interface exists in German (the language of the source texts), English, Italian, Spanish, French, Russian and Swedish. The dictionaries are plain
 JSON files in `web/lang/<xx>.json` (key = the German text exactly as it stands in the source, value = the translation, `{0}` `{1}` … are
 values the program inserts and must stay). Fixing a wording or filling a gap is a one-line change; `python tools/i18n/check_lang.py <xx>`
 lists missing texts and wrong placeholders. How it works, how to add a language and how the manual, FAQ and README are built:
@@ -60,8 +62,8 @@ lists missing texts and wrong placeholders. How it works, how to add a language 
 
 - Do not commit secrets, private tokens, or local credentials.
 - Do not include proprietary SDK files or binaries in pull requests.
-- Do not add game data, firmware, system libraries from the console, keys or
-  anything that circumvents copy protection, and do not ask for help with
+- Do not add game data, firmware, system libraries from the console or keys,
+  and do not ask for help with
   pirated content in issues or pull requests. See the legal section of the README.
 - Report security problems privately, as described in [SECURITY.md](SECURITY.md).
 

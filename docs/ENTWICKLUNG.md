@@ -4,20 +4,22 @@
 
 > **This document is in German.** The [README](../README.md) is in English and has a short build guide.
 
-Bauen, auf die Konsole senden, Fehlersuche und Aufbau des Quellcodes.
+Bauen, auf die Konsole senden, Fehlersuche, Tests, Aufbau des Quellcodes und Werkzeuge.
 
 ## Bauen
 
 Voraussetzung: das [PS5-Payload-SDK](https://github.com/ps5-payload-dev/sdk)
-**ab v0.42**; gebaut und getestet ist mit **v0.50** (20.11.2026)
+**v0.50** (seit 20.11.2026; es kennt jede Firmware von **1.00 bis 14.22**)
 (`ps5-payload-sdk.zip`, 8 839 112 Bytes, SHA-256
 `2993a69e52fea04a32bf1753318fc60b3f918ab635bdf946870e7d1849557bb2`, so auch
-von GitHub als Prüfsumme der Datei angegeben).
+von GitHub als Prüfsumme der Datei angegeben). Ein älteres SDK lehnt der Bau ab,
+weil ihm Firmware-Fälle fehlen (siehe unten; `make FW_NEED=…` schaltet das um).
 `tools/build-windows.sh` erwartet eine Kopie im Projektordner unter
 `PS5_PAYLOAD_SDK/` (Git ignoriert diesen Ordner); ein anderer Ort lässt sich mit
-der Umgebungsvariablen `PS5_PAYLOAD_SDK_DIR` nennen.
+der Umgebungsvariablen `PS5_PAYLOAD_SDK_DIR` nennen. Gebaut wird unter Windows
+mit Git Bash und **LLVM 21** (nächster Abschnitt).
 
-### Warum nicht älter als v0.42
+### Warum das SDK die Firmware bestimmt
 
 Jedes Payload beginnt im Startcode des SDK (`crt1.o`). Dessen `__kernel_init()`
 liest die Firmware der Konsole und vergleicht sie, Fall für Fall, mit den
@@ -100,25 +102,53 @@ export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-Ergebnis: `PS5_Cooling_Center.elf` (~9 MB — Web-UI samt den 30 Profilbildern,
-Konverter, Bibliotheken und die Dateien der Kachel (1,7 MB) eingebettet; das Kachel-Paket nicht: Es kostete 10,5 MB Speicher,
-und die Konsole konnte dann keine einzige Anfrage mehr bedienen. Mit
-`make TILE_PKG=pkg/out/x.pkg` lässt es sich trotzdem einbetten. Der frühere Installer
-entfällt seit 1.70.0).
+Ergebnis: `PS5_Cooling_Center.elf` (~25 MB — Web-UI samt den 30 Profilbildern und
+Wörterbüchern, Konverter, Bibliotheken, die Hilfsprogramme, Kraken Mount, Dump Forge (als zstd-Rahmen),
+die APR-EMU-, PlayGo- und DLC-Fassungen, die LZ4-Profile und die Dateien der Kachel `PSCC69690` eingebettet).
 
-`make release` legt zusätzlich einen Ordner `PS5 Cooling and System Center v<Version>/`
-mit der ELF und der LIESMICH an (die Starter-Kachel `FAKE86921.zip` entsteht mit `tools/make_starter.sh <elf>`, benötigt WSL, und wird mit Python zu einer Zip mit Schrägstrich-Pfaden gepackt). Es löscht dabei nichts:
-Liegt in dem Ordner etwas, das es nicht selbst anlegt, bricht es mit einer
-Liste ab; ebenso bei mehr als einem Paket in `pkg/out/`. Nach Änderungen an
-einem Header, an `src/*.inc` oder am Makefile selbst baut `make` neu.
+`make release` (bzw. `tools/build-windows.sh release`) legt zusätzlich einen Ordner
+`PS5 Cooling and System Center v<Version>/` mit der ELF (`PS5_Cooling_System_Center_v<Version>.elf`) und der
+LIESMICH an. Es löscht dabei nichts: Liegt in dem Ordner etwas anderes als diese beiden, `FAKE86921.zip`,
+`FAKE86922.zip` und `payload-manager.json` (die legt `tools/release.sh` dazu), bricht es mit einer Liste ab.
+Nach Änderungen an einem Header, an `src/*.inc` oder am Makefile selbst baut `make` neu.
 
-Ein-Kommando-Pre-Release-Check (Build + Release + Asset-Prüfung):
+### Kacheln bauen (`tools/make_starter.sh`)
+
+```bash
+tools/make_starter.sh [PS5_Cooling_Center.elf]
+```
+
+baut beide Kacheln nach `starter/out/`: **`FAKE86921`** (Vollbild-App aus `tvapp/`, über `tools/tvapp-build.sh`
+im WSL-Baum `~/ps5cc-tvapp`) und **`FAKE86922`** (Browser-Kachel aus `starter/browser/`). Beide tragen die App-ELF
+in ihrer `eboot.bin`; die Hintergründe (`pic0.dds`/`pic1.dds`, BC7, 3840 × 2160) macht `tools/png_to_bc7_dds.py`
+aus `starter/sce_sys/pic0.png`. Braucht WSL (Ubuntu-26.04) mit clang, clang-18, ninja, Python und ps5-native-tool;
+der erste Lauf lädt das festgelegte ps5-opengl-SDK (Prüfsumme geprüft).
+
+### Veröffentlichen (`tools/release.sh`)
+
+```bash
+tools/release.sh <X.Y.Z> --dry-run     # nur prüfen und auflisten
+tools/release.sh <X.Y.Z>               # mit einer Rückfrage vor Push und Release
+```
+
+Ablauf: Prüfungen (sauberer Baum, Version über dem letzten Tag, Anmeldung, Zweig, alle Host-Tests über
+`tools/run-host-tests.sh`), Version in `src/ps5tm.h`, den READMEs und `docs/LIESMICH.txt`, Handbuch und FAQ
+(`tools/i18n/docs_build.py app`), Commit `release: vX.Y.Z`, Bau (`tools/build-windows.sh release`,
+`tools/make_starter.sh`, `FAKE86921.zip` und `FAKE86922.zip` mit Python als ZIP ohne Kompression,
+`payload-manager.json` mit `tools/make_payload_json.py`), Suche nach privaten Angaben, erst dann Push
+`origin public:main` und `gh release create` mit fünf Dateien (ELF, zwei Kachel-Zips, LIESMICH,
+`payload-manager.json`; Seite englisch aus `docs/RELEASE_NOTES.md`, die deutschen Notizen
+`docs/RELEASE_NOTES.de.md` aufklappbar), zuletzt der Abgleich der Prüfsummen.
+
+Ältere Prüfung ohne Veröffentlichung (Bau unter WSL, `make clean && make -j1 && make release`, dann
+Prüfung der Dateien im Release-Ordner; die Kachel-Zips müssen dort schon liegen):
 
 ```powershell
 .\tools\pre-release-check.ps1
 ```
 
-Optional mit GitHub-Upload/Update der Release-Assets:
+Optional mit GitHub-Upload/Update der Release-Assets (nur ELF, `FAKE86921.zip` und LIESMICH; eine
+vollständige Veröffentlichung macht `tools/release.sh`):
 
 ```powershell
 .\tools\pre-release-check.ps1 -CreateOrUpdateRelease
@@ -128,7 +158,6 @@ Erwartete Erfolgsausgaben bei einem vollständigen Lauf:
 
 ```text
 Local release assets: OK
-Successfully uploaded 4 assets to v<Version>
 GitHub release assets: OK
 Pre-release check completed successfully.
 ```
@@ -151,11 +180,20 @@ chmod +x $PS5_PAYLOAD_SDK/bin/*
 ## Auf die Konsole übertragen
 
 ```bash
-make deploy PS5_HOST=192.168.1.50
+tools/deploy.sh <IP>                 # ELF an Port 9021, danach beide Kacheln per FTP
+tools/deploy.sh <IP> --nur-elf       # nur die ELF (--nur-kacheln: nur die Kacheln)
+tools/deploy.sh <IP> --dry-run       # nur ausgeben, was geschähe
 ```
 
-Alternativ die `.elf` mit einem beliebigen Payload-Sender an **Port 9021**
-(elfldr) schicken.
+`tools/deploy.sh` (Git Bash, ohne WSL) schickt die ELF über `tools/lib/send_elf.ps1` in einem eigenen Prozess an
+den ELF-Lader (Port 9021) – nicht, solange die App einen Auftrag bearbeitet oder an der Konsole gerade ein Titel
+startet (`--trotzdem` übergeht das) – und wartet, bis `GET /api/v1/system` die neue `app_version` meldet. Danach
+lädt es `starter/out/FAKE86921` und `FAKE86922` per FTP (Port 2121) nach `/data/homebrew/<Kachel>/`, die
+`eboot.bin` zuletzt, und vergleicht deren Größen. Rückgabewert 3: Die Vollbild-App ist auf der Konsole offen
+(ihre `eboot.bin` lässt sich dann nicht ersetzen).
+
+Nur die ELF geht auch mit `make deploy PS5_HOST=<IP>` (der Sender des SDK) oder mit einem beliebigen
+Payload-Sender an **Port 9021** (elfldr).
 
 ## Fehlersuche (Windows + PS5)
 
@@ -279,62 +317,57 @@ Zwischenspeicher (`~/.cache/ps5cc-fw-imports`) dauert ein Lauf wenige Sekunden. 
 
 ## PS4Mount-Prüfungen
 
-`third_party/ps4mount/test/unit.c` (aus dem Quellprojekt) prüft den Port `src/ps4m_pkg|build|crypto|origin.c`: PKG-Kopf,
-Einträge, Schlüssel, `param.sfo`, Herkunftsliste. Unter WSL/Linux mit gcc und python3:
+Die Prüfprogramme aus dem Quellprojekt (`third_party/ps4mount/test/`) prüfen den Port `src/ps4m_*.c`: `unit.c` PKG-Kopf,
+Einträge, Schlüssel, `param.sfo`, Herkunftsliste; seit PS4Mount 0.8.0 dazu `pkgindex_test.c`, `klogdup_test.c` und
+`accopy_test.c`; `test/ps4m/playgo_hostile_test.c` (von der App) prüft feindliche `playgo-chunk.dat`. Unter WSL/Linux mit gcc und python3:
 
 ```bash
-sh test/ps4m/run.sh            # baut die Vorlagen-Kopfdatei, übersetzt und meldet „157 checks, 0 failed“
+sh test/ps4m/run.sh            # baut die Vorlagen-Kopfdatei, übersetzt; jedes Programm meldet „<n> checks, 0 failed“
 ```
 
-Der Rückgabewert ist ungleich 0, sobald eine Prüfung scheitert. Bringt ein neues PS4Mount neue Prüfungen in `unit.c`,
+Der Rückgabewert ist ungleich 0, sobald eine Prüfung scheitert. Bringt ein neues PS4Mount neue Prüfungen in seine Testdateien,
 laufen sie hier mit.
 
-## Host-Test
+## Host-Tests
 
-> [!WARNING]
-> Diese Anleitung stammt aus einer frühen Fassung und **baut mit dem heutigen
-> Quellstand nicht mehr** (geprüft am 02.10.2026): Es fehlen FreeBSD-Kopfdateien
-> wie `sys/sysctl.h` und `sys/cpuset.h`, und `test/stubs.c` deckt die neueren
-> Module nicht ab. Der Quellcode kennt dafür den Schalter `-DPS5TM_HOST_TEST`;
-> eine passende, aktuelle Host-Testumgebung gehört noch nicht zum Repository.
-> Die Anleitung bleibt hier als Ausgangspunkt stehen.
-
-Server, API, Konfiguration und Kurvenmathematik lassen sich ohne Konsole auf
-Linux prüfen — `test/stubs.c` simuliert Sensorik und Kernel:
+Die Prüfungen ohne Konsole liegen unter `test/<Name>/`, je mit einem `run.sh` (Linux/WSL, gcc, die meisten mit ASan/UBSan;
+ohne Konsole und ohne SDK). Welche zur festen Liste gehören, steht in `.github/workflows/tests.yml` (47 Tests);
+`tools/run-host-tests.sh` arbeitet genau diese Liste ab und danach die Regelkreis-Simulation (`test/sim`). Unter Git Bash
+läuft es in WSL (`HOST_TESTS_WSL_DISTRO`, Vorgabe `Ubuntu-26.04`); `tools/release.sh` ruft es vor jedem Release auf.
 
 ```bash
-gcc -g -O0 -Isrc -Isrc/third_party -Itest/include \
-    -DPS5TM_DATA_DIR='"/tmp/ps5tm"' -o /tmp/ps5tm-host \
-    src/*.c gen/assets.c src/third_party/cJSON.c test/stubs.c \
-    src/third_party/libdeflate/lib/adler32.c \
-    src/third_party/libdeflate/lib/crc32.c \
-    src/third_party/libdeflate/lib/deflate_compress.c \
-    src/third_party/libdeflate/lib/deflate_decompress.c \
-    src/third_party/libdeflate/lib/zlib_compress.c \
-    src/third_party/libdeflate/lib/zlib_decompress.c \
-    src/third_party/libdeflate/lib/utils.c \
-    src/third_party/libdeflate/lib/x86/cpu_features.c \
-    -lpthread
-mkdir -p /tmp/ps5tm && /tmp/ps5tm-host
+bash tools/run-host-tests.sh      # alle: Exit 0 bestanden, 1 ein Test scheiterte, 3 kein gcc bzw. WSL
+sh test/krakenmig/run.sh          # ein einzelner
 ```
 
-Seit 1.46.0 braucht der Host-Build zusätzlich libdeflate (Kompression fürs
-Konvertieren, `conv_pfs.c`) — dieselben Quellen wie `DEFLATE_SRCS` im
-Makefile, sonst fehlen beim Binden die `libdeflate_*`-Symbole.
+Nicht in der Liste, weil sie länger laufen oder eine Vorgabe brauchen: `test/fuzz` (libFuzzer, clang mit
+`libclang-rt-dev`: `sh test/fuzz/run.sh [Sekunden je Ziel]`) und `test/lz4cross` (beim Wechsel der LZ4-Fassung:
+`sh test/lz4cross/run.sh <Ordner der anderen Fassung>`). `test/stubs*.c` sind Reste eines früheren Host-Builds der ganzen
+App; der baut mit dem heutigen Quellstand nicht mehr (der Schalter `-DPS5TM_HOST_TEST` dient heute den Einzeltests).
 
-Danach `http://127.0.0.1:8086`. Der ICC-ioctl ist auf dem Host naturgemäß nicht
-testbar und meldet sauber „nicht verfügbar".
+### Vollbild-App (`tvapp/`)
 
-## Kachel-Dateien und Kachel-Paket bauen
+Die Vollbild-App wird nicht im Projektordner gebaut: `tools/tvapp-build.sh` (von `tools/make_starter.sh` gerufen) spiegelt
+`tvapp/` in einen Baum im Linux-Dateisystem von WSL (`~/ps5cc-tvapp`, anders mit `PS5TM_TVAPP_TREE`) und baut dort. Dort
+laufen auch ihre Tests:
 
-Seit 1.47.0 trägt die ELF die Dateien der Kachel selbst: `tile/sce_sys/` (`param.json`,
+```bash
+cd ~/ps5cc-tvapp
+USE_CCACHE=0 make test-unit       # GoogleTest-Einheitstests aus tvapp/tests/unit, mit ASan/UBSan
+make test-integration             # Tests der Bauwerkzeuge (tvapp/tests/test_*.py)
+make host-snapshots               # der Rundgang auf dem PC, Bilder nach build/snapshots
+```
+
+## Kachel-Dateien (PSCC69690)
+
+Seit 1.47.0 trägt die ELF die Dateien der früheren Homescreen-Kachel `PSCC69690` selbst: `tile/sce_sys/` (`param.json`,
 `icon0.png`, `pic0.png`, `pic1.png`). `tools/gen_tile_files.py` prüft sie (JSON, PNG-Kennung,
 Title-ID gleich `PS5TM_TITLE_ID` in `src/tile.c`, höchstens 4 MB), legt gleiche Dateien nur
-einmal ab und schreibt `gen/tile_files.c`; `src/tile.c` macht daraus beim Start die Kachel
-(siehe das [Handbuch](HANDBUCH.md#homescreen-kachel)). Das Paket unten ist nur noch ein Rückfall.
-
-Gebaut wird sie mit `pkg/build.ps1` (Bilder skalieren → `LibProsperoPkg.dll`
-bereitstellen → `dotnet run`). Voraussetzung ist das **.NET-10-SDK**.
+einmal ab und schreibt `gen/tile_files.c`. `src/tile.c` legt daraus die Kachel nur für eine ELF an, die ohne die Kacheln
+`FAKE86921`/`FAKE86922` läuft, und nur einmal (siehe das
+[Handbuch](HANDBUCH.md#kacheln-fake86921-vollbild-und-fake86922-browser)). Ein Kachel-Paket und ein eigener Installer werden
+seit 19.10.2026 weder gebaut noch ausgeliefert; der Paketweg in `src/tile.c` (`tile.pkg` im Datenordner,
+`POST /api/v1/tile/upload`) und `make TILE_PKG=<Paket>` bleiben nur für ein Paket aus einer älteren Veröffentlichung.
 
 ## Kacheln FAKE86921/FAKE86922: ältere laufende App ersetzen (seit 1.77.1)
 
@@ -364,7 +397,7 @@ Versionen:
 
 ## Übersetzungen
 
-Die Oberfläche gibt es auf Deutsch, Englisch, Italienisch, Spanisch, Französisch und Russisch. Die Quelltexte sind deutsch und
+Die Oberfläche gibt es auf Deutsch, Englisch, Italienisch, Spanisch, Französisch, Russisch und Schwedisch. Die Quelltexte sind deutsch und
 bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
 
 - `web/i18n-boot.js` wählt die Sprache (gemerkte Wahl in `localStorage` `lang`, sonst Browsersprache, sonst Englisch), noch bevor
@@ -409,19 +442,22 @@ bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
 ## Aufbau des Quellcodes
 
 ```text
-src/main.c          Start, Ablösung einer älteren Instanz, Serverschleife
+src/main.c          Start, Ablösung einer älteren Instanz, Serverschleife; Versionsmarke PS5CC-VERSION für die Kacheln
+src/instlock.c      genau eine laufende App: Schreibsperre auf eine Datei im Datenordner, eine ältere Kopie wird beendet (ohne HTTP)
 src/platform.c      Rechteausweitung, Temperatursensoren, ICC-Lüftersteuerung, Firmware
 src/fan.c           Komfortregelung (Mittelwert, Totzone, Trend) und Servo auf die Lüfterschwelle
+src/fanguard.c      Lüfterwächter: eigener Thread, liest die Sensoren selbst; hängt die Regelung oder wird es zu heiß, Lüfter zurück an die Konsole bzw. volle Kühlung
+src/fantrace.c      Regelaufzeichnung der letzten 30 Minuten im Speicher (GET /api/v1/fan/trace, POST /api/v1/fan/trace/save)
 src/probe.c         Hintergrund-Thread für alle Abfragen an Systemdienste
-src/http.c          HTTP/1.1-Server (POSIX-Sockets, ohne Fremdbibliothek), Host-/Origin-Prüfung
+src/http.c          HTTP/1.1-Server (POSIX-Sockets, ohne Fremdbibliothek), Host-/Origin-Prüfung, Uploads direkt auf die Platte
 src/assets.c        liefert die eingebetteten Dateien der Oberfläche aus, gzip wie gespeichert oder entpackt (libdeflate), je nach Accept-Encoding
-src/api.c           REST-Schnittstelle unter /api/v1
+src/api.c           REST-Schnittstelle unter /api/v1 (die Routen des Dateimanagers stehen in filemgr.c)
 src/config.c        JSON-Konfiguration, atomares Speichern
 src/log.c           Ereignis-Ringpuffer (gespiegelt ins Kernelprotokoll); Steuerzeichen einer Meldung werden zu Leerzeichen, damit aus einem Namen mit Zeilenumbruch keine zweite Zeile wird
 src/klogown.h       erkennt Zeilen der App selbst im Kernel-Puffer; die Leser (Spiel, Takt, Controller, Mikrofon-Taste) überspringen sie
 src/sysinfo.c       Modell, Laufzeit, Speicherplatz (zwischengespeichert)
 src/netdisp.c       Netzwerkverbindung und angeschlossener Bildschirm
-src/qr.c           QR-Code für die Adresse der Oberfläche (System-Seite); der Encoder stammt aus webhb von slopmaster33 (GPL-3.0)
+src/qr.c            QR-Code für die Adresse der Oberfläche (System-Seite); der Encoder stammt aus webhb von slopmaster33 (GPL-3.0)
 src/telemetry.c     Stromschienen, Takt live, Bildrate
 src/clocks.c        Taktgrenzen aus der Energiezustandstabelle der Konsole
 src/chanlog.c       Aufzeichnung aller SoC-Sensorkanäle (zum Zuordnen)
@@ -431,73 +467,156 @@ src/gamestate.c     Welches Spiel läuft und ob es im Vordergrund ist
 src/dualsense.c     Controller-Akku aus dem Kernelprotokoll
 src/micbutton.c     Doppeldruck der Mikrofon-Taste -> Temperaturmeldung
 src/notify.c        Bildschirmmeldungen, Adresse im Heimnetz
-src/power.c         Ausschalten und Neustart
+src/power.c         Ausschalten, Neustart, Ruhemodus, abgesicherter Modus
+src/powerguard.c    Ruhemodus-Uhr bei langen Vorgängen zurücksetzen
 src/procmgr.c       Laufende Payloads auflisten und beenden
 src/payloads.c      Payload-Dateien (interner Ordner, USB): starten, kopieren, löschen
-src/payprofiles.c  Payload-Profile: benannte Folgen von Payloads mit Pausen, ein Startprofil, Abbruch zwischen zwei Einträgen
+src/payprofiles.c   Payload-Profile: benannte Folgen von Payloads mit Pausen, ein Startprofil, Abbruch zwischen zwei Einträgen
+src/paystore.c      Payloads herunterladen: die Listen des Payload Managers von itsPLK (itsplk.github.io) und von strongt1me, Download mit SHA-256-Prüfung in den Payload-Ordner, installed.json, Aktualisieren/Löschen
+src/upd_http.c      HTTP/1.1 über TCP oder TLS 1.2 (BearSSL, Vertrauensanker aus src/upd_ca.h, erzeugt mit tools/mk_upd_ta.py), Umleitungen nur nach Regel; upd_dns.c eigene DNS-Anfragen (UDP, TCP, DNS über HTTPS, gemerkte Adressen); beides aus PatchDL
 src/profile.c       Anzeigename und Profilbild des Benutzers
+src/account.c       Offline-Konto aktivieren (wie OffAct) und Fake-Anmeldung (np-fake-signin senden, Einträge leeren)
 src/regstats.c      Konsolenname aus der Registry (nur lesend)
-src/library.c       Spiele des Startbildschirms, Start, Cover
+src/backdrops.c     Hintergrundbilder der Vollbild-App je Bereich (eigene JPEGs im Datenordner)
+src/library.c       Spiele des Startbildschirms, Start, Cover; Quelle und Format je Spiel (ShadowMountPlus, PS4Mount, Kraken Mount)
+src/libcache.c      Zwischenspeicher der Spieleliste (covers_and_more: meta.json + icon0.png je Titel), nur speichern und herausgeben; library.c prüft, was es davon glaubt
 src/sqlite_ro.c     Nur-lesender SQLite-Leser für die App-Datenbank der Konsole
-src/smp.c           Schnittstelle zu ShadowMountPlus (Port 10101)
-src/gamecopy.c      Spiele kopieren (jede Datei zurücklesen, Prüfsummen-Datei)
-src/gameconvert.c   Spiele konvertieren (exFAT, ffpfsc, ffpkg), Ergebnis zurücklesen und prüfen
-src/fsign.c          Unsignierte PS5-Programmdateien als fake-signierte SELF-Dateien (FSELF) schreiben: beim Konvertieren und beim Packen in einen neuen Ordner
-src/gamemove.c      Verschieben und Entpacken über ShadowMountPlus
-src/filemgr.c      Dateimanager: ansehen, laden, hochladen, kopieren, verschieben, umbenennen, löschen; ändern nur unter den Laufwerken und /data, nie über Verknüpfungen
-src/fm_ntfs.inc    NTFS-Laufwerke im Dateimanager (in filemgr.c eingebunden): Knoten Konsole/NTFS, Liste, Ansicht, Hochladen, Kopieren/Verschieben/Löschen, Auswerfen; nie ersetzen oder umbenennen
-src/ntfsvol.c      NTFS-Laufwerke finden (ganze Platten daN ohne Einhängung, höchstens alle 3 s, nie beim Auswerfen), ntfs0..7, nur-lesbar-Gründe, Auswerfen
-src/third_party/ntfsb/  NTFS-Treiber aus PS5-NTFS-BROWSER v1.4.0 (abcde6543, GPL-3.0-or-later), unverändert
-src/jobhist.c      Verlauf der Aufträge (history.jsonl): eine Zeile je beendetem Kopieren, Konvertieren, Installieren, Löschen, Dateimanager-Auftrag usw.
-src/imgread.c      nur-lesender Leser für exFAT-, PFS/PFSC- (.ffpfsc) und UFS2-Abbilder (.ffpkg); alles gegen die Größen der Köpfe geprüft, Fehler statt wilder Lesezugriffe
-src/imgjob.c       Abbild prüfen, in einen Ordner entpacken und reparieren (mit imgjob_lz4.inc für LZ4-Pakete)
-src/amprindex.c    AMPR-Index (ampr_emu.index, AMPRIDX3) eines Spiels bauen: C-Portierung von build_ampr_index.py aus drakmors ampr_emu
-src/amprlib.c      APR-EMU- und PlayGo-Datei eines Spiels: Fassung wählen, einsetzen, entfernen, das Original zurücklegen; die Fassungen sind eingebettet (gen/*_blob.c)
-src/lz4pack.c      LZ4-Asset-Packs eines Spiels (AMPRPAK4/AMPRDAT3): packen, prüfen, entpacken (mit lz4pack_write.inc und lz4pack_read.inc)
-src/lz4cfg.c       Packprofil der LZ4-Packs: eingebaute Regeln und ein Leser für die TOML-Profile von drakmors ampr_pack.py
-src/plugins.c      Spiel-Plugins (PlayGo-Stub, DLC-Module von drakmor) im fakelib eines Spiels aktuell halten
-src/trace.c        Mitschnitt: ein Profil für die LZ4-Packs aus dem echten Leseverhalten eines Spiels (Debug-APR-EMU, Journal AMPRCMD1)
+src/smp.c           Schnittstelle zu ShadowMountPlus (Port 10101; erkennt, wenn dort Kraken Mount antwortet)
+src/smpcfg.c        config.ini von ShadowMountPlus: update_emulators bzw. update_enabled lesen und ändern (flaches und v2-Format)
+src/smpremount.c    ein Spiel über ShadowMountPlus aus-, ein- oder neu einhängen
+src/smphold.c       ein über ShadowMountPlus eingehängtes, nicht gestartetes Spiel wieder freigeben (smp-mounted.txt)
+src/bgpause.c       Pausieren des Hintergrund-Spiels vor dem Antippen einer Kachel (17.11.2026): `ps5tm_bgpause_decide` (reine Entscheidung, Host-Test `test/bgpause`), `ps5tm_bgpause_tick` (aus der Probe-Schleife, zweimal pro Sekunde solange ein Spiel läuft), startet das Hilfsprogramm über `ps5tm_loader_inject_mem`; liest dessen Antwort aus `bgpause.res`
+src/mounters.c      Titel, die zwei Einbinder zugleich führen (Kraken Mount, ShadowMountPlus, PS4Mount): die Warnliste conflicts
+src/fpkgdup.c       ein Spiel, das Kraken Mount und ShadowMountPlus beide führen, nach dem Beenden bei ShadowMountPlus aushängen
+src/kraken.c        KrakenMount: Kraken Mount (quer3q) eingebettet, starten und beenden, Seite, Suchordner (Kraken-Games; ohne ShadowMountPlus auch dessen Ordner), Löschen über Kraken Mount
+src/krakenboot.h    wann Kraken Mount mit der App startet (Host-Test test/krakenboot)
+src/krakenmig.h     Umzug FPKG-Games → Kraken-Games und die Ordnerlisten (Host-Test test/krakenmig)
+src/dumpforge.c     Dump Forge (quer3q) als Motor von „FPKG (Debug-.pkg)“ und des Packens beim Konvertieren: eingebettet (zstd), beauftragt über 127.0.0.1:8095
+src/lhttp.c         kleiner HTTP-Client für die Programme auf 127.0.0.1 (Kraken Mount 8097, Dump Forge 8095)
+src/tilekeep.c      hält die eigene Kachel von Kraken Mount und Dump Forge fern (leere Datei an /user/app/<Titel-ID>)
+src/gamecopy.c      Spiele kopieren (Ziele homebrew, Kraken-Games, PS5-Sicherung/Spiele; jede Datei zurücklesen, Prüfsummen-Datei)
+src/gameconvert.c   Spiele konvertieren (exFAT, ffpfsc, ffpkg, FPKG über Dump Forge), Ergebnis zurücklesen und prüfen
+src/convqueue.c     Warteschlange der Konvertierungen (eigener Thread, höchstens 24 Einträge, nur im Speicher)
+src/cvname.c        Name des Ergebnisses aus einer Vorlage ({titel}, {id}, {version}, {quelle}); reine Funktionen, Host-Test test/cvname
+src/cvpack.c        prüft die Wahl, ein Spiel beim Schreiben des Abbilds zu packen (pack, pack_level, pack_runtime)
+src/origafter.c     „Original danach“: das Original nach Konvertieren, Kopieren oder Entpacken behalten, löschen oder verschieben
+src/fsign.c         Unsignierte PS5-Programmdateien als fake-signierte SELF-Dateien (FSELF) schreiben: beim Konvertieren und beim Packen in einen neuen Ordner
+src/gamemove.c      Verschieben und Entpacken über ShadowMountPlus; scheitert dessen Entpacken an EACCES, entpackt die App selbst
+src/gamedelete.c    Spiele und Sicherungen löschen: Plan mit Einmal-Kennwort, Deinstallation über die Konsole (Helfer), ShadowMountPlus abmelden + Abbild löschen, Spiele von Kraken Mount über Kraken Mount, von PS4Mount über PS4Mount, Sicherungen; löscht nie über Verknüpfungen, Laufwerksgrenzen oder außerhalb von /mnt/usb*, /mnt/ext*, /data
+src/filemgr.c       Dateimanager: ansehen, laden, hochladen, kopieren, verschieben, umbenennen, löschen; ändern nur unter den Laufwerken und /data, nie über Verknüpfungen
+src/fm_ntfs.inc     NTFS-Laufwerke im Dateimanager (in filemgr.c eingebunden): Knoten Konsole/NTFS, Liste, Ansicht, Hochladen, Kopieren/Verschieben/Löschen, Auswerfen; nie ersetzen oder umbenennen
+src/fm_search.inc   Suche des Dateimanagers (eigener Thread, auch auf NTFS)
+src/fm_title.inc    Spieltitel zu Einträgen, die nach einer Titel-ID heißen (Ordnerliste und Suche)
+src/ntfsvol.c       NTFS-Laufwerke finden (ganze Platten daN ohne Einhängung, höchstens alle 3 s, nie beim Auswerfen), ntfs0..7, nur-lesbar-Gründe, Auswerfen
+src/third_party/ntfsb/  NTFS-Treiber aus PS5-NTFS-BROWSER v1.4.0 (abcde6543, GPL-3.0-or-later); die Änderungen (Prüfungen, Schreib-Cache, Schreibreihenfolge) nennt ORIGIN.md dort
+src/usbeject.c      USB-Laufwerk sicher auswerfen über ShadowMountPlus: nur ohne laufenden Auftrag, ohne PS4Mount-Spiel und ohne Abbild von Kraken Mount auf dem Laufwerk
+src/drivegate.c     Laufwerks-Tor: Lesezugriffe der App melden sich an, ein Auswerfen wartet auf sie (bis 4 s) und lässt keine neuen zu
+src/driveholders.c  wer Dateien, Ordner oder sein Arbeitsverzeichnis auf einem Laufwerk offen hat (sysctl kern.proc.filedesc, nur lesend)
+src/ejectmark.c     Marke eines Auswerfens, das nicht zurückkam: danach bleibt das Auswerfen aus, bis es wieder erlaubt wird (rearm)
+src/jobreg.c        die eine Liste der Aufträge, die nicht nebeneinander laufen (ps5tm_jobs_busy_except)
+src/jobhist.c       Verlauf der Aufträge (history.jsonl): eine Zeile je beendetem Kopieren, Konvertieren, Installieren, Löschen, Dateimanager-Auftrag usw.
+src/imgread.c       nur-lesender Leser für exFAT-, PFS/PFSC- (.ffpfsc) und UFS2-Abbilder (.ffpkg); alles gegen die Größen der Köpfe geprüft, Fehler statt wilder Lesezugriffe
+src/imgjob.c        Abbild prüfen, in einen Ordner entpacken und reparieren (mit imgjob_lz4.inc für die LZ4- und zstd-Pack-Aufträge)
+src/amprindex.c     AMPR-Index (ampr_emu.index, AMPRIDX3) eines Spiels bauen: C-Portierung von build_ampr_index.py aus drakmors ampr_emu
+src/indexlimit.c    passen die Tabellen eines zstd- oder LZ4-Packs in den Indexspeicher von AMPR EMU NG (index_check)
+src/amprlib.c       APR-EMU- und PlayGo-Datei eines Spiels: Fassung wählen, einsetzen, entfernen, das Original zurücklegen; die Fassungen sind eingebettet (gen/*_blob.c)
+src/amprng.c        AMPR EMU NG (quer3q): die zwei angebotenen Fassungen, eine neuere stabile Veröffentlichung von GitHub laden
+src/blobz.c         entpackt die als zlib-Strom eingebetteten Programme (Hilfsprogramme, np-fake-signin, Kraken Mount)
+src/lz4pack.c       LZ4-Asset-Packs eines Spiels (AMPRPAK4/AMPRDAT3): packen, prüfen, entpacken (mit lz4pack_write.inc und lz4pack_read.inc)
+src/zstdpack.c      zstd-Asset-Packs eines Spiels: packen, prüfen, entpacken
+src/lz4cfg.c        Packprofil der LZ4-Packs: eingebaute Regeln und ein Leser für die TOML-Profile von drakmors ampr_pack.py
+src/plugins.c       Spiel-Plugins (PlayGo-Stub, DLC-Module von drakmor) im fakelib eines Spiels aktuell halten
+src/trace.c         Mitschnitt: ein Profil für die LZ4-Packs aus dem echten Leseverhalten eines Spiels (Debug-APR-EMU, Journal AMPRCMD1)
 src/conv_exfat.c    exFAT-Abbild schreiben (aus MkPFS portiert)
 src/conv_pfs.c      PFS-Container mit PFSC-Kompression (aus MkPFS portiert), vollständige Prüfung
 src/conv_ufs2.c     UFS2-Abbild (ffpkg) nach dem Vorbild von UFS2Tool, Prüfsumme je Datei
 src/checkfile.c     Zurücklesen mit CRC-32/SHA-256, Prüfsummen-Datei im sha256sum-Format
 src/sha256.c        SHA-256 (eigen): reines C, dazu die SHA-Befehle der CPU (CPUID + Selbsttest, Test: test/sha256/run.sh)
 src/iopolicy.c      Lesen und Schreiben gleichzeitig nur zwischen zwei Laufwerken, Vorauslesen
-src/gamedelete.c    Spiele und Sicherungen löschen: Plan mit Einmal-Kennwort, Deinstallation über die Konsole (Helfer), ShadowMountPlus abmelden + Abbild löschen, Sicherungen; löscht nie über Verknüpfungen, Laufwerksgrenzen oder außerhalb von /mnt/usb*, /mnt/ext*, /data
 src/ioerr.h         die Worte für einen gescheiterten Zugriff: abgemeldetes Laufwerk (ENXIO/ENODEV), EIO, sonst strerror()
-src/powerguard.c    Ruhemodus-Uhr bei langen Vorgängen zurücksetzen
 src/klog.c          Kernel-Log live: Kopie von kern.msgbuf, neue Zeilen über einen Anker aus den letzten sechs Zeilen
 src/klogfiles.c     Kernel-Log in Dateien: Auszüge von der Seite, Aufnahme (eigener Thread liest ps5tm_klog_fetch), Ordner klog-live-log leeren
 src/playtime.c      Spielzeit: Sitzungen je Spiel mit Temperaturen (sessions.csv, session-open.csv), eigener Thread
-src/libcache.c      Zwischenspeicher der Spieleliste (covers_and_more: meta.json + icon0.png je Titel), nur speichern und herausgeben; library.c prüft, was es davon glaubt
 src/pkgparse.c      Paket-Dateien lesen (PS4 CNT, PS5 FIH, geteilte PS5MPKG1): Titel, Version, Art, Bild; jede Angabe der Datei wird gegen ihre Größe geprüft
 src/pkgscan.c       Pakete suchen (Wurzel und Ordner pkg der Laufwerke, im Hintergrund), Liste mit Kennungen, geteilte Pakete als ein Eintrag
 src/pkgsplit.c      ein Paket in Teile (PS5MPKG1) aufteilen: Zwischennamen, Zurücklesen mit SHA-256, Namen erst am Ende, Abbruch räumt auf
-src/pkglive.c      Paket direkt vom PC: der Browser schickt Stücke zu 1 MB, die Konsole installiert, ohne dass vorher etwas auf ein Laufwerk geschrieben wird
-src/pkgqueue.c     Warteschlange: mehrere Pakete nacheinander installieren; jedes wird erst an seiner Reihe befragt
+src/pkglive.c       Paket direkt vom PC: der Browser schickt Stücke zu 1 MB, die Konsole installiert, ohne dass vorher etwas auf ein Laufwerk geschrieben wird
+src/pkgqueue.c      Warteschlange: mehrere Pakete nacheinander installieren; jedes wird erst an seiner Reihe befragt
 src/pkgstream.c     kleiner HTTP-Server nur auf 127.0.0.1:18851: liefert das Paket (ein geteiltes als ein Strom) mit Range an die Installation der Konsole, nur den einen gepinnten Namen
 src/pkginstall.c    Paket installieren: Plan, ein Auftrag je Installation, Hilfsprogramm starten und befragen, Fertig erst bei Systemstatus + alle Bytes, danach Suche in der Datenbank (vier Enden: installiert, als fertig gemeldet, geliefert ohne Bestätigung, fehlgeschlagen); die Verbindung zum Hilfsprogramm liegt ab fd 200
 src/pkginst.h       Aufteilung des Pakets in Stücke (Slices) und der Server; src/pkginst_ipc.h die Nachrichten zwischen App und Hilfsprogramm
-src/bgpause.c               Pausieren des Hintergrund-Spiels vor dem Antippen einer Kachel (17.11.2026): `ps5tm_bgpause_decide` (reine Entscheidung, Host-Test `test/bgpause`), `ps5tm_bgpause_tick` (aus der Probe-Schleife, zweimal pro Sekunde solange ein Spiel läuft), startet das Hilfsprogramm über `ps5tm_loader_inject_mem`; liest dessen Antwort aus `bgpause.res`
-src/helper/bgpause_helper.c  das Hilfsprogramm dazu (eigene ELF, eingebettet; `gen/bgpause_blob.c`): liest die Anwendungs-ID aus `bgpause.req`, ruft `sceLncUtilSuspendApp` nur für die laufende große Anwendung gleicher ID; baut ohne `-fno-asynchronous-unwind-tables`, `tools/check_elf_pages.py` prüft die Seitenlage der Segmente
+src/helper/bgpause_helper.c  das Hilfsprogramm zu bgpause.c (eigene ELF, eingebettet; `gen/bgpause_blob.c`): liest die Anwendungs-ID aus `bgpause.req`, ruft `sceLncUtilSuspendApp` nur für die laufende große Anwendung gleicher ID; baut ohne `-fno-asynchronous-unwind-tables`, `tools/check_elf_pages.py` prüft die Seitenlage der Segmente
 src/helper/pkginst_helper.c  das Hilfsprogramm (eigene ELF, in die App eingebettet): ruft sceAppInstUtil* auf; höchstens ein Installationsaufruf je Prozess, fragt nach dem Fortschritt (auch als Ersatz für ein gestorbenes); beendet die Bibliothek nie, steigt mit _exit aus; gibt sceAppInstUtilGetInstallStatus einen eigenen 16-KiB-Puffer (die Funktion schreibt 712 Bytes, das bekannte Feld hat 600) und hält die Verbindung zur App ab fd 100
-tools/gen_blob.py   macht aus der Hilfs-ELF ein C-Feld und prüft, dass die Kennungsstelle genau einmal vorkommt
 src/savebackup.c    Spielstände: sichern, prüfen, zurückspielen (rohe Kopie mit Zurücklesen, Liste mit SHA-256, Stand vor dem Zurückspielen), ein Thread je Vorgang
-src/ps4m_core.c    PS4Mount 0.6.1 (gasb07, GPL-3.0) in der App: PS4-Fake-PKGs auf USB erkennen, ohne Installation einbinden, zurückverschieben; ps4m_pkg.c, ps4m_build.c, ps4m_crypto.c, ps4m_fw.c, ps4m_origin.c und ps4m_keys.h gehören dazu (Quelle: third_party/ps4mount/)
+src/savemnt.c       einen Spielstand der Konsole öffnen (über die Funktionen der Konsole; die App entschlüsselt nichts selbst)
+src/savexport.c     einen Spielstand als ZIP aus Klartext-Dateien auslesen
+src/saveimport.c    einen Spielstand aus einer solchen ZIP einspielen (neues Abbild, Stand davor gesichert)
+src/savezip.c       die ZIP-Dateien der Spielstände lesen und schreiben
+src/chives.c        chives.json: wie das Abbild eines ausgelesenen Spielstands gebaut war (liegt in der ZIP neben den Dateien)
+src/savesfo.c       die param.sfo eines Spielstands
+src/savedb.c        der Eintrag eines eingespielten Spielstands in der Spielstand-Datenbank der Konsole (SQLite)
+src/ps4m_core.c     PS4Mount 0.8.0 (gasb07, GPL-3.0) in der App: PS4-Fake-PKGs auf USB erkennen, ohne Installation einbinden, zurückverschieben; ps4m_pkg.c, ps4m_build.c, ps4m_crypto.c, ps4m_fw.c, ps4m_origin.c, ps4m_pkgindex.c (PKG-Liste je Laufwerk), ps4m_accopy.c (Zusatzinhalte kopieren), ps4m_klogdup.c (wiederholte Kernel-Zeilen zusammenfassen) und ps4m_keys.h gehören dazu (Quelle: third_party/ps4mount/)
 src/dupimg.c        doppelte Abbilder eines Spiels finden und beiseitelegen (`….off`), nach exFAT2AMPR 1.104 (V-10)
 src/disc.c          Das Laufwerk (nach ps-disc-detect, GPL-3.0): CAM-Durchreichgerät, Disc-Profil, Titelkennung, Abbild einer PS2-DVD/PS3-Disc mit CRC-32/MD5/SHA-1, optionale Redump-Liste (sqlite_ro.c liest ihre WITHOUT-ROWID-Tabellen)
-src/paystore.c      Payloads herunterladen: Liste des Payload Managers von itsPLK (itsplk.github.io), Download mit SHA-256-Prüfung in den Payload-Ordner, installed.json, Aktualisieren/Löschen
-src/upd_http.c      HTTP/1.1 über TCP oder TLS 1.2 (BearSSL, Vertrauensanker aus src/upd_ca.h, erzeugt mit tools/mk_upd_ta.py), Umleitungen nur nach Regel; upd_dns.c eigene DNS-Anfragen (UDP, TCP, DNS über HTTPS, gemerkte Adressen)
-src/tile.c          Kachel-Installation über AppInstUtil (Ordner aus eingebetteten Dateien, Paket als Rückfall)
+src/dump_lib.c      Reiter Disc: Marken der Spieleliste und Suche nach vorhandenen Dumps (die dump_*.c nach ps5-app-dumper 2.10, GPL-3.0-or-later)
+src/dump_job.c      ein laufendes PS5-Spiel samt eingehängter DLC dumpen
+src/dump_queue.c    Warteschlange der Dumps: bis zu 64 Titel nacheinander starten und dumpen
+src/dump_self.c     SELF/SPRX-Dateien eines Dumps entschlüsseln
+src/dump_fself.c    eine einfache ELF als FSELF schreiben (Einstellung „als FSELF neu signieren“)
+src/dump_backport.c SDK-Version der Dateien eines Dumps senken (Backport)
+src/dump_unpkg.c    die sce_sys-Dateien aus einem installierten app.pkg oder ac.pkg holen
+src/dump_ps4.c      PFS-Abbild eines PS4-Spiels entpacken
+src/dump_image.c    was ein PS4-Spielordner für ein Abbild braucht (nach PS4FFPFSC 0.2.9); heute vom Konvertieren der PS4-Ordner benutzt
+src/tile.c          Kachel PSCC69690 für eine ELF ohne die Kacheln FAKE86921/FAKE86922: Ordner aus eingebetteten Dateien über AppInstUtil, ein vorhandenes Paket als Rückfall
 src/dynsym.c        Symbolsuche in Systemmodulen
 src/sony_api_lock.c gemeinsame Sperre für empfindliche Systemaufrufe
-src/third_party/    cJSON, libdeflate, lz4, bearssl
-third_party/        eingebettete Fassungen fremder Programme (drakmor: ampr_emu, dlc_emu, playgo; gasb07: ps4mount) und LZ4-Profile
+src/third_party/    cJSON, libdeflate, lz4, zstd, BearSSL, SQLite, ntfsb (siehe THIRD_PARTY_NOTICES.md)
+third_party/        eingebettete Fassungen fremder Programme: ampr_emu (drakmor, AMPR EMU NG von quer3q), dlc_emu und playgo (drakmor), ps4mount (gasb07: Vorlagen und Tests), kraken_mount und dump_forge (quer3q), np_fake_signin (earthonion), lz4_profiles; patchdl nur als Herkunftsnachweis
 web/                Web-Oberfläche (per tools/gen_assets.py eingebettet, gzip), Profilbilder in web/avatars/, Wörterbücher in web/lang/
-tile/               Dateien der Kachel (sce_sys), eingebettet über tools/gen_tile_files.py
-tools/              Build-, Release- und Diagnose-Skripte
-test/               Stubs der früheren Host-Tests
+tile/               Dateien der Kachel PSCC69690 (sce_sys), eingebettet über tools/gen_tile_files.py
+starter/            Browser-Kachel FAKE86922 (starter/browser/) und die Hintergründe beider Kacheln (starter/sce_sys/)
+tvapp/              Vollbild-App, Kachel FAKE86921 (auf ps5-homebrew-ui und ps5-opengl), mit eigenen Tests
+tools/              Bau-, Release-, Sende- und Prüfwerkzeuge (nächster Abschnitt)
+test/               Host-Tests (je Ordner ein run.sh) und die Regelkreis-Simulation test/sim
 docs/               Handbuch, API, Entwicklung, Versionshinweise, Entscheidungsprotokoll
+```
+
+## Werkzeuge (`tools/`)
+
+```text
+tools/build-windows.sh         Bau unter Windows ohne WSL (Git Bash, GNU Make, LLVM 21); „release“ legt den Release-Ordner an, „clean“ räumt auf
+tools/win/                     prospero-clang, llvm-config und rev für Git Bash (von build-windows.sh benutzt)
+tools/check_sdk_firmware.py    prüft das crt1.o des SDK bzw. eine fertige ELF auf die Firmware-Fälle (FW_NEED im Makefile)
+tools/check_elf_pages.py       prüft, dass jedes ladbare Segment einer Payload-ELF auf einer 16-KiB-Seite beginnt (Hilfsprogramm bgpause)
+tools/check_fw_imports.py      sucht die Systemfunktionen der App in den Exporten entschlüsselter Firmware-Bibliotheken (siehe oben)
+tools/build_date.py            Baudatum für das Makefile; tools/read_version.py die Version aus src/ps5tm.h
+tools/gen_assets.py            bettet web/ gzip-komprimiert ein (gen/assets.c)
+tools/gen_tile_files.py        bettet tile/sce_sys ein (gen/tile_files.c)
+tools/gen_pkg_blob.py          bettet ein Kachel-Paket ein, nur mit make TILE_PKG=…; sonst ein leeres Feld
+tools/gen_blob.py              macht aus einer ELF ein C-Feld (zlib-Strom): beide Hilfsprogramme, np-fake-signin, Kraken Mount
+tools/gen_zstd_blob.py         bettet einen schon gepackten zstd-Rahmen ein (Dump Forge)
+tools/gen_emu_blob.py          bettet die APR-EMU-Fassungen, die PlayGo-Stubs und die DLC-Module aus third_party/ ein
+tools/gen_lz4_profiles.py      bettet die erprobten LZ4-Profile aus third_party/lz4_profiles ein
+tools/gen_p4m_templates.py     die PlayGo-Vorlagen von PS4Mount als C-Felder (gen/pdb_template.h)
+tools/patch_kraken.py          die drei Änderungen an Kraken Mount: kein Warten auf ShadowMountPlus, keine eigene Update-Abfrage, Port 18097 statt 10101
+tools/fetch-dumpforge.sh       lädt die festgelegte Fassung von Dump Forge und prüft die SHA-256; tools/pack-dumpforge.sh legt sie als zstd-Rahmen nach third_party/dump_forge
+tools/mk_upd_ta.py             schreibt src/upd_ca.h (BearSSL-Vertrauensanker)
+tools/gen_theme_hell.py        Textfarben des hellen Designs in web/style.css
+tools/build_avatars.py         die 30 eingebauten Profilbilder (web/avatars); tools/build_avatar_thumbs.py ihre Vorschauen
+tools/build_tile_assets.py     Bilder der Kachel PSCC69690 aus den Vorlagen in pkg/ (der Ordner gehört nicht zum Repository)
+tools/png_to_bc7_dds.py        Hintergrund einer Kachel als BC7-DDS, 3840 × 2160 (pic0.dds, pic1.dds)
+tools/optimize_png.py          PNG-Dateien kleiner, ohne ein Pixel zu ändern (zopfli)
+tools/make_starter.sh          baut beide Kacheln FAKE86921 und FAKE86922; tools/tvapp-build.sh baut darin die Vollbild-App unter WSL
+tools/release.sh               die Veröffentlichung (siehe oben)
+tools/make_payload_json.py     payload-manager.json: die Liste dieser App für den Payload Manager von itsPLK
+tools/pre-release-check.ps1    ältere Prüfung vor einem Release (Bau unter WSL, Dateien im Release-Ordner)
+tools/check-release-liesmich-sync.ps1  vergleicht den Abschnitt KURZDIAGNOSE der LIESMICH in den Release-Ordnern mit docs/LIESMICH.txt
+tools/run-host-tests.sh        alle Host-Tests der CI-Liste und die Simulation (siehe Host-Tests)
+tools/deploy.sh                ELF und Kacheln an eine Konsole; tools/lib/send_elf.ps1 schickt die ELF an Port 9021
+tools/diagnose.ps1             von Windows aus: läuft die App, antwortet Port 8086, wirkt der Lüfterpfad
+tools/upstream.json            die Fremdbausteine und ihre eingebauten Fassungen (Feld current); tools/upstream_check.py fragt GitHub nach neueren (Skill upstream-update)
+tools/i18n/                    Wörterbücher prüfen, Texte ziehen, Handbuch und FAQ bauen (siehe Übersetzungen)
+tools/demo/                    Vorführung ohne Konsole und Bildschirmfotos fürs Handbuch (siehe Übersetzungen)
 ```
 
 ## Vorgeschichte: Warum die alte Version nicht funktionierte

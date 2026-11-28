@@ -66,11 +66,15 @@ Zum Beispiel:
   Pfad sie kennt; Dateien unter `/data` liest sie nur bei eingeschaltetem
   Fehlersuch-Modus und über einen Umweg (DNS-Rebinding). Der Reiter KrakenMount
   zeigt abweichende Suchordner an; die Prüfung von `Host` und `Origin` kann nur
-  der Autor von Kraken Mount einbauen.
+  der Autor von Kraken Mount einbauen. Die App bringt inzwischen Kraken Mount
+  0.4.2 mit, dessen Schnittstelle ein Spiel auch über seine Titel-ID löscht;
+  solange ShadowMountPlus nicht läuft, gibt die App ihm außerdem die Ordner
+  `homebrew` und `etaHEN/games`.
 - Schwachstellen in der Konsole selbst, im Jailbreak, in kstuff, im Payload-Lader
   oder in anderen Homebrew-Programmen. Bitte melde sie dort.
-- Das Umgehen von Schutzmaßnahmen des Herstellers. Dieses Projekt enthält dafür keinen
-  Code und leistet dazu keine Hilfe.
+- Das Umgehen von Schutzmaßnahmen des Herstellers. Dieses Projekt leistet dazu keine
+  Hilfe; entschlüsselt wird nur beim Dumpen (Reiter Disc), wo die Konsole die auf
+  ihr installierten Spiele mit eigenen Mitteln für eine Sicherung entschlüsselt.
 
 ## Rechtliches
 

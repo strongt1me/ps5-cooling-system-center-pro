@@ -262,7 +262,8 @@ def work(path, pats, required):
 
 work(header, [(re.compile(rb'(#define\s+PS5TM_VERSION\s+")[^"]+(")'), rb'\g<1>' + nb + rb'\g<2>')], 1)
 for r in readmes:
-    work(r, [(re.compile(rb'Version-\d+\.\d+\.\d+'), b'Version-' + nb),
+    # the badge label is translated in some READMEs (Versione-, Versi%C3%B3n-, %D0%92...-), so match any label
+    work(r, [(re.compile(rb'(img\.shields\.io/badge/[^-/)]+-)\d+\.\d+\.\d+'), rb'\g<1>' + nb),
              (re.compile(rb'(PS5_Cooling_System_Center_v)\d+\.\d+\.\d+(\.elf)'), rb'\g<1>' + nb + rb'\g<2>')], 1)
 work(liesmich, [(re.compile(rb'(?<![\d.])' + re.escape(old.encode()) + rb'(?!\d)'), nb)], 1)
 sys.exit(1 if bad else 0)

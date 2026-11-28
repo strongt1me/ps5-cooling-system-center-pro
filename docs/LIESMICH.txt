@@ -7,23 +7,38 @@ WAS HIER DRIN LIEGT
 
 PS5_Cooling_System_Center_v1.98.0.elf
     Das Hauptprogramm: Lüftersteuerung und Web-Oberfläche. Das ist die
-    Datei, die du nach jedem Neustart der Konsole sendest.
+    Datei, die du ohne Kachel nach jedem Neustart der Konsole sendest.
 
 FAKE86921.zip
     Die Vollbild-Kachel: den Ordner FAKE86921 nach /data/homebrew/ kopieren
-    (z. B. mit ShadowMountPlus oder einem FTP-Programm). Ein Tipp auf die
-    Kachel startet die App und zeigt sie im Vollbild mit Controller-
-    Bedienung: Kühlung, Spiele, Dateimanager, Payloads, System, Profil und
-    Protokoll. Die Seitenleiste öffnet die Touchpad-Taste.
+    (per FTP oder mit dem Dateimanager der App). Ein Tipp auf die Kachel
+    startet die App und zeigt sie im Vollbild mit Controller-Bedienung:
+    Kühlung, Spiele, Dateimanager, Payloads, System, Profil und Protokoll.
+    Die Seitenleiste öffnet die Touchpad-Taste.
 
 FAKE86922.zip
     Die Browser-Kachel: wie oben nach /data/homebrew/ kopieren. Ein Tipp
     startet die App und öffnet die Web-Oberfläche im Browser der Konsole.
     Beide Kacheln können nebeneinander liegen.
 
+payload-manager.json
+    Die Liste für den Payload Manager von itsPLK (Link auf die ELF dieses
+    Releases und ihre SHA-256). Im Payload Manager als Quelle eintragen:
+    https://github.com/strongt1me/ps5-cooling-system-center-pro/releases/latest/download/payload-manager.json
+
 Jede Kachel trägt das Hauptprogramm in sich: Ein Tipp darauf startet es,
-falls es noch nicht läuft. Einen Kachel-Installer (ELF) und ein Kachel-Paket
-(.pkg) gibt es nicht mehr.
+falls es noch nicht läuft. Die Kacheln legt ShadowMountPlus an; läuft es
+nicht, tut das Kraken Mount, sobald es in der App eingeschaltet ist.
+
+
+VORAUSSETZUNGEN
+===============
+
+- PS5 mit Jailbreak und ELF-Lader auf Port 9021 (z. B. elfldr),
+  Firmware 1.00 bis 14.22.
+- kstuff für die Lüftersteuerung. Ohne kstuff laufen Messwerte und
+  Oberfläche, die Regelung nicht.
+- Optional ShadowMountPlus (Verschieben, Entpacken, Kacheln).
 
 
 SO WIRD ES BENUTZT
@@ -52,9 +67,13 @@ Neustart der Konsole muss die ELF weiter gesendet werden). Das passiert nur,
 wenn gerade kein Spiel läuft, und nur einmal: Eine später gelöschte Kachel kommt
 nicht von allein zurück.
 
+PS4Mount (Reiter "PS4 PKG von USB") und Kraken Mount (Reiter "KrakenMount")
+sind ab Werk aus. Eingeschaltet startet die App sie bei jedem eigenen Start;
+die Wahl bleibt über Neustarts erhalten.
+
 Wichtig: Immer nur EINE Instanz laufen lassen. Zwei Instanzen regeln den
 Lüfter gleichzeitig und stören sich. Eine alte Instanz lässt sich auf der
-Systemseite unter "Payloads" beenden, sonst hilft ein Neustart.
+Seite "Payloads" beenden, sonst hilft ein Neustart.
 
 
 EINSTELLUNGEN
@@ -64,11 +83,10 @@ Werden unter /data/PS5-Cooling-Center/ gespeichert und beim nächsten Start
 wieder verwendet. Läuft die App nicht, gelten die normalen PS5-Vorgaben —
 die Konsole regelt dann wieder selbst.
 
-Standard-Zieltemperatur: 66 °C.
+Standard-Zieltemperatur: 66 °C (einstellbar von 50 bis 91 °C).
 
-Bis Version 1.2 hieß der Ordner "/data/PS5 Cooling Center/" — mit
-Leerzeichen. Beim ersten Start von 1.3 wird er samt Einstellungen und
-Temperaturverlauf automatisch umbenannt. Es geht nichts verloren.
+Ein alter Datenordner "/data/PS5 Cooling Center/" (mit Leerzeichen, bis
+Version 1.2) wird beim Start samt Einstellungen umbenannt.
 
 
 HINWEIS ZUM PORT
@@ -109,9 +127,6 @@ Von einem Stick lässt sich eine Datei auch in den internen Ordner kopieren.
 Gestartet wird über den Payload-Lader der Konsole (elfldr, Port 9021) —
 ist der nicht geladen, meldet die Seite das.
 
-Die früheren Seiten "Übersicht" und "Kühlung" sind ab dieser Version eine:
-"Kühlung". Die Seite "Payloads" steht an der Stelle der Übersicht.
-
 
 KURZDIAGNOSE (PC-SEITE)
 =======================
@@ -127,7 +142,7 @@ Wenn die Web-Oberfläche oder API nicht erreichbar ist:
 3. Bei Fehlern:
     - Payload erneut senden (Port 9021)
     - Nur eine Instanz laufen lassen
-    - Falls nötig Diagnose-Skript verwenden:
+    - Falls nötig Diagnose-Skript aus dem Quellcode verwenden:
       .\tools\diagnose.ps1 -Ps5Ip <PS5-IP> -AutoPort
 
 Optionaler Lüfter-Wirkungstest:
@@ -158,16 +173,18 @@ Nur für die eigene Konsole. Das Modifizieren einer Konsole kann gegen
 Nutzungsbedingungen verstoßen und zu Garantieverlust oder zur Sperrung von
 Konto oder Konsole führen. Das Risiko trägt, wer das tut.
 
-Keine Piraterie. Das Programm enthält keine Spiele, keine Firmware, keine
-Schlüssel und nichts, was einen Kopierschutz umgeht. Es lädt nichts aus dem
-Internet (nur die Seite "Credits" prüft im Browser, ob github.com erreichbar
-ist) außer, auf Knopfdruck, der Payload-Liste und der Payloads von GitHub
-("Payloads herunterladen"). Kopieren, Verschieben und Konvertieren wirken nur auf Spiele, die
-schon auf der eigenen Konsole liegen; Pakete finden, aufteilen und installieren
-nur auf Pakete, die du selbst auf die Konsole oder ein Laufwerk gelegt hast.
-Raubkopien zu beschaffen oder zu
-verbreiten ist in den meisten Ländern strafbar und wird hier nicht
-unterstützt.
+Keine Piraterie. Das Programm enthält keine Spiele, keine Firmware und keine
+fremden Schlüssel (nur einen öffentlich bekannten für selbst gebaute
+Test-Pakete). Das Dumpen (Reiter Disc) lässt nur die eigene Konsole die auf
+ihr installierten Spiele für eine Sicherung entschlüsseln. Es lädt nichts aus
+dem Internet (nur die Seite "Credits" prüft im Browser, ob github.com
+erreichbar ist) außer, auf Knopfdruck, von GitHub: die Payload-Listen samt
+Payloads ("Payloads herunterladen") und neuere Fassungen von AMPR EMU NG,
+Kraken Mount und Dump Forge. Kopieren, Verschieben und Konvertieren wirken
+nur auf Spiele, die schon auf der eigenen Konsole liegen; Pakete finden,
+aufteilen und installieren nur auf Pakete, die du selbst auf die Konsole
+oder ein Laufwerk gelegt hast. Raubkopien zu beschaffen oder zu verbreiten
+ist in den meisten Ländern strafbar und wird hier nicht unterstützt.
 
 Keine Gewährleistung. Das Programm wird so bereitgestellt, wie es ist (GNU
 General Public License, Version 3 oder später). Wer es benutzt, tut das auf

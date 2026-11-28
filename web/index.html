@@ -197,9 +197,7 @@
                 <p class="av-status" id="av-status">Noch kein Bild gewählt.</p>
                 <p class="note" id="av-note">Das Bild wird hier im Browser in die
                   vier Größen umgerechnet, die die PS5 erwartet, und erst danach
-                  zur Konsole geschickt. <b>Mit „Als Avatar speichern" wird das Set im
-                  Ordner /data/PS5-Cooling-Center/Avatars abgelegt</b> und kann später
-                  wieder geladen oder auf andere Profile übernommen werden. <b>Vor der ersten Übernahme wird das
+                  zur Konsole geschickt. <b>Vor der ersten Übernahme wird das
                   bisherige Profilbild gesichert</b> — „Vorheriges zurückholen"
                   macht die Änderung damit rückgängig. Bis das Startmenü das neue
                   Bild zeigt, kann ein Benutzerwechsel nötig sein.</p>
@@ -2067,12 +2065,13 @@
               <div class="cr-text">
                 <b>John Törnblom</b> <a class="cr-login" href="https://github.com/john-tornblom" target="_blank" rel="noopener noreferrer">@john-tornblom</a>
                 <p>Das PS5-Payload-SDK, mit dem jede ELF dieser App gebaut wird, der Payload-Lader elfldr auf Port 9021,
-                  dazu klogsrv, ftpsrv und websrv. Danke für das Fundament, auf dem fast alles Homebrew der PS5 steht –
-                  und an alle Mitwirkenden von ps5-payload-dev.</p>
+                  dazu klogsrv, ftpsrv und websrv, und OffAct, nach dem die Seite Profil das Offline-Konto aktiviert. Danke für
+                  das Fundament, auf dem fast alles Homebrew der PS5 steht – und an alle Mitwirkenden von ps5-payload-dev.</p>
                 <div class="cr-links">
                   <a href="https://github.com/ps5-payload-dev/sdk" target="_blank" rel="noopener noreferrer">sdk</a>
                   <a href="https://github.com/ps5-payload-dev/elfldr" target="_blank" rel="noopener noreferrer">elfldr</a>
                   <a href="https://github.com/ps5-payload-dev/websrv" target="_blank" rel="noopener noreferrer">websrv</a>
+                  <a href="https://github.com/ps5-payload-dev/offact" target="_blank" rel="noopener noreferrer">offact</a>
                   <a href="https://github.com/ps5-payload-dev" target="_blank" rel="noopener noreferrer">ps5-payload-dev</a>
                   <a href="https://github.com/john-tornblom?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
                 </div>
@@ -2207,6 +2206,35 @@
                 </div>
               </div>
             </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/EchoStretch.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>Echo Stretch und slopmaster33</b> <a class="cr-login" href="https://github.com/EchoStretch" target="_blank" rel="noopener noreferrer">@EchoStretch</a>
+                <p>ps5-app-dumper: die Grundlage des Dumpens im Reiter Disc – das Entschlüsseln der Programmdateien eines Spiels und das Schreiben als FSELF, übernommen und für die App neu geschrieben. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/EchoStretch/ps5-app-dumper" target="_blank" rel="noopener noreferrer">ps5-app-dumper</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <img class="cr-pic" src="/credits/idlesauce.jpg" alt="" width="56" height="56">
+              <div class="cr-text">
+                <b>idlesauce</b> <a class="cr-login" href="https://github.com/idlesauce" target="_blank" rel="noopener noreferrer">@idlesauce</a>
+                <p>ps5-self-pager: Damit lässt das Dumpen die Konsole die Programmdateien eines Spiels selbst entschlüsseln. Dazu umtx2 und weitere Werkzeuge für PS4 und PS5. Danke!</p>
+                <div class="cr-links">
+                  <a href="https://github.com/idlesauce/ps5-self-pager" target="_blank" rel="noopener noreferrer">ps5-self-pager</a>
+                  <a href="https://github.com/idlesauce/umtx2" target="_blank" rel="noopener noreferrer">umtx2</a>
+                  <a href="https://github.com/idlesauce?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a>
+                </div>
+              </div>
+            </article>
+            <article class="cr-card">
+              <span class="cr-pic cr-initials" aria-hidden="true">DN</span>
+              <div class="cr-text">
+                <b>Daniel Nylander</b> <a class="cr-login" href="https://github.com/yeager" target="_blank" rel="noopener noreferrer">@yeager</a>
+                <p>Die schwedische Übersetzung der Browser-Oberfläche. Danke!</p>
+              </div>
+            </article>
           </div>
 
           <h3 class="cr-group">Zusammenspiel, Wissen und Vorbilder</h3>
@@ -2246,9 +2274,11 @@
               <span class="cr-pic cr-initials" aria-hidden="true">q3</span>
               <div class="cr-text">
                 <b>quer3q</b> <a class="cr-login" href="https://github.com/quer3q" target="_blank" rel="noopener noreferrer">@quer3q</a>
-                <p>AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei neuesten Fassungen (0.5.1 und 0.5.0) stecken eingebettet in der App, neuere lädt sie auf Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „KrakenMount“, es spielt FPKG, Spielordner und Abbilder ohne Installation. Danke!</p>
+                <p>AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei neuesten Fassungen (0.5.1 und 0.5.0) stecken eingebettet in der App, neuere lädt sie auf Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „KrakenMount“, es spielt FPKG, Spielordner und Abbilder ohne Installation. Dump Forge: der Motor für FPKG und das Packen beim Konvertieren. Alle drei stecken in der App. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/quer3q/ampr-emu-ng" target="_blank" rel="noopener noreferrer">ampr-emu-ng</a>
+                  <a href="https://github.com/quer3q/kraken-mount" target="_blank" rel="noopener noreferrer">kraken-mount</a>
+                  <a href="https://github.com/quer3q/ps5-dump-forge" target="_blank" rel="noopener noreferrer">ps5-dump-forge</a>
                 </div>
               </div>
             </article>
@@ -2256,7 +2286,7 @@
               <span class="cr-pic cr-initials" aria-hidden="true">kw</span>
               <div class="cr-text">
                 <b>Knutwurst</b> <a class="cr-login" href="https://github.com/knutwurst" target="_blank" rel="noopener noreferrer">@knutwurst</a>
-                <p>PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für den Payload-Store) stammen daraus. Danke!</p>
+                <p>PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für die Downloads von GitHub) stammen daraus. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/knutwurst/ps5-patchdl" target="_blank" rel="noopener noreferrer">ps5-patchdl</a>
                 </div>
@@ -2293,9 +2323,10 @@
               <span class="cr-pic cr-initials" aria-hidden="true">eo</span>
               <div class="cr-text">
                 <b>earthonion</b> <a class="cr-login" href="https://github.com/earthonion" target="_blank" rel="noopener noreferrer">@earthonion</a>
-                <p>Garlic SaveMgr: Vorbild für das Übertragen von Spielständen – das Format der ZIP-Datei (chives.json) und der Weg über das eigene Einhängen der Konsole. Der Code dieser App ist neu geschrieben. Danke!</p>
+                <p>Garlic SaveMgr: Vorbild für das Übertragen von Spielständen – das Format der ZIP-Datei (chives.json) und der Weg über das eigene Einhängen der Konsole. Der Code dieser App ist neu geschrieben. Dazu np-fake-signin, unverändert eingebettet für die Fake-Anmeldung auf der Seite Profil. Danke!</p>
                 <div class="cr-links">
                   <a href="https://github.com/earthonion/garlic-savemgr" target="_blank" rel="noopener noreferrer">garlic-savemgr</a>
+                  <a href="https://github.com/earthonion/np-fake-signin" target="_blank" rel="noopener noreferrer">np-fake-signin</a>
                 </div>
               </div>
             </article>
@@ -2469,15 +2500,6 @@
               </div>
             </article>
             <article class="cr-card">
-              <img class="cr-pic" src="/credits/idlesauce.jpg" alt="" width="56" height="56">
-              <div class="cr-text">
-                <b>idlesauce</b> <a class="cr-login" href="https://github.com/idlesauce" target="_blank" rel="noopener noreferrer">@idlesauce</a>
-                <p>umtx2 und weitere Werkzeuge für PS4 und PS5.</p>
-                <div class="cr-links"><a href="https://github.com/idlesauce/umtx2" target="_blank" rel="noopener noreferrer">umtx2</a>
-                  <a href="https://github.com/idlesauce?tab=repositories" target="_blank" rel="noopener noreferrer">Alle Projekte</a></div>
-              </div>
-            </article>
-            <article class="cr-card">
               <img class="cr-pic" src="/credits/flatz.jpg" alt="" width="56" height="56">
               <div class="cr-text">
                 <b>flatz</b> <a class="cr-login" href="https://github.com/flatz" target="_blank" rel="noopener noreferrer">@flatz</a>
@@ -2576,7 +2598,8 @@
             Tests, Anleitungen oder Antworten auf Fragen. Danke!</p>
           <p class="muted cr-outro">Ebenfalls in der App stecken: LZ4 von Yann Collet (BSD-2-Clause), der QR-Encoder aus webhb von
             slopmaster33 (GPL-3.0) und die Bauweise der Starter-Kachel nach ps5-native-app-boilerplate von BlackBearReloaded
-            (GPL-3.0). Danke!</p>
+            (GPL-3.0). Vorbilder waren außerdem PS4FFPFSC (was ein PS4-Spielordner für ein Abbild braucht) und Transmission
+            für die PS5 (zwei Sicherungen beim Auswerfen). Danke!</p>
           <div class="cr-links cr-outro-links">
             <a href="https://github.com/lz4/lz4" target="_blank" rel="noopener noreferrer">LZ4</a>
           </div>

@@ -219,7 +219,7 @@ BGP_HELPER_LIBS := -lkernel_sys -lSceSystemService -lSceUserService
 # cJSON is built separately: upstream trips several of our warning flags.
 CJSON_OBJ := gen/cJSON.o
 
-# SQLite 3.46.0 (public domain) for the entry of an imported save in the console's save database (savedb.c). Built separately like cJSON:
+# SQLite 3.54.1 (public domain) for the entry of an imported save in the console's save database (savedb.c). Built separately like cJSON:
 # the amalgamation's warnings must not trip -Werror. One thread at a time (the import job), no WAL (the console's file is a rollback-journal one).
 SQLITE_OBJ := gen/sqlite3.o
 
@@ -239,7 +239,7 @@ DEFLATE_OBJS := $(patsubst src/third_party/libdeflate/lib/%.c,gen/libdeflate/%.o
 LZ4_OBJS := gen/lz4/lz4.o gen/lz4/lz4hc.o
 
 # The NTFS driver of PS5-NTFS-BROWSER 1.4.0 (abcde6543, GPL-3.0-or-later) for NTFS sticks in the file manager (ntfsvol.c, fm_ntfs.inc,
-# 23.11.2026). Taken over unchanged; it builds clean with the app's warnings, at -O2 because copying speed is the person's waiting time.
+# 23.11.2026). Hardened and sped up by this app (src/third_party/ntfsb/ORIGIN.md); it builds clean with the app's warnings, at -O2 because copying speed is the person's waiting time.
 NTFSB_OBJS := gen/ntfsb/ntfs.o gen/ntfsb/ntfs_write.o gen/ntfsb/bdev.o gen/ntfsb/part.o gen/ntfsb/utf.o
 NTFSB_HDRS := $(wildcard src/third_party/ntfsb/*.h)
 LZ4_HDRS := $(wildcard src/third_party/lz4/*.h)

@@ -49,7 +49,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Kylning</h3>
-      Tyst fläktstyrning mot en måltemperatur (50–91 °C), driftlägen, profiler per spel, ett tystare mål på natten, ett fläkttest, en säkerhetsgräns som hårdvaran sköter.
+      Tyst fläktstyrning mot en måltemperatur (50–91 °C), driftlägen, profiler per spel, ett tystare mål på natten, ett fläkttest, en säkerhetsramp och en fläktvakt.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Mätvärden</h3>
@@ -57,13 +57,13 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Spel</h3>
-      Starta, stäng, kopiera, flytta, konvertera till exFAT/ffpkg/ffpfsc/FPKG, LZ4-asset-paket, APR-EMU, PlayGo. Kompakt vy (standard) eller stor.
+      Starta, stäng, kopiera, flytta, radera, konvertera till exFAT/ffpkg/ffpfsc/FPKG, LZ4- och zstd-paket, APR-EMU, PlayGo. Kompakt vy (standard) eller stor.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 PKG från USB</h3>
-      Spela PS4-fake-PKG direkt från en USB-enhet utan installation (PS4Mount inbyggt), med uppdateringar och DLC.
+      <h3>💾 Spela utan installation</h3>
+      PS4-fake-PKG från en USB-enhet med uppdateringar och DLC (PS4Mount), PS5-FPKG, spelmappar och avbilder (Kraken Mount); båda inbyggda.
     </td>
     <td valign="top">
       <h3>📦 Paket & spelsparningar</h3>
@@ -71,7 +71,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     </td>
     <td valign="top">
       <h3>📁 Filer & payloads</h3>
-      Filhanterare för konsolen och enheterna; hämta payloads (Payload Managers lista), starta och avsluta dem, ladda dem efter varandra som profiler.
+      Filhanterare för konsolen och enheterna (även NTFS) med sökning; hämta payloads från två listor (en är Payload Managers), starta och avsluta dem, ladda dem efter varandra som profiler.
     </td>
   </tr>
   <tr>
@@ -140,7 +140,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     <td align="center" valign="middle"><sub>Spel i stor vy: stora omslag, knappar med text (växlas på sidan Spel)</sub></td>
   </tr>
 </table>
-<sub>Alla bilder använder exempeldata och påhittade spel; gränssnittet visas på tyska.</sub>
+<sub>Alla bilder använder exempeldata och påhittade spel och togs med tidigare versioner; gränssnittet visas på engelska.</sub>
 </details>
 
 ### Vyer i helskärmsappen
@@ -163,7 +163,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     <td align="center"><sub>Speltid med dagsöversikt</sub></td>
   </tr>
 </table>
-<sub>Alla bilder använder exempeldata och påhittade spel; gränssnittet visas på tyska.</sub>
+<sub>Alla bilder använder exempeldata och påhittade spel och togs med tidigare versioner; gränssnittet visas på engelska.</sub>
 
 <details>
 <summary><b>Alla funktioner i detalj</b></summary>
@@ -171,31 +171,31 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 **Kylning**
 - Håller en måltemperatur (standard 66 °C, justerbar 50–91 °C) med glidande medelvärde, dödzon och trend och ändrar fläkthastigheten bara i små steg.
 - Tyst, balanserat och kyligt läge, snabbval och egna regler per spel.
-- Över säkerhetstemperaturen (standard 78 °C) bestämmer bara hårdvaran; när appen inte körs reglerar konsolen sig själv.
+- Från säkerhetstemperaturen (standard 78 °C) körs fläkten upp kraftigt; en separat fläktvakt ger tillbaka den till konsolen om regleringen hänger sig och håller full kylning vid överhettning. Utan appen reglerar konsolen sig själv.
 - Nattläge: ett tystare mål mellan två klockslag; tiden är den på den enhet där sidan är öppen.
-- Fläkttest med ett knapptryck (svarar fläkten på tröskeln?) och konsolens inlärda lägsta fläkthastighet (20 % i vila, 34 % i spel), som visas i diagnosen.
+- Fläkttest med ett knapptryck och konsolens inlärda lägsta fläkthastighet (20 % i vila, 34 % i spel), som visas i diagnosen.
 
 **Spel**
-- Starta (från konsolens webbläsare stängs sidan direkt), stäng, kopiera till andra enheter, flytta eller packa upp med ShadowMountPlus.
-- Konvertera till exFAT-, ffpkg- och ffpfsc-avbilder utan dator; allt läses tillbaka och kontrolleras efter skrivningen, med en `.sha256`-fil. Dessutom ett felsöknings-FPKG (`.pkg`) för Kraken Mount, skrivet av Dump Forge (quer3q; inbyggt i appen).
-- LZ4-asset-paket, AMPR-index, APR-EMU (ampr_emu och AMPR EMU NG), PlayGo-stub och DLC-moduler per spel; kontrollera, packa upp och reparera avbilder.
-- PS4 PKG från USB: PS4-fake-PKG från en USB-enhet in i biblioteket utan installation (PS4Mount av gasb07).
-- KrakenMount: spela (F)PKG-spel och spelmappar utan installation, med Kraken Mount från quer3q (appen har med sig och startar det).
-- Skiva: visar vilken skiva som ligger i enheten (PS2/PS3/PS4/PS5, titel-ID) och gör en avbild av PS2-DVD och PS3-skivor med CRC-32, MD5 och SHA-1, på begäran kontrollerad mot Redump (efter ps-disc-detect).
+- Starta (från konsolens webbläsare stängs sidan direkt), stäng, radera (frågar först), flytta eller packa upp med ShadowMountPlus; kopiera till en annan enhet som spel för ShadowMountPlus (`homebrew`), för Kraken Mount (`Kraken-Games`) eller som säkerhetskopia.
+- Konvertera till exFAT-, ffpkg- och ffpfsc-avbilder utan dator (samma tre mål); allt läses tillbaka och kontrolleras, med en `.sha256`-fil, och osignerade PS5-programfiler fejksigneras. Dessutom ett felsöknings-FPKG (`.pkg`) för Kraken Mount, skrivet av det inbyggda Dump Forge (quer3q).
+- LZ4- och zstd-paket, AMPR-index, APR-EMU (ampr_emu och AMPR EMU NG), PlayGo-stub och DLC-moduler per spel; kontrollera, packa upp och reparera avbilder.
+- PS4 PKG från USB: PS4-fake-PKG från en USB-enhet in i biblioteket utan installation (PS4Mount av gasb07; avstängt från början).
+- KrakenMount: spela FPKG, spelmappar och avbilder från mapparna `Kraken-Games` utan installation, med Kraken Mount från quer3q (inbyggt, avstängt från början). När ShadowMountPlus inte körs spelar det även dess mappar (`homebrew`, `etaHEN/games`); en lampa på fliken visar vilket program som har dem.
+- Skiva: visar vilken skiva som ligger i enheten (PS2/PS3/PS4/PS5, titel-ID), gör en avbild av PS2-DVD och PS3-skivor med CRC-32, MD5 och SHA-1, på begäran kontrollerad mot Redump (efter ps-disc-detect), och dumpar PS5- och PS4-spel som installerats från skiva till en enhet som säkerhetskopia.
 - Speltid med temperaturer, säkerhetskopiera och återställ spelsparningar, hitta, dela och installera paket, historik över alla jobb.
 
 **Hantering**
 - Filhanterare: visa, redigera, hämta och ladda upp (även hela mappar), skapa mappar, byta namn, kopiera, flytta, ta bort – överallt, med hastighet och återstående tid vid kopiering; borttagning frågar först och anger vad som försvinner. Sökning efter namn i mappen eller under den (även på hela enheten), och mappar med ett titel-ID som namn visar spelets titel.
 - NTFS-enheter (Windows): läsa och skriva NTFS-minnen och -diskar i filhanteraren (ladda upp, skapa mappar, kopiera, flytta, ta bort; utan att byta namn eller ersätta), mata ut utan ShadowMountPlus (drivrutin från PS5-NTFS-BROWSER av abcde6543).
 - Payloads: se och avsluta pågående, starta egna `.elf` från en mapp eller ett USB-minne, profiler som startföljd; hämta och uppdatera payloads från itsPLK:s Payload Manager-lista och från strongt1mes lista (med SHA-256-kontroll).
-- Profil: visningsnamn och profilbild (30 inbyggda bilder eller en egen fil).
+- Profil: visningsnamn och profilbild (30 inbyggda bilder eller en egen fil); aktivera ett offlinekonto (som OffAct gör) och skriva en falsk inloggning (np-fake-signin av earthonion).
 - Tema: Standard, Ljust, Mörkt och Optimal (snabbast att rita, tänkt för TV:n); varje enhet minns sitt val.
 - System: modell, firmware, drifttid, lagring, nätverk; råa sensorer och diagnos i expertläge.
 - Sidhuvud på varje sida: viloläge, starta om, stäng av, felsäkert läge (ett klick var).
 
 **Teknik**
 - Egen HTTP-server utan tredjepartsbibliotek, ett dokumenterat [JSON-gränssnitt](docs/API.md), inställningar i `/data/PS5-Cooling-Center/config.json`.
-- Ingen internetåtkomst, utom på knapptryck: ”Hämta payloads” hämtar payload-listan och filerna från GitHub, ”Hämta AMPR EMU NG” en nyare utgåva därifrån. I övrigt pratar appen bara med program på konsolen och med webbläsarna i hemnätverket.
+- Ingen internetåtkomst, utom på knapptryck: ”Hämta payloads” och knapparna för en nyare utgåva av AMPR EMU NG, Kraken Mount eller Dump Forge hämtar från GitHub. I övrigt pratar appen bara med program på konsolen och med webbläsarna i hemnätverket.
 
 </details>
 
@@ -209,7 +209,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 3. Öppna **`http://<PS5-IP>:8086`** i en webbläsare (aviseringen uppe till vänster på TV:n visar också adressen).
 
 > [!TIP]
-> **Starta utan att skicka:** packa upp `FAKE86921.zip` (helskärmsapp med handkontroll) och/eller `FAKE86922.zip` (webbgränssnitt i webbläsaren) från releasen och kopiera mapparna till `/data/homebrew/`. ShadowMountPlus lägger till rutorna; ett tryck startar appen.
+> **Starta utan att skicka:** packa upp `FAKE86921.zip` (helskärmsapp med handkontroll) och/eller `FAKE86922.zip` (webbgränssnitt i webbläsaren) från releasen och kopiera mapparna till `/data/homebrew/`. ShadowMountPlus (utan det Kraken Mount, om det är påslaget) lägger till rutorna; ett tryck startar appen.
 
 > [!IMPORTANT]
 > Bara **en** instans får köra åt gången, annars kämpar två program om fläkten. En gammal instans kan avslutas på sidan ”Payloads”. Mer i [LIESMICH](docs/LIESMICH.txt) (tyska).
@@ -220,15 +220,15 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 | --- | --- |
 | **Konsol** | Jailbreakad PS5 med en ELF-laddare på port 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) eller liknande) |
 | **Firmware** | **Stöd för FW 1.00 till 14.22** |
-| **Testad** | PS5 Pro (CFI-7021), firmware 12.00; flera användare rapporterar att även 4.xx till 10.xx och 13.60 fungerar |
+| **Testad** | PS5 Pro (CFI-7021) och PS5 Slim (CFI-2116), firmware 12.00; flera användare rapporterar att även 4.xx till 10.xx och 13.60 fungerar |
 | **Fläkt** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (utan den fungerar sensorer och gränssnitt, men inte fläktstyrningen) |
 | **Nätverk** | En webbläsare i samma nätverk, eller konsolens egen webbläsare |
-| **Valfritt** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) för att flytta, packa upp och för startrutan |
+| **Valfritt** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) för att flytta, packa upp och för startrutorna; utan det spelar det inbyggda Kraken Mount dess mappar |
 
 <details>
 <summary>Firmware och SDK i detalj</summary>
 
-ELF-filen är byggd med PS5-payload-SDK **v0.50**, vars startkod känner till alla firmware **från 1.00 upp till 14.22**. En firmware som startkoden inte känner till når aldrig `main()`: programmet startar då inte alls och skriver ingenting i loggen. För 13.00 till 13.40 finns ännu inga rapporter (startkoden känner till dem). Grafiktemperaturen finns bara på Pro.
+ELF-filen är byggd med PS5-payload-SDK **v0.50**, vars startkod känner till alla firmware **från 1.00 upp till 14.22**. En firmware som startkoden inte känner till når aldrig `main()`: programmet startar då inte alls och skriver ingenting i loggen. Grafiktemperaturen finns bara på Pro.
 </details>
 
 ## Användning
@@ -236,11 +236,11 @@ ELF-filen är byggd med PS5-payload-SDK **v0.50**, vars startkod känner till al
 | Sida | Innehåll |
 | --- | --- |
 | **Kylning** | Status, historik, sensorer, måltemperatur, driftläge, profiler per spel |
-| **Spel** | Bibliotek, speltid, spelsparningar, paket, PS4 PKG från USB, KrakenMount, säkerhetskopior, historik |
-| **Filhanterare** | Mappar på konsolen och enheterna |
+| **Spel** | Bibliotek, speltid, spelsparningar, paket, PS4 PKG från USB, KrakenMount, Skiva (med skivenhet), säkerhetskopior, historik |
+| **Filhanterare** | Mappar på konsolen och enheterna (även NTFS), sökning |
 | **Payloads** | Pågående, sparade och USB-payloads, profiler, hämta payloads |
 | **System** | Konsol, lagring, nätverk, diagnos |
-| **Profil** | Visningsnamn och profilbild |
+| **Profil** | Visningsnamn, profilbild, offlinekonto, falsk inloggning |
 | **Logg** | Appens händelser och den levande kärnloggen |
 | **Medverkande** | Tack till utvecklarna; dessutom **handboken** och **FAQ** på sju språk |
 
@@ -264,7 +264,7 @@ ELF-filen är byggd med PS5-payload-SDK **v0.50**, vars startkod känner till al
 <details>
 <summary><b>Bygga från källkoden</b></summary>
 
-Du behöver [PS5-payload-SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 eller nyare** (testad med v0.50); bygget kontrollerar detta och avbryts med ett äldre SDK. I Windows räcker Git Bash med LLVM 21:
+Du behöver [PS5-payload-SDK](https://github.com/ps5-payload-dev/sdk) **v0.50**; bygget kontrollerar att det känner varje firmware från 1.00 till 14.22 och avbryts annars. I Windows räcker Git Bash med GNU Make och LLVM 21:
 
 ```bash
 tools/build-windows.sh
@@ -277,13 +277,13 @@ export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-Resultatet är `PS5_Cooling_Center.elf`; `tools/make_starter.sh` bygger startrutan. Allt annat står i [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+Resultatet är `PS5_Cooling_Center.elf`; `tools/make_starter.sh` bygger de två rutorna (kräver WSL). Allt annat står i [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
 </details>
 
 ## Juridisk information och ansvarsfriskrivning
 
 > [!CAUTION]
-> **Ingen officiell produkt, ingen piratkopiering, inget ansvar.** Projektet har ingen koppling till konsolens rättighetsinnehavare. Det innehåller inga spel, ingen firmware, inga tredjepartsnycklar (bara en offentligt känd nyckel för egenbyggda testpaket, se THIRD_PARTY_NOTICES.md) och ingen kod för att kringgå kopieringsskydd, och det laddar inget från internet utom, på knapptryck, payload-listan med dess filer och en nyare utgåva av AMPR EMU NG från GitHub. Att modifiera en konsol kan kosta garanti och konto; risken bär den som gör det. Programmet tillhandahålls **utan någon garanti**.
+> **Ingen officiell produkt, ingen piratkopiering, inget ansvar.** Projektet har ingen koppling till konsolens rättighetsinnehavare. Det innehåller inga spel, ingen firmware och inga tredjepartsnycklar (bara en offentligt känd nyckel för egenbyggda testpaket, se THIRD_PARTY_NOTICES.md); dumpningen (fliken Disc) låter bara din egen konsol dekryptera spelen som är installerade på den, för en säkerhetskopia. Det laddar inget från internet utom, på knapptryck, payload-listorna med deras filer och nyare utgåvor av AMPR EMU NG, Kraken Mount och Dump Forge från GitHub. Att modifiera en konsol kan kosta garanti och konto; risken bär den som gör det. Programmet tillhandahålls **utan någon garanti**.
 
 <details>
 <summary>Fullständig text</summary>
@@ -310,7 +310,7 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 <details>
 <summary><b>Plattform och verktyg</b></summary>
 
-- **John Törnblom och alla som bidrar till [ps5-payload-dev](https://github.com/ps5-payload-dev)**: [PS5-payload-SDK](https://github.com/ps5-payload-dev/sdk), payload-laddaren [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) och [websrv](https://github.com/ps5-payload-dev/websrv).
+- **John Törnblom och alla som bidrar till [ps5-payload-dev](https://github.com/ps5-payload-dev)**: [PS5-payload-SDK](https://github.com/ps5-payload-dev/sdk), payload-laddaren [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv), [websrv](https://github.com/ps5-payload-dev/websrv) och [OffAct](https://github.com/ps5-payload-dev/offact) (aktivering av offlinekonton, överförd till C).
 - **Utvecklarna av kstuff**: [sleirsgoevy](https://github.com/sleirsgoevy), [EchoStretch](https://github.com/EchoStretch) och [drakmor](https://github.com/drakmor) ([kstuff-lite](https://github.com/EchoStretch/kstuff-lite)). Utan kstuff fanns ingen åtkomst till fläktstyrenheten.
 </details>
 
@@ -321,16 +321,17 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) och de som bidrar till [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- och PFSC-avbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): förebilden för UFS2-/ffpkg-skrivaren.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-asset-paket, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) och [dlc_emu](https://github.com/drakmor/dlc_emu) (inbyggda versioner, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, en vidareutveckling av ampr_emu som också läser zstd-paket (de två senaste utgåvorna, 0.5.1 och 0.5.0, inbyggda, nyare hämtar appen på begäran). Dessutom [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): programmet bakom fliken ”KrakenMount” (inbyggt oförändrat som ELF).
-- **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): hur startrutan byggs som en inbyggd titel.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), en vidareutveckling av ampr_emu som också läser zstd-paket (0.5.1 och 0.5.0 inbyggda, nyare på begäran); [Kraken Mount](https://github.com/quer3q/kraken-mount), programmet bakom fliken ”KrakenMount” (inbyggt, ändrat i några få byte för att köras bredvid ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), motorn för FPKG och för packning vid konvertering (inbyggt oförändrat). Appens zstd-paket och fejksignering följer deras format.
+- **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl och ps5-native-app-boilerplate** (GPL-3.0): helskärmsappen bygger på ps5-homebrew-ui (från den bevarade kopian hos [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), webbläsarrutan efter boilerplaten.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): paketens uppbyggnad och installationsförloppet (egen kod efter denna förebild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profilfunktionen och profilbildens format.
+- **[EchoStretch](https://github.com/EchoStretch) och slopmaster33, [ps5-app-dumper](https://github.com/EchoStretch/ps5-app-dumper)** 2.10 (GPL-3.0-or-later): grunden för dumpningen på fliken Skiva, övertagen och nyskriven för appen (med self pager av [idlesauce](https://github.com/idlesauce), SELF-strukturer efter Cryptogenics PS5-SELF-Decrypter).
 - **slopmaster33, webhb** (GPL-3.0): QR-kodare.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): de fyra testade LZ4-profilerna (ASTRO BOT, EA Sports UFC 6, Insomniac-motorn, Unity-motorn), inbyggda oförändrade.
-- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): appens egen namnuppslagning och HTTPS-hämtning (för payload-butiken).
-- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): NTFS-drivrutinen (läsa och skriva) bakom NTFS-enheterna i filhanteraren, inbyggd oförändrad (v1.4.0).
-- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS för payload-butiken.
-- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
+- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): appens egen namnuppslagning och HTTPS-hämtning (för nedladdningarna från GitHub).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): NTFS-drivrutinen (läsa och skriva) bakom NTFS-enheterna i filhanteraren, inbyggd (v1.4.0) med tillagda kontroller, en skrivcache och hantering av journalen.
+- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS för nedladdningarna från GitHub.
+- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause) · **[zstd](https://github.com/facebook/zstd)** (BSD-3-Clause) · **[SQLite](https://sqlite.org/)** (allmän egendom) · **stb_image** (Sean Barrett, allmän egendom eller MIT; helskärmsappen).
 </details>
 
 <details>
@@ -340,20 +341,23 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: listan för ”Automatiskt”, inspelning för att skapa profiler, skötsel av spelens insticksmoduler.
 - **theghostonline (Husam Osman), PS5 LZ4 Compression**: filer som måste ligga löst vid packning, rättigheter 0777, reparation vid kontroll av paketen, urval av de testade profilerna.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parametrar för `.ffpkg`-avbilder.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) och [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (förebild och lista för ”Hämta payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) och [Payload Manager](https://github.com/itsPLK/ps5-payload-manager) (förebild och lista för ”Hämta payloads”, [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): igenkänning av pågående spel.
-- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: förebild för att föra över spelsparningar till en annan konsol (ZIP-filens format med `chives.json`, vägen via konsolens egen montering); appens kod är nyskriven.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: förebild för att föra över spelsparningar till en annan konsol (ZIP-filens format med `chives.json`, vägen via konsolens egen montering); appens kod är nyskriven. Dessutom np-fake-signin 1.3, inbyggt oförändrat för den falska inloggningen.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** och **[onionHEN](https://github.com/aydencharles/onionHEN)**: systemanrop, mätvärden, bildfrekvens.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: förebild för många funktioner (koden skrevs varje gång om).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: principen med ersättningsbibliotek.
 - **Juma Sayeh och Osama Abualia, PS5 Game Compressor**: idéer för kontroll och konvertering (allt omskrivet; källkoden har ingen licens).
-- **Linux-drivrutinen `hid-playstation`** (DualSense-batteri) · **Xbox 360 DashLaunch** (tanken på tyst reglering).
+- **PS4FFPFSC** 0.2.9 (GPL-3.0-or-later): förebild för vad en PS4-spelmapp behöver för att bli en avbild (nyskrivet i C).
+- **Transmission för PS5** (GPL-3.0-or-later): förebild för två skydd vid utmatning (vem som fortfarande har filer öppna på enheten, en utmatning som aldrig kom tillbaka).
+- **[Daniel Nylander](https://github.com/yeager)**: den svenska översättningen av webbgränssnittet.
+- **Linux-drivrutinen `hid-playstation`** (DualSense-batteri) · **Xbox 360 DashLaunch** (tanken på tyst reglering) · **ps-disc-detect** (förebild för fliken Skiva).
 </details>
 
 <details>
 <summary><b>Tack till gemenskapen</b></summary>
 
-Deras kod finns inte i den här appen, men utan deras delade arbete skulle scenen inte finnas som den gör: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [idlesauce](https://github.com/idlesauce), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – och alla andra som bidrar med kod, tester, guider eller svar. I appen står alla med bild på sidan ”Medverkande”.
+Deras kod finns inte i den här appen, men utan deras delade arbete skulle scenen inte finnas som den gör: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – och alla andra som bidrar med kod, tester, guider eller svar. I appen står alla med bild på sidan ”Medverkande”.
 </details>
 
 Saknas du här eller är felaktigt beskriven: säg till, så kompletteras listan gärna.

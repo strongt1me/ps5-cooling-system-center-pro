@@ -1,6 +1,6 @@
 # PS4Mount 0.8.0 (gasb07)
 
-Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), dazu am 18.10.2026 die Änderungen von 0.5.1 auf 0.6.0 (Quelltext des Tags `v0.6.0`, gelesen und nachgebaut), Lizenz GPL-3.0-or-later
+Quelle: <https://github.com/gasb07/ps4mount>, Archiv `ps4mount-0.5.1.zip` (vom User am 15.10.2026 bereitgestellt; davor 0.5.0 vom selben Tag, 0.4.4 vom 14.10. und 0.4.1 vom 13.10.), dazu am 18.10.2026 die Änderungen von 0.5.1 auf 0.6.0 (Quelltext des Tags `v0.6.0`, gelesen und nachgebaut) und danach die jeder Fassung bis 0.8.0 (Tags `v0.6.1` bis `v0.8.0`, Abschnitte „Seit …“ unten), Lizenz GPL-3.0-or-later
 (`LICENSE` hier). Der Quelltext ist unter `src/ps4m_*.c` übernommen:
 
 | Original | Hier | Änderung |

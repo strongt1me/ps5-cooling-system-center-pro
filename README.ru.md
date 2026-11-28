@@ -6,7 +6,7 @@
 
 **Управление вентилятором, контроль температуры и системный центр для PlayStation 5 с джейлбрейком,<br>в браузере (консоль, телефон, ПК) или как полноэкранное приложение на телевизоре с геймпадом, на семи языках.**
 
-![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.84.0-1f6feb)
+![Версия](https://img.shields.io/badge/%D0%92%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.98.0-1f6feb)
 ![Прошивка](https://img.shields.io/badge/FW-1.00%E2%80%9314.22%20%D0%BF%D0%BE%D0%B4%D0%B4%D0%B5%D1%80%D0%B6%D0%BA%D0%B0-2ea44f)
 ![Лицензия](https://img.shields.io/badge/%D0%9B%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-GPL--3.0--or--later-blue)
 ![Платформа](https://img.shields.io/badge/%D0%9F%D0%BB%D0%B0%D1%82%D1%84%D0%BE%D1%80%D0%BC%D0%B0-PS5%20Payload-003791)
@@ -49,7 +49,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Охлаждение</h3>
-      Тихая регулировка вентилятора на целевую температуру (50–91 °C), режимы, профили для игр, ночной режим с более тихой целью, самотест вентилятора, предел безопасности за аппаратурой.
+      Тихая регулировка вентилятора на целевую температуру (50–91 °C), режимы, профили для игр, ночной режим с более тихой целью, самотест вентилятора, аварийный разгон и сторож вентилятора.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Показания</h3>
@@ -57,13 +57,13 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Игры</h3>
-      Запуск, закрытие, копирование, перенос, конвертация в exFAT/ffpkg/ffpfsc/FPKG, LZ4-ассет-паки, APR-EMU, PlayGo. Вид: компактный (по умолчанию) или крупный.
+      Запуск, закрытие, копирование, перенос, удаление, конвертация в exFAT/ffpkg/ffpfsc/FPKG, пакеты LZ4 и zstd, APR-EMU, PlayGo. Вид: компактный (по умолчанию) или крупный.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 PKG с USB</h3>
-      Игры PS4 (fake PKG) прямо с USB-накопителя без установки (встроенный PS4Mount), с обновлениями и DLC.
+      <h3>💾 Игры без установки</h3>
+      Fake PKG для PS4 с USB-накопителя с обновлениями и DLC (PS4Mount), FPKG для PS5, папки игр и образы (Kraken Mount); оба встроены.
     </td>
     <td valign="top">
       <h3>📦 Пакеты и сохранения</h3>
@@ -71,7 +71,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     </td>
     <td valign="top">
       <h3>📁 Файлы и пейлоады</h3>
-      Файловый менеджер для консоли и накопителей; загрузка пейлоадов (список Payload Manager), запуск и остановка, загрузка подряд как профиль.
+      Файловый менеджер для консоли и накопителей (и NTFS) с поиском; загрузка пейлоадов из двух списков (один из них — список Payload Manager), запуск и остановка, загрузка подряд как профиль.
     </td>
   </tr>
   <tr>
@@ -140,7 +140,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     <td align="center" valign="middle"><sub>Игры в крупном виде: большие обложки, кнопки с подписями (переключается на странице «Игры»)</sub></td>
   </tr>
 </table>
-<sub>Все изображения с примерными данными и вымышленными играми; интерфейс показан на немецком.</sub>
+<sub>Все изображения с примерными данными и вымышленными играми, сняты в более ранних версиях; интерфейс показан на английском.</sub>
 </details>
 
 ### Экраны полноэкранного приложения
@@ -163,7 +163,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     <td align="center"><sub>Время в игре с обзором по дням</sub></td>
   </tr>
 </table>
-<sub>Все изображения с примерными данными и вымышленными играми; интерфейс показан на немецком.</sub>
+<sub>Все изображения с примерными данными и вымышленными играми, сняты в более ранних версиях; интерфейс показан на английском.</sub>
 
 <details>
 <summary><b>Все функции подробно</b></summary>
@@ -171,31 +171,31 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 **Охлаждение**
 - Удерживает целевую температуру (по умолчанию 66 °C, настраивается 50–91 °C) со скользящим средним, мёртвой зоной и трендом и меняет скорость только малыми шагами.
 - Режимы тихий, сбалансированный и холодный, быстрый выбор и правила для отдельных игр.
-- Выше температуры безопасности (по умолчанию 78 °C) решает только аппаратура; если приложение не запущено, консоль регулирует сама.
+- Начиная с температуры безопасности (по умолчанию 78 °C) вентилятор резко разгоняется; отдельный сторож вентилятора возвращает его консоли, если регулировка зависла, и держит полное охлаждение при перегреве. Без приложения консоль регулирует сама.
 - Ночной режим: между двумя моментами времени действует более тихая цель; время берётся с устройства, на котором открыта страница.
-- Самотест вентилятора одной кнопкой (отвечает ли вентилятор на порог?) и выученная минимальная скорость консоли (20 % в покое, 34 % в игре), которая видна в диагностике.
+- Самотест вентилятора одной кнопкой и выученная минимальная скорость консоли (20 % в покое, 34 % в игре), которая видна в диагностике.
 
 **Игры**
-- Запуск (из браузера консоли страница закрывается сразу), закрытие, копирование на другие накопители, перенос или распаковка с ShadowMountPlus.
-- Конвертация в образы exFAT, ffpkg и ffpfsc без ПК; всё перечитывается и проверяется после записи, с файлом `.sha256`. Кроме того, отладочный FPKG (`.pkg`) для Kraken Mount, который записывает Dump Forge (quer3q; встроен в приложение).
-- LZ4-ассет-паки, индекс AMPR, APR-EMU (ampr_emu и AMPR EMU NG), заглушка PlayGo и модули DLC для каждой игры; проверка, распаковка и исправление образов.
-- PS4 PKG с USB: fake PKG PS4 PKG с USB-накопителя в библиотеку без установки (PS4Mount от gasb07).
-- KrakenMount: запуск игр (F)PKG и папок игр без установки через Kraken Mount от quer3q (приложение содержит его и запускает).
-- Disc: показывает, какой диск лежит в дисководе (PS2/PS3/PS4/PS5, ID заголовка), и создаёт образ DVD PS2 и дисков PS3 с CRC-32, MD5 и SHA-1, при желании с проверкой по Redump (по мотивам ps-disc-detect).
+- Запуск (из браузера консоли страница закрывается сразу), закрытие, удаление (сначала спрашивает), перенос или распаковка с ShadowMountPlus; копирование на другой накопитель как игра для ShadowMountPlus (`homebrew`), для Kraken Mount (`Kraken-Games`) или как резервная копия.
+- Конвертация в образы exFAT, ffpkg и ffpfsc без ПК (те же три цели); всё перечитывается и проверяется, с файлом `.sha256`, а неподписанные исполняемые файлы PS5 получают поддельную подпись. Кроме того, отладочный FPKG (`.pkg`) для Kraken Mount, который записывает встроенный Dump Forge (quer3q).
+- Пакеты LZ4 и zstd, индекс AMPR, APR-EMU (ampr_emu и AMPR EMU NG), заглушка PlayGo и модули DLC для каждой игры; проверка, распаковка и исправление образов.
+- PS4 PKG с USB: fake PKG PS4 с USB-накопителя в библиотеку без установки (PS4Mount от gasb07; по умолчанию выключен).
+- KrakenMount: запуск FPKG, папок игр и образов из папок `Kraken-Games` без установки через Kraken Mount от quer3q (встроен, по умолчанию выключен). Пока ShadowMountPlus не запущен, он запускает и игры из его папок (`homebrew`, `etaHEN/games`); индикатор на вкладке показывает, какая программа ими владеет.
+- Disc: показывает, какой диск лежит в дисководе (PS2/PS3/PS4/PS5, ID заголовка), создаёт образ DVD PS2 и дисков PS3 с CRC-32, MD5 и SHA-1, при желании с проверкой по Redump (по мотивам ps-disc-detect), и делает дамп установленных с диска игр PS5 и PS4 на накопитель как резервную копию.
 - Время игры с температурами, резервное копирование и восстановление сохранений, поиск, разделение и установка пакетов, история всех операций.
 
 **Управление**
 - Файловый менеджер: просмотр, правка, скачивание и загрузка (в том числе целых папок), создание папок, переименование, копирование, перемещение, удаление — везде, со скоростью и оставшимся временем при копировании; удаление сначала спрашивает и называет, что будет удалено. Поиск по имени в папке или ниже (и по всему накопителю), а папки с ID игры в имени показывают название игры.
 - Накопители NTFS (Windows): чтение и запись флешек и дисков NTFS в файловом менеджере (загрузка, новые папки, копирование, перемещение, удаление; без переименования и замены), извлечение без ShadowMountPlus (драйвер из PS5-NTFS-BROWSER от abcde6543).
 - Пейлоады: просмотр и остановка запущенных, запуск своих `.elf` из папки или с USB, профили как последовательность запуска; загрузка и обновление пейлоадов из списка Payload Manager от itsPLK и из списка strongt1me (с проверкой SHA-256).
-- Профиль: отображаемое имя и изображение профиля (30 встроенных изображений или свой файл).
+- Профиль: отображаемое имя и изображение профиля (30 встроенных изображений или свой файл); активация офлайн-аккаунта (как в OffAct) и запись поддельного входа (np-fake-signin от earthonion).
 - Оформление: стандартное, светлое, тёмное и оптимальное (быстрее всего рисуется, рассчитано на телевизор); каждое устройство запоминает свой выбор.
 - Система: модель, прошивка, время работы, хранилище, сеть; сырые датчики и диагностика в режиме эксперта.
 - Шапка на каждой странице: режим покоя, перезагрузка, выключение, безопасный режим (по одному щелчку).
 
 **Техника**
 - Собственный HTTP-сервер без сторонних библиотек, документированный [JSON-интерфейс](docs/API.md), настройки в `/data/PS5-Cooling-Center/config.json`.
-- Без доступа к интернету, кроме нажатия кнопки: «Скачать пейлоады» загружает список пейлоадов и файлы с GitHub, «Скачать AMPR EMU NG» — более новый выпуск оттуда. В остальном приложение общается только с программами на консоли и с браузерами в домашней сети.
+- Без доступа к интернету, кроме нажатия кнопки: «Скачать пейлоады» и кнопки для более новых выпусков AMPR EMU NG, Kraken Mount или Dump Forge загружают с GitHub. В остальном приложение общается только с программами на консоли и с браузерами в домашней сети.
 
 </details>
 
@@ -209,7 +209,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 3. Откройте **`http://<IP-PS5>:8086`** в браузере (адрес также показывает уведомление вверху слева на ТВ).
 
 > [!TIP]
-> **Запуск без отправки:** распакуйте `FAKE86921.zip` (полноэкранное приложение с геймпадом) и/или `FAKE86922.zip` (веб-интерфейс в браузере) из релиза и скопируйте папки в `/data/homebrew/`. ShadowMountPlus создаст плитки; одно нажатие запускает приложение.
+> **Запуск без отправки:** распакуйте `FAKE86921.zip` (полноэкранное приложение с геймпадом) и/или `FAKE86922.zip` (веб-интерфейс в браузере) из релиза и скопируйте папки в `/data/homebrew/`. ShadowMountPlus (без него — включённый Kraken Mount) создаст плитки; одно нажатие запускает приложение.
 
 > [!IMPORTANT]
 > Одновременно может работать только **один** экземпляр, иначе две программы будут спорить за вентилятор. Старый экземпляр можно остановить на странице «Пейлоады». Подробнее в [LIESMICH](docs/LIESMICH.txt) (на немецком).
@@ -220,15 +220,15 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 | --- | --- |
 | **Консоль** | PS5 с джейлбрейком и загрузчиком ELF на порту 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) или аналог) |
 | **Прошивка** | **Поддержка FW 1.00–14.22** |
-| **Проверено** | PS5 Pro (CFI-7021), прошивка 12.00; по сообщениям нескольких пользователей работает и на 4.xx–10.xx, и на 13.60 |
+| **Проверено** | PS5 Pro (CFI-7021) и PS5 Slim (CFI-2116), прошивка 12.00; по сообщениям нескольких пользователей работает и на 4.xx–10.xx, и на 13.60 |
 | **Вентилятор** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (без него работают датчики и интерфейс, но не регулировка) |
 | **Сеть** | Браузер в той же сети или браузер самой консоли |
-| **Необязательно** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) для переноса, распаковки и плитки запуска |
+| **Необязательно** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) для переноса, распаковки и плиток запуска; без него игры из его папок запускает встроенный Kraken Mount |
 
 <details>
 <summary>Прошивка и SDK подробно</summary>
 
-ELF собран с PS5 payload SDK **v0.50**, стартовый код которого знает все прошивки **с 1.00 до 14.22**. Прошивка, которую стартовый код не знает, не доходит до `main()`: программа вообще не запускается и ничего не пишет в журнал. Для 13.00–13.40 сообщений пока нет (стартовый код их знает). Температура GPU есть только на Pro.
+ELF собран с PS5 payload SDK **v0.50**, стартовый код которого знает все прошивки **с 1.00 до 14.22**. Прошивка, которую стартовый код не знает, не доходит до `main()`: программа вообще не запускается и ничего не пишет в журнал. Температура GPU есть только на Pro.
 </details>
 
 ## Использование
@@ -236,11 +236,11 @@ ELF собран с PS5 payload SDK **v0.50**, стартовый код кот�
 | Страница | Содержание |
 | --- | --- |
 | **Охлаждение** | Состояние, история, датчики, целевая температура, режим, профили для игр |
-| **Игры** | Библиотека, время игры, сохранения, пакеты, PS4 PKG с USB, KrakenMount, резервные копии, история |
-| **Файловый менеджер** | Папки консоли и накопителей |
+| **Игры** | Библиотека, время игры, сохранения, пакеты, PS4 PKG с USB, KrakenMount, Disc (при наличии дисковода), резервные копии, история |
+| **Файловый менеджер** | Папки консоли и накопителей (и NTFS), поиск |
 | **Пейлоады** | Запущенные, сохранённые и лежащие на USB пейлоады, профили, загрузка пейлоадов |
 | **Система** | Консоль, хранилище, сеть, диагностика |
-| **Профиль** | Отображаемое имя и изображение профиля |
+| **Профиль** | Отображаемое имя, изображение профиля, офлайн-аккаунт, поддельный вход |
 | **Журнал** | События приложения и журнал ядра в реальном времени |
 | **Благодарности** | Спасибо разработчикам; плюс **руководство** и **FAQ** на семи языках |
 
@@ -264,7 +264,7 @@ ELF собран с PS5 payload SDK **v0.50**, стартовый код кот�
 <details>
 <summary><b>Сборка из исходного кода</b></summary>
 
-Нужен [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 или новее** (проверено с v0.50); сборка это проверяет и останавливается со старым SDK. В Windows достаточно Git Bash с LLVM 21:
+Нужен [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.50**; сборка проверяет, что он знает все прошивки от 1.00 до 14.22, и иначе останавливается. В Windows достаточно Git Bash с GNU Make и LLVM 21:
 
 ```bash
 tools/build-windows.sh
@@ -277,13 +277,13 @@ export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-Результат — `PS5_Cooling_Center.elf`; `tools/make_starter.sh` собирает плитку запуска. Остальное в [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+Результат — `PS5_Cooling_Center.elf`; `tools/make_starter.sh` собирает обе плитки (нужен WSL). Остальное в [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
 </details>
 
 ## Правовая информация и отказ от ответственности
 
 > [!CAUTION]
-> **Не официальный продукт, без пиратства, без ответственности.** Проект никак не связан с правообладателями консоли. Он не содержит игр, прошивок, чужих ключей (только общеизвестный ключ для самостоятельно собранных тестовых пакетов, см. THIRD_PARTY_NOTICES.md) и кода для обхода защиты от копирования и ничего не скачивает из интернета, кроме списка пейлоадов с файлами и более нового выпуска AMPR EMU NG с GitHub — по нажатию кнопки. Модификация консоли может стоить гарантии и аккаунта; риск несёт тот, кто это делает. Программа предоставляется **без каких-либо гарантий**.
+> **Не официальный продукт, без пиратства, без ответственности.** Проект никак не связан с правообладателями консоли. Он не содержит игр, прошивок и чужих ключей (только общеизвестный ключ для самостоятельно собранных тестовых пакетов, см. THIRD_PARTY_NOTICES.md); дамп (вкладка Disc) лишь позволяет вашей консоли расшифровать установленные на ней игры для резервной копии. Проект ничего не скачивает из интернета, кроме списков пейлоадов с файлами и более новых выпусков AMPR EMU NG, Kraken Mount и Dump Forge с GitHub — по нажатию кнопки. Модификация консоли может стоить гарантии и аккаунта; риск несёт тот, кто это делает. Программа предоставляется **без каких-либо гарантий**.
 
 <details>
 <summary>Полный текст</summary>
@@ -310,7 +310,7 @@ make
 <details>
 <summary><b>Платформа и инструменты</b></summary>
 
-- **John Törnblom и все участники [ps5-payload-dev](https://github.com/ps5-payload-dev)**: [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), загрузчик [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) и [websrv](https://github.com/ps5-payload-dev/websrv).
+- **John Törnblom и все участники [ps5-payload-dev](https://github.com/ps5-payload-dev)**: [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), загрузчик [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv), [websrv](https://github.com/ps5-payload-dev/websrv) и [OffAct](https://github.com/ps5-payload-dev/offact) (активация офлайн-аккаунта, перенесена на C).
 - **Разработчики kstuff**: [sleirsgoevy](https://github.com/sleirsgoevy), [EchoStretch](https://github.com/EchoStretch) и [drakmor](https://github.com/drakmor) ([kstuff-lite](https://github.com/EchoStretch/kstuff-lite)). Без kstuff не было бы доступа к контроллеру вентилятора.
 </details>
 
@@ -321,16 +321,17 @@ make
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) и участники [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): образы exFAT, PFS и PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): образец для записи UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-ассет-паки, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) и [dlc_emu](https://github.com/drakmor/dlc_emu) (встроенные сборки, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, развитие ampr_emu, которое читает и пакеты zstd (встроены две самые новые версии, 0.5.1 и 0.5.0, более новые приложение загружает по запросу). А также [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): программа за вкладкой «KrakenMount» (встроена без изменений как ELF).
-- **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): как собрана плитка запуска в виде нативного приложения.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), развитие ampr_emu, которое читает и пакеты zstd (встроены 0.5.1 и 0.5.0, более новые — по запросу); [Kraken Mount](https://github.com/quer3q/kraken-mount), программа за вкладкой «KrakenMount» (встроена, изменена в нескольких байтах, чтобы работать рядом с ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), движок FPKG и упаковки при конвертации (встроен без изменений). Пакеты zstd и поддельная подпись приложения следуют их форматам.
+- **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl и ps5-native-app-boilerplate** (GPL-3.0): полноэкранное приложение построено на ps5-homebrew-ui (из сохранённой копии [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), плитка браузера — по образцу boilerplate.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.
+- **[EchoStretch](https://github.com/EchoStretch) и slopmaster33, [ps5-app-dumper](https://github.com/EchoStretch/ps5-app-dumper)** 2.10 (GPL-3.0-or-later): основа дампа на вкладке Disc, перенесена и переписана для приложения (с self pager от [idlesauce](https://github.com/idlesauce), структуры SELF по PS5-SELF-Decrypter от Cryptogenic).
 - **slopmaster33, webhb** (GPL-3.0): QR-кодировщик.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): четыре проверенных профиля LZ4 (ASTRO BOT, EA Sports UFC 6, движок Insomniac, движок Unity), встроены без изменений.
-- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): собственное разрешение имён и HTTPS-загрузка приложения (для магазина пейлоадов).
-- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): драйвер NTFS (чтение и запись) для накопителей NTFS в файловом менеджере, встроен без изменений (v1.4.0).
-- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS для магазина пейлоадов.
-- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
+- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): собственное разрешение имён и HTTPS-загрузка приложения (для загрузок с GitHub).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): драйвер NTFS (чтение и запись) для накопителей NTFS в файловом менеджере, встроен (v1.4.0) с добавленными проверками, кэшем записи и обработкой журнала.
+- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS для загрузок с GitHub.
+- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause) · **[zstd](https://github.com/facebook/zstd)** (BSD-3-Clause) · **[SQLite](https://sqlite.org/)** (общественное достояние) · **stb_image** (Sean Barrett, общественное достояние или MIT; полноэкранное приложение).
 </details>
 
 <details>
@@ -340,20 +341,23 @@ make
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: список для «Автоматически», запись для создания профилей, поддержка плагинов игр.
 - **theghostonline (Husam Osman), PS5 LZ4 Compression**: файлы, которые при упаковке должны оставаться отдельно, права 0777, исправление при проверке пакетов, выбор проверенных профилей.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: параметры для образов `.ffpkg`.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) и [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (образец и список для «Скачать пейлоады», [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) и [Payload Manager](https://github.com/itsPLK/ps5-payload-manager) (образец и список для «Скачать пейлоады», [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): определение запущенной игры.
-- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: образец для переноса сохранений на другую консоль (формат ZIP-файла с `chives.json`, путь через собственное монтирование консоли); код этого приложения написан заново.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: образец для переноса сохранений на другую консоль (формат ZIP-файла с `chives.json`, путь через собственное монтирование консоли); код этого приложения написан заново. Кроме того, np-fake-signin 1.3, встроен без изменений для поддельного входа.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** и **[onionHEN](https://github.com/aydencharles/onionHEN)**: системные вызовы, показания, FPS.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: образец для многих функций (код каждый раз написан заново).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: принцип библиотек-заменителей.
 - **Juma Sayeh и Osama Abualia, PS5 Game Compressor**: идеи для проверки и конвертации (всё переписано; у его кода нет лицензии).
-- **Драйвер Linux `hid-playstation`** (заряд DualSense) · **Xbox 360 DashLaunch** (идея спокойной регулировки).
+- **PS4FFPFSC** 0.2.9 (GPL-3.0-or-later): образец того, что нужно папке игры PS4, чтобы стать образом (переписано на C).
+- **Transmission для PS5** (GPL-3.0-or-later): образец двух защит при извлечении (кто ещё держит файлы на накопителе открытыми, извлечение, которое не завершилось).
+- **[Daniel Nylander](https://github.com/yeager)**: шведский перевод веб-интерфейса.
+- **Драйвер Linux `hid-playstation`** (заряд DualSense) · **Xbox 360 DashLaunch** (идея спокойной регулировки) · **ps-disc-detect** (образец для вкладки Disc).
 </details>
 
 <details>
 <summary><b>Спасибо сообществу</b></summary>
 
-Их кода нет в этом приложении, но без их общей работы сцены не было бы в таком виде: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [idlesauce](https://github.com/idlesauce), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) — и всем остальным, кто помогает кодом, тестами, инструкциями или ответами. В приложении все они указаны с изображением на странице «Благодарности».
+Их кода нет в этом приложении, но без их общей работы сцены не было бы в таком виде: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) — и всем остальным, кто помогает кодом, тестами, инструкциями или ответами. В приложении все они указаны с изображением на странице «Благодарности».
 </details>
 
 Если вас здесь нет или вы описаны неверно, сообщите — список будет с радостью дополнен.

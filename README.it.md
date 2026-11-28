@@ -6,7 +6,7 @@
 
 **Controllo della ventola, monitoraggio della temperatura e centro di sistema per la PlayStation 5 con jailbreak,<br>usabile nel browser (console, telefono, PC) o come app a schermo intero sulla TV con il controller, in sette lingue.**
 
-![Versione](https://img.shields.io/badge/Versione-1.84.0-1f6feb)
+![Versione](https://img.shields.io/badge/Versione-1.98.0-1f6feb)
 ![Firmware](https://img.shields.io/badge/FW-da%201.00%20a%2014.22%20supportato-2ea44f)
 ![Licenza](https://img.shields.io/badge/Licenza-GPL--3.0--or--later-blue)
 ![Piattaforma](https://img.shields.io/badge/Piattaforma-PS5%20Payload-003791)
@@ -49,7 +49,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
   <tr>
     <td width="33%" valign="top">
       <h3>🌡️ Raffreddamento</h3>
-      Regolazione silenziosa della ventola su una temperatura obiettivo (50–91 °C), modalità, profili per gioco, modalità notte con obiettivo più silenzioso, autotest della ventola, limite di sicurezza all'hardware.
+      Regolazione silenziosa della ventola su una temperatura obiettivo (50–91 °C), modalità, profili per gioco, modalità notte con obiettivo più silenzioso, autotest della ventola, rampa di sicurezza e guardiano della ventola.
     </td>
     <td width="33%" valign="top">
       <h3>📊 Valori</h3>
@@ -57,13 +57,13 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     </td>
     <td width="33%" valign="top">
       <h3>🎮 Giochi</h3>
-      Avviare, chiudere, copiare, spostare, convertire in exFAT/ffpkg/ffpfsc/FPKG, asset pack LZ4, APR-EMU, PlayGo. Vista compatta (predefinita) o grande.
+      Avviare, chiudere, copiare, spostare, eliminare, convertire in exFAT/ffpkg/ffpfsc/FPKG, pacchetti LZ4 e zstd, APR-EMU, PlayGo. Vista compatta (predefinita) o grande.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <h3>💾 PS4 PKG da USB</h3>
-      Giocare ai PKG falsi PS4 direttamente dall'unità USB senza installarli (PS4Mount integrato), con aggiornamenti e DLC.
+      <h3>💾 Giocare senza installare</h3>
+      PKG falsi PS4 da un'unità USB con aggiornamenti e DLC (PS4Mount), FPKG PS5, cartelle di gioco e immagini (Kraken Mount); entrambi integrati.
     </td>
     <td valign="top">
       <h3>📦 Pacchetti e salvataggi</h3>
@@ -71,7 +71,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     </td>
     <td valign="top">
       <h3>📁 File e payload</h3>
-      File manager per console e unità; scaricare payload (l'elenco del Payload Manager), avviarli e fermarli, caricarli in sequenza come profili.
+      File manager per console e unità (anche NTFS) con ricerca; scaricare payload da due elenchi (uno è quello del Payload Manager), avviarli e fermarli, caricarli in sequenza come profili.
     </td>
   </tr>
   <tr>
@@ -140,7 +140,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     <td align="center" valign="middle"><sub>Giochi in vista grande: copertine grandi, pulsanti con testo (si cambia nella pagina Giochi)</sub></td>
   </tr>
 </table>
-<sub>Tutte le immagini con dati di esempio e giochi inventati; l'interfaccia è mostrata in tedesco.</sub>
+<sub>Tutte le immagini con dati di esempio e giochi inventati, riprese con versioni precedenti; l'interfaccia è mostrata in inglese.</sub>
 </details>
 
 ### Schermate dell'app a schermo intero
@@ -163,7 +163,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     <td align="center"><sub>Tempo di gioco con panoramica giornaliera</sub></td>
   </tr>
 </table>
-<sub>Tutte le immagini con dati di esempio e giochi inventati; l'interfaccia è mostrata in tedesco.</sub>
+<sub>Tutte le immagini con dati di esempio e giochi inventati, riprese con versioni precedenti; l'interfaccia è mostrata in inglese.</sub>
 
 <details>
 <summary><b>Tutte le funzioni in dettaglio</b></summary>
@@ -171,31 +171,31 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 **Raffreddamento**
 - Mantiene una temperatura obiettivo (predefinita 66 °C, regolabile 50–91 °C) con media mobile, zona morta e tendenza, e cambia la velocità solo a piccoli passi.
 - Modalità silenziosa, bilanciata e fresca, scelte rapide e regole per gioco.
-- Oltre la temperatura di sicurezza (predefinita 78 °C) decide solo l'hardware; se l'app non è in esecuzione, la console regola da sola.
+- Dalla temperatura di sicurezza (predefinita 78 °C) la ventola viene accelerata con decisione; un guardiano della ventola separato la restituisce alla console se la regolazione si blocca e mantiene il raffreddamento pieno in caso di surriscaldamento. Senza l'app, la console regola da sola.
 - Modalità notte: tra due orari vale un obiettivo più silenzioso; l'orario è quello del dispositivo su cui è aperta la pagina.
-- Autotest della ventola con un pulsante (la ventola risponde alla soglia?) e velocità minima della console appresa (20 % a riposo, 34 % in gioco), mostrata nella diagnostica.
+- Autotest della ventola con un pulsante e velocità minima della console appresa (20 % a riposo, 34 % in gioco), mostrata nella diagnostica.
 
 **Giochi**
-- Avviare (dal browser della console la pagina si chiude subito), chiudere, copiare su altre unità, spostare o estrarre con ShadowMountPlus.
-- Convertire in immagini exFAT, ffpkg e ffpfsc senza PC; tutto viene riletto e verificato dopo la scrittura, con un file `.sha256`. Inoltre un FPKG di debug (`.pkg`) per Kraken Mount, scritto da Dump Forge (quer3q; integrato nell’app).
-- Asset pack LZ4, indice AMPR, APR-EMU (ampr_emu e AMPR EMU NG), stub PlayGo e moduli DLC per gioco; verificare, estrarre e riparare immagini.
-- PS4 PKG da USB: PKG falsi PS4 da un'unità USB nella libreria senza installarli (PS4Mount di gasb07).
-- KrakenMount: avvia giochi (F)PKG e cartelle di gioco senza installarli, con Kraken Mount di quer3q (l'app lo include e lo avvia).
-- Disc: mostra quale disco c'è nell'unità (PS2/PS3/PS4/PS5, ID titolo) e crea un'immagine di DVD PS2 e dischi PS3 con CRC-32, MD5 e SHA-1, verificata con Redump se si vuole (secondo ps-disc-detect).
+- Avviare (dal browser della console la pagina si chiude subito), chiudere, eliminare (chiede prima), spostare o estrarre con ShadowMountPlus; copiare su un'altra unità come gioco per ShadowMountPlus (`homebrew`), per Kraken Mount (`Kraken-Games`) o come backup.
+- Convertire in immagini exFAT, ffpkg e ffpfsc senza PC (stesse tre destinazioni); tutto viene riletto e verificato, con un file `.sha256`, e gli eseguibili PS5 non firmati ricevono una firma fittizia. Inoltre un FPKG di debug (`.pkg`) per Kraken Mount, scritto dal Dump Forge integrato (quer3q).
+- Pacchetti LZ4 e zstd, indice AMPR, APR-EMU (ampr_emu e AMPR EMU NG), stub PlayGo e moduli DLC per gioco; verificare, estrarre e riparare immagini.
+- PS4 PKG da USB: PKG falsi PS4 da un'unità USB nella libreria senza installarli (PS4Mount di gasb07; disattivato di fabbrica).
+- KrakenMount: giocare FPKG, cartelle di gioco e immagini dalle cartelle `Kraken-Games` senza installarli, con Kraken Mount di quer3q (integrato, disattivato di fabbrica). Se ShadowMountPlus non è in esecuzione, gioca anche le sue cartelle (`homebrew`, `etaHEN/games`); una spia nella scheda mostra quale programma le gestisce.
+- Disc: mostra quale disco c'è nell'unità (PS2/PS3/PS4/PS5, ID titolo), crea un'immagine di DVD PS2 e dischi PS3 con CRC-32, MD5 e SHA-1, verificata con Redump se si vuole (secondo ps-disc-detect), e copia (dump) su un'unità come backup i giochi PS5 e PS4 installati da disco.
 - Tempo di gioco con temperature, backup e ripristino dei salvataggi, trovare, dividere e installare pacchetti, cronologia di tutte le operazioni.
 
 **Gestione**
 - Gestione file: visualizzare, modificare, scaricare e caricare (anche cartelle intere), creare cartelle, rinominare, copiare, spostare, eliminare – ovunque, con velocità e tempo residuo durante la copia; l'eliminazione chiede prima conferma e indica cosa verrà eliminato. Ricerca per nome nella cartella o sotto di essa (anche su tutta l'unità), e le cartelle con un ID titolo come nome mostrano il titolo del gioco.
 - Unità NTFS (Windows): leggere e scrivere chiavette e dischi NTFS nella gestione file (caricare, creare cartelle, copiare, spostare, eliminare; senza rinominare né sostituire), espellere senza ShadowMountPlus (driver da PS5-NTFS-BROWSER di abcde6543).
 - Payload: vedere e fermare quelli in esecuzione, avviare i propri `.elf` da una cartella o da una chiavetta USB, profili come sequenza di avvio; scaricare e aggiornare i payload dall'elenco del Payload Manager di itsPLK e da quello di strongt1me (con controllo SHA-256).
-- Profilo: nome visualizzato e immagine del profilo (30 immagini integrate o un file proprio).
+- Profilo: nome visualizzato e immagine del profilo (30 immagini integrate o un file proprio); attivare un account offline (come OffAct) e scrivere un accesso fittizio (np-fake-signin di earthonion).
 - Tema: standard, chiaro, scuro e ottimale (il più veloce da disegnare, pensato per il televisore); ogni dispositivo ricorda la sua scelta.
 - Sistema: modello, firmware, tempo di attività, memoria, rete; sensori grezzi e diagnostica in modalità esperto.
 - Intestazione su ogni pagina: modalità riposo, riavvio, spegnimento, modalità provvisoria (un clic ciascuno).
 
 **Tecnica**
 - Server HTTP proprio senza librerie esterne, [interfaccia JSON](docs/API.md) documentata, impostazioni in `/data/PS5-Cooling-Center/config.json`.
-- Nessun accesso a Internet, tranne premendo un pulsante: «Scarica payload» prende l'elenco dei payload e i file da GitHub, «Scarica AMPR EMU NG» una versione più recente da lì. Per il resto l'app parla solo con programmi sulla console e con i browser della tua rete domestica.
+- Nessun accesso a Internet, tranne premendo un pulsante: «Scarica payload» e i pulsanti per una versione più recente di AMPR EMU NG, Kraken Mount o Dump Forge scaricano da GitHub. Per il resto l'app parla solo con programmi sulla console e con i browser della tua rete domestica.
 
 </details>
 
@@ -209,7 +209,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 3. Aprire **`http://<IP-PS5>:8086`** nel browser (l'indirizzo compare anche nella notifica in alto a sinistra sulla TV).
 
 > [!TIP]
-> **Avviare senza inviare:** decomprimi `FAKE86921.zip` (app a schermo intero con il controller) e/o `FAKE86922.zip` (interfaccia web nel browser) dalla release e copia le cartelle in `/data/homebrew/`. ShadowMountPlus crea i riquadri; un tocco avvia l'app.
+> **Avviare senza inviare:** decomprimi `FAKE86921.zip` (app a schermo intero con il controller) e/o `FAKE86922.zip` (interfaccia web nel browser) dalla release e copia le cartelle in `/data/homebrew/`. ShadowMountPlus (senza di esso, Kraken Mount se attivato) crea i riquadri; un tocco avvia l'app.
 
 > [!IMPORTANT]
 > Può essere in esecuzione una sola **istanza** alla volta, altrimenti due programmi regolano la ventola uno contro l'altro. Una vecchia istanza si ferma nella pagina "Payload". Altro nel [LIESMICH](docs/LIESMICH.txt) (in tedesco).
@@ -220,15 +220,15 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 | --- | --- |
 | **Console** | PS5 con jailbreak e loader ELF sulla porta 9021 ([elfldr](https://github.com/ps5-payload-dev/elfldr) o simile) |
 | **Firmware** | **Supporto per FW da 1.00 a 14.22** |
-| **Testato** | PS5 Pro (CFI-7021), firmware 12.00; diversi utenti segnalano che funziona anche su 4.xx–10.xx e su 13.60 |
+| **Testato** | PS5 Pro (CFI-7021) e PS5 Slim (CFI-2116), firmware 12.00; diversi utenti segnalano che funziona anche su 4.xx–10.xx e su 13.60 |
 | **Ventola** | [kstuff](https://github.com/EchoStretch/kstuff-lite) (senza, sensori e interfaccia funzionano, la regolazione no) |
 | **Rete** | Un browser nella stessa rete, oppure il browser della console |
-| **Opzionale** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) per spostare, estrarre e per il riquadro di avvio |
+| **Opzionale** | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) per spostare, estrarre e per i riquadri di avvio; senza di esso, il Kraken Mount integrato gioca le sue cartelle |
 
 <details>
 <summary>Firmware e SDK in dettaglio</summary>
 
-L'ELF è compilato con il PS5 payload SDK **v0.50**, il cui codice di avvio conosce ogni firmware **da 1.00 fino a 14.22**. Un firmware che il codice di avvio non conosce non arriva a `main()`: il programma non si avvia affatto e non scrive nulla nel registro. Per 13.00–13.40 non ci sono ancora segnalazioni (il codice di avvio li conosce). La temperatura della GPU esiste solo sulla Pro.
+L'ELF è compilato con il PS5 payload SDK **v0.50**, il cui codice di avvio conosce ogni firmware **da 1.00 fino a 14.22**. Un firmware che il codice di avvio non conosce non arriva a `main()`: il programma non si avvia affatto e non scrive nulla nel registro. La temperatura della GPU esiste solo sulla Pro.
 </details>
 
 ## Utilizzo
@@ -236,11 +236,11 @@ L'ELF è compilato con il PS5 payload SDK **v0.50**, il cui codice di avvio cono
 | Pagina | Contenuto |
 | --- | --- |
 | **Raffreddamento** | Stato, andamento, sensori, temperatura obiettivo, modalità, profili per gioco |
-| **Giochi** | Libreria, tempo di gioco, salvataggi, pacchetti, PS4 PKG da USB, KrakenMount, backup, cronologia |
-| **File manager** | Cartelle della console e delle unità |
+| **Giochi** | Libreria, tempo di gioco, salvataggi, pacchetti, PS4 PKG da USB, KrakenMount, Disc (con unità disco), backup, cronologia |
+| **File manager** | Cartelle della console e delle unità (anche NTFS), ricerca |
 | **Payload** | Payload in esecuzione, salvati e su USB, profili, scarica payload |
 | **Sistema** | Console, memoria, rete, diagnostica |
-| **Profilo** | Nome visualizzato e immagine del profilo |
+| **Profilo** | Nome visualizzato, immagine del profilo, account offline, accesso fittizio |
 | **Registro** | Eventi dell'app e log del kernel in diretta |
 | **Riconoscimenti** | Grazie agli sviluppatori; più **manuale** e **FAQ** in sette lingue |
 
@@ -264,7 +264,7 @@ L'ELF è compilato con il PS5 payload SDK **v0.50**, il cui codice di avvio cono
 <details>
 <summary><b>Compilare dal codice sorgente</b></summary>
 
-Serve il [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.42 o successivo** (testato con v0.50); la compilazione lo verifica e si ferma con un SDK più vecchio. Su Windows basta Git Bash con LLVM 21:
+Serve il [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk) **v0.50**; la compilazione verifica che conosca ogni firmware da 1.00 a 14.22 e altrimenti si ferma. Su Windows basta Git Bash con GNU Make e LLVM 21:
 
 ```bash
 tools/build-windows.sh
@@ -277,13 +277,13 @@ export PS5_PAYLOAD_SDK=$HOME/ps5sdk/sdk
 make
 ```
 
-Il risultato è `PS5_Cooling_Center.elf`; `tools/make_starter.sh` crea il riquadro di avvio. Il resto è in [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+Il risultato è `PS5_Cooling_Center.elf`; `tools/make_starter.sh` crea i due riquadri (serve WSL). Il resto è in [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
 </details>
 
 ## Note legali ed esclusione di responsabilità
 
 > [!CAUTION]
-> **Non è un prodotto ufficiale, niente pirateria, nessuna responsabilità.** Questo progetto non ha legami con i titolari dei diritti della console. Non contiene giochi, firmware, chiavi di terzi (solo una chiave pubblicamente nota per pacchetti di prova autocostruiti, vedi THIRD_PARTY_NOTICES.md) né codice per aggirare protezioni anticopia, e non scarica nulla da Internet tranne, premendo un pulsante, l'elenco dei payload con i suoi file e una versione più recente di AMPR EMU NG da GitHub. Modificare una console può costare garanzia e account; il rischio è di chi lo fa. Il programma è fornito **senza alcuna garanzia**.
+> **Non è un prodotto ufficiale, niente pirateria, nessuna responsabilità.** Questo progetto non ha legami con i titolari dei diritti della console. Non contiene giochi, firmware né chiavi di terzi (solo una chiave pubblicamente nota per pacchetti di prova autocostruiti, vedi THIRD_PARTY_NOTICES.md); il dump (scheda Disc) fa solo decifrare alla tua console i giochi installati su di essa, per un backup. Non scarica nulla da Internet tranne, premendo un pulsante, gli elenchi dei payload con i loro file e versioni più recenti di AMPR EMU NG, Kraken Mount e Dump Forge da GitHub. Modificare una console può costare garanzia e account; il rischio è di chi lo fa. Il programma è fornito **senza alcuna garanzia**.
 
 <details>
 <summary>Testo completo</summary>
@@ -310,7 +310,7 @@ Questo progetto poggia sulle spalle della comunità homebrew della PS5. **Grazie
 <details>
 <summary><b>Piattaforma e strumenti</b></summary>
 
-- **John Törnblom e tutti i collaboratori di [ps5-payload-dev](https://github.com/ps5-payload-dev)**: il [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), il loader [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) e [websrv](https://github.com/ps5-payload-dev/websrv).
+- **John Törnblom e tutti i collaboratori di [ps5-payload-dev](https://github.com/ps5-payload-dev)**: il [PS5 payload SDK](https://github.com/ps5-payload-dev/sdk), il loader [elfldr](https://github.com/ps5-payload-dev/elfldr), [klogsrv](https://github.com/ps5-payload-dev/klogsrv), [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv), [websrv](https://github.com/ps5-payload-dev/websrv) e [OffAct](https://github.com/ps5-payload-dev/offact) (attivazione di account offline, portata in C).
 - **Gli sviluppatori di kstuff**: [sleirsgoevy](https://github.com/sleirsgoevy), [EchoStretch](https://github.com/EchoStretch) e [drakmor](https://github.com/drakmor) ([kstuff-lite](https://github.com/EchoStretch/kstuff-lite)). Senza kstuff non ci sarebbe accesso al controller della ventola.
 </details>
 
@@ -321,16 +321,17 @@ Questo progetto poggia sulle spalle della comunità homebrew della PS5. **Grazie
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) e i collaboratori di [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): immagini exFAT, PFS e PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): modello per lo scrittore UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (asset pack LZ4, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) e [dlc_emu](https://github.com/drakmor/dlc_emu) (versioni integrate, GPL-3.0).
-- **[quer3q](https://github.com/quer3q), [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng)** (GPL-3.0): AMPR EMU NG, un'evoluzione di ampr_emu che legge anche i pacchetti zstd (le due versioni più recenti, 0.5.1 e 0.5.0, integrate, quelle più recenti le scarica l'app su richiesta). Inoltre [Kraken Mount](https://github.com/quer3q/kraken-mount) (GPL-3.0): il programma dietro la scheda «KrakenMount» (incluso invariato come ELF).
-- **BlackBearReloaded, ps5-native-app-boilerplate** (GPL-3.0): come il riquadro di avvio è costruito come titolo nativo.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), un'evoluzione di ampr_emu che legge anche i pacchetti zstd (0.5.1 e 0.5.0 integrate, quelle più recenti su richiesta); [Kraken Mount](https://github.com/quer3q/kraken-mount), il programma dietro la scheda «KrakenMount» (incluso, modificato in pochi byte per funzionare accanto a ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), il motore per FPKG e per la compressione durante la conversione (incluso invariato). I pacchetti zstd e la firma fittizia dell'app seguono i loro formati.
+- **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl e ps5-native-app-boilerplate** (GPL-3.0): l'app a schermo intero è costruita su ps5-homebrew-ui (dalla copia conservata da [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), il riquadro del browser secondo il boilerplate.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): struttura dei pacchetti e procedura di installazione (codice proprio su questo modello).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): funzione del profilo e formato dell'immagine del profilo.
+- **[EchoStretch](https://github.com/EchoStretch) e slopmaster33, [ps5-app-dumper](https://github.com/EchoStretch/ps5-app-dumper)** 2.10 (GPL-3.0-or-later): la base del dump nella scheda Disc, ripresa e riscritta per l'app (con il self pager di [idlesauce](https://github.com/idlesauce), strutture SELF secondo PS5-SELF-Decrypter di Cryptogenic).
 - **slopmaster33, webhb** (GPL-3.0): codificatore QR.
 - **[danthespal](https://github.com/danthespal), [MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp)** (GPL-3.0): i quattro profili LZ4 testati (ASTRO BOT, EA Sports UFC 6, motore di Insomniac, motore Unity), inclusi senza modifiche.
-- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): la risoluzione dei nomi propria dell'app e il download HTTPS (per lo store dei payload).
-- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): il driver NTFS (lettura e scrittura) dietro le unità NTFS della gestione file, integrato senza modifiche (v1.4.0).
-- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS per lo store dei payload.
-- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause).
+- **[Knutwurst](https://github.com/knutwurst), [PatchDL](https://github.com/knutwurst/ps5-patchdl)** (GPL-3.0): la risoluzione dei nomi propria dell'app e il download HTTPS (per i download da GitHub).
+- **[abcde6543](https://github.com/abcde6543), [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER)** (GPL-3.0-or-later): il driver NTFS (lettura e scrittura) dietro le unità NTFS della gestione file, integrato (v1.4.0) con controlli aggiuntivi, una cache di scrittura e la gestione del journal.
+- **[BearSSL](https://bearssl.org/)** 0.6 (Thomas Pornin, MIT): TLS per i download da GitHub.
+- **[Eric Biggers](https://github.com/ebiggers), [libdeflate](https://github.com/ebiggers/libdeflate)** (MIT) · **[Dave Gamble](https://github.com/DaveGamble), [cJSON](https://github.com/DaveGamble/cJSON)** (MIT) · **[LZ4](https://github.com/lz4/lz4)** (BSD-2-Clause) · **[zstd](https://github.com/facebook/zstd)** (BSD-3-Clause) · **[SQLite](https://sqlite.org/)** (pubblico dominio) · **stb_image** (Sean Barrett, pubblico dominio o MIT; app a schermo intero).
 </details>
 
 <details>
@@ -340,20 +341,23 @@ Questo progetto poggia sulle spalle della comunità homebrew della PS5. **Grazie
 - **V-10, [exFAT2AMPR](https://github.com/exFAT2AMPR/exfat2ampr)**: elenco per "Automatico", registrazione per creare profili, manutenzione dei plugin dei giochi.
 - **theghostonline (Husam Osman), PS5 LZ4 Compression**: file che devono restare sciolti nella compressione, permessi 0777, riparazione durante il controllo dei pacchetti, scelta dei profili testati.
 - **[kerrdec97](https://github.com/kerrdec97), [exFAT Image Builder](https://github.com/kerrdec97/ps5-exfat-builder)**: parametri per immagini `.ffpkg`.
-- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) e [ps5-payload-manager](https://github.com/itsPLK/ps5-payload-manager) (modello ed elenco per «Scarica payload», [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
+- **[itsPLK](https://github.com/itsPLK)**: [ps5-unified-autoloader](https://github.com/itsPLK/ps5-unified-autoloader) e [Payload Manager](https://github.com/itsPLK/ps5-payload-manager) (modello ed elenco per «Scarica payload», [ps5-payloads-mirror](https://github.com/itsPLK/ps5-payloads-mirror)).
 - **[StonedModder](https://github.com/StonedModder), [ps-game-state-lib](https://github.com/StonedModder/ps-game-state-lib)** (MIT): riconoscimento del gioco in corso.
-- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: modello per portare i salvataggi su un’altra console (formato del file ZIP con `chives.json`, percorso tramite il montaggio proprio della console); il codice di questa app è riscritto da zero.
+- **[earthonion](https://github.com/earthonion), [Garlic SaveMgr](https://github.com/earthonion/garlic-savemgr)**: modello per portare i salvataggi su un’altra console (formato del file ZIP con `chives.json`, percorso tramite il montaggio proprio della console); il codice di questa app è riscritto da zero. Inoltre np-fake-signin 1.3, incluso invariato per l'accesso fittizio.
 - **[etaHEN](https://github.com/etaHEN/etaHEN)** e **[onionHEN](https://github.com/aydencharles/onionHEN)**: chiamate di sistema, valori, frame rate.
 - **[Soniciso](https://git.etawen.dev/soniciso), [Elf Arsenal](https://git.etawen.dev/soniciso/elf-arsenal)**: modello per molte funzioni (codice riscritto ogni volta).
 - **BestPig, [BackPork](https://github.com/BestPig/BackPork)**: il principio delle librerie sostitutive.
 - **Juma Sayeh e Osama Abualia, PS5 Game Compressor**: idee per verifica e conversione (tutto riscritto; il suo codice non ha licenza).
-- **Driver Linux `hid-playstation`** (batteria del DualSense) · **Xbox 360 DashLaunch** (l'idea della regolazione silenziosa).
+- **PS4FFPFSC** 0.2.9 (GPL-3.0-or-later): modello di ciò che serve a una cartella di gioco PS4 per diventare un'immagine (riscritto in C).
+- **Transmission per PS5** (GPL-3.0-or-later): modello per due sicurezze durante l'espulsione (chi ha ancora file aperti sull'unità, un'espulsione che non si è conclusa).
+- **[Daniel Nylander](https://github.com/yeager)**: la traduzione svedese dell'interfaccia web.
+- **Driver Linux `hid-playstation`** (batteria del DualSense) · **Xbox 360 DashLaunch** (l'idea della regolazione silenziosa) · **ps-disc-detect** (modello per la scheda Disc).
 </details>
 
 <details>
 <summary><b>Grazie alla comunità</b></summary>
 
-Il loro codice non è in questa app, ma senza il loro lavoro condiviso la scena non esisterebbe così: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [idlesauce](https://github.com/idlesauce), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – e a tutti gli altri che contribuiscono con codice, test, guide o risposte. Nell'app tutti sono elencati con un'immagine nella pagina "Riconoscimenti".
+Il loro codice non è in questa app, ma senza il loro lavoro condiviso la scena non esisterebbe così: [owendswang](https://github.com/owendswang), [LightningMods](https://github.com/LightningMods), [Andy Nguyen / TheFloW](https://github.com/TheOfficialFloW), [Specter](https://github.com/Cryptogenic), [ChendoChap](https://github.com/ChendoChap), [flatz](https://github.com/flatz), [Al Azif](https://github.com/Al-Azif), [zecoxao](https://github.com/zecoxao), [ArkSama](https://github.com/ArkSama), [nexgen999](https://github.com/nexgen999), [matem6](https://github.com/matem6), [Phoenixx1202](https://github.com/Phoenixx1202), [SiSTR0](https://github.com/SiSTR0) – e a tutti gli altri che contribuiscono con codice, test, guide o risposte. Nell'app tutti sono elencati con un'immagine nella pagina "Riconoscimenti".
 </details>
 
 Chi non si trova qui o si trova descritto in modo errato può segnalarlo: l'elenco sarà volentieri ampliato.

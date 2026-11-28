@@ -63,11 +63,15 @@ For example:
   debug mode) and delete a game whose exact path it knows; it reads files under
   `/data` only with the debug mode switched on and by a detour (DNS rebinding).
   The KrakenMount tab shows differing search folders; checking `Host` and `Origin`
-  can only be added by the author of Kraken Mount.
+  can only be added by the author of Kraken Mount. The app now carries Kraken
+  Mount 0.4.2, whose interface also deletes a game by its title ID; while
+  ShadowMountPlus is not running, the app also hands it the folders `homebrew`
+  and `etaHEN/games`.
 - Vulnerabilities in the console itself, in the jailbreak, in kstuff, in the
   payload loader or in other homebrew programs. Please report them there.
-- Bypassing the manufacturer's protections. This project contains no code for
-  that and gives no help with it.
+- Bypassing the manufacturer's protections. This project gives no help with
+  it; its only decryption is dumping (Disc tab), where the console decrypts
+  the games installed on it with its own means, for a backup.
 
 ## Legal
 

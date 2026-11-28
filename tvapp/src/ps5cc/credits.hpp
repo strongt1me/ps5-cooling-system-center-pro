@@ -26,8 +26,8 @@ inline constexpr Credit kCredits[] = {
      "Community teilst!"},
     {"Plattform und Werkzeuge", "john-tornblom.jpg", "John Törnblom", "@john-tornblom",
      "Das PS5-Payload-SDK, mit dem jede ELF dieser App gebaut wird, der Payload-Lader elfldr auf "
-     "Port 9021, dazu klogsrv, ftpsrv und websrv. Danke für das Fundament, auf dem fast alles "
-     "Homebrew der PS5 steht – und an alle Mitwirkenden von ps5-payload-dev."},
+     "Port 9021, dazu klogsrv, ftpsrv, websrv und OffAct (Offline-Konto). Danke für das Fundament, "
+     "auf dem fast alles Homebrew der PS5 steht – und an alle Mitwirkenden von ps5-payload-dev."},
     {"Plattform und Werkzeuge", "sleirsgoevy.jpg", "sleirsgoevy", "@sleirsgoevy",
      "Der Hauptautor von kstuff. Ohne kstuff gäbe es keinen Zugriff auf den Lüfter-Controller – "
      "und damit keine Lüftersteuerung. Dazu ps4jb und bd-jb für die PS4. Danke!"},
@@ -55,6 +55,16 @@ inline constexpr Credit kCredits[] = {
     {"Code, der in der App steckt", "", "abcde6543", "@abcde6543",
      "PS5-NTFS-BROWSER: der NTFS-Treiber, mit dem der Dateimanager NTFS-Laufwerke liest und "
      "beschreibt. Danke!"},
+    {"Code, der in der App steckt", "EchoStretch.jpg", "Echo Stretch und slopmaster33",
+     "@EchoStretch",
+     "ps5-app-dumper: die Grundlage des Dumpens im Reiter Disc – das Entschlüsseln der "
+     "Programmdateien eines Spiels und das Schreiben als FSELF, übernommen und für die App neu "
+     "geschrieben. Danke!"},
+    {"Code, der in der App steckt", "idlesauce.jpg", "idlesauce", "@idlesauce",
+     "ps5-self-pager: Damit lässt das Dumpen die Konsole die Programmdateien eines Spiels selbst "
+     "entschlüsseln. Dazu umtx2 und weitere Werkzeuge für PS4 und PS5. Danke!"},
+    {"Code, der in der App steckt", "", "Daniel Nylander", "@yeager",
+     "Die schwedische Übersetzung der Browser-Oberfläche. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "drakmor.jpg", "Drakmor", "@drakmor",
      "ShadowMountPlus: Spiele einhängen, verschieben und entpacken – die Spiele-Seite baut darauf "
      "auf. Dazu ps5-hwinfo mit den Stromschienen und Taktwerten, und als einer der größten "
@@ -64,13 +74,12 @@ inline constexpr Credit kCredits[] = {
      "PS4Mount: Vorlage und Code für den Reiter „PS4 PKG von USB“, PS4-Spiele (Fake-PKG) vom "
      "USB-Laufwerk ohne Installation. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "quer3q", "@quer3q",
-     "AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei "
-     "neuesten Fassungen (0.5.1 und 0.5.0) stecken eingebettet in der App, neuere lädt sie auf "
-     "Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „KrakenMount“, es spielt "
-     "FPKG, Spielordner und Abbilder ohne Installation. Danke!"},
+     "AMPR EMU NG (liest auch zstd-Pakete), Kraken Mount (spielt FPKG, Spielordner und Abbilder "
+     "ohne Installation) und Dump Forge (Motor für FPKG und das Packen beim Konvertieren) – alle "
+     "drei stecken in der App. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "Knutwurst", "@knutwurst",
-     "PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für den Payload-Store) "
-     "stammen daraus. Danke!"},
+     "PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für die Downloads von "
+     "GitHub) stammen daraus. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "V-10", "exFAT2AMPR",
      "exFAT2AMPR: zeigte die Liste, die „Automatisch“ beim Packen lose lässt, den Mitschnitt zur "
      "Profil-Erzeugung und die Pflege der Spiel-Plugins mit ihren Prüfsummen. Danke!"},
@@ -84,7 +93,7 @@ inline constexpr Credit kCredits[] = {
     {"Zusammenspiel, Wissen und Vorbilder", "", "earthonion", "@earthonion",
      "Garlic SaveMgr: Vorbild für das Übertragen von Spielständen – das Format der ZIP-Datei "
      "(chives.json) und der Weg über das eigene Einhängen der Konsole. Der Code dieser App ist neu "
-     "geschrieben. Danke!"},
+     "geschrieben. Dazu np-fake-signin, unverändert eingebettet für die Fake-Anmeldung. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "kerrdec97.jpg", "kerrdec97", "@kerrdec97",
      "exFAT Image Builder: zeigte, mit welchen Einstellungen ein .ffpkg für ShadowMountPlus gebaut "
      "wird. Danke!"},
@@ -122,8 +131,6 @@ inline constexpr Credit kCredits[] = {
      "Der IPv6-Kernel-Exploit für die PS5 und ausführliche Write-ups, aus denen die Szene lernt."},
     {"Danke an die Community", "ChendoChap.jpg", "ChendoChap", "@ChendoChap",
      "pOOBs4 und die Code-Ausführung über den WebKit-Browser der PS5."},
-    {"Danke an die Community", "idlesauce.jpg", "idlesauce", "@idlesauce",
-     "umtx2 und weitere Werkzeuge für PS4 und PS5."},
     {"Danke an die Community", "flatz.jpg", "flatz", "@flatz",
      "Werkzeuge rund um Pakete und das PFS-Dateisystem, dazu der PS5-ELF-Lader für IDA."},
     {"Danke an die Community", "Al-Azif.jpg", "Al Azif", "@Al-Azif",
