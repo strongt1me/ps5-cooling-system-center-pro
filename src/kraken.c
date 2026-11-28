@@ -1275,7 +1275,7 @@ ps5tm_kraken_delete_game(const char *tid, const char *path, char *msg, size_t n)
     for(char *c = why; *c; c++) if((unsigned char)*c < 0x20) *c = ' ';
   }
   free(reply);
-  if(st == 204 || st == 200) { PS5TM_INFO("kraken_delete", "Spiel %s über Kraken Mount gelöscht (Seite Spiele): %s", tid, path); return 200; }
+  if(st == 204 || st == 200) { PS5TM_INFO("kraken_delete", "Spiel %s über Kraken Mount gelöscht: %s", tid, path); return 200; }
   /* no answer in time, an answer cut off or too long, a connection that broke while it worked: what happened is not known (review 28.11.2026) */
   if(st == LHTTP_NO_ANSWER || st == LHTTP_TOO_BIG) snprintf(msg, n, "Kraken Mount hat das Löschen nicht bestätigt (keine Antwort). Bitte in der Liste nachsehen, ob das Spiel weg ist.");
   else if(st < 0) snprintf(msg, n, "Kraken Mount läuft nicht. Es wurde nichts gelöscht.");

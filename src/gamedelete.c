@@ -723,6 +723,7 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
     char t[400];
     snprintf(t, sizeof(t), "die Spieldaten: %s", p.path);
     cJSON_AddItemToArray(items, cJSON_CreateString(t));
+    cJSON_AddItemToArray(items, cJSON_CreateString("eine Prüfsummen-Datei daneben, falls vorhanden"));
     cJSON_AddItemToArray(items, cJSON_CreateString("der Zwischenspeicher, den Kraken Mount für das Spiel angelegt hat"));
   } else if(!strcmp(p.kind, "smp")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("der Eintrag bei ShadowMountPlus (das Spiel wird ausgehängt und abgemeldet)"));
@@ -1086,6 +1087,10 @@ run_kraken(const dl_args_t *a) {
     job_end(DL_FAILED, msg, NULL);
     return;
   }
+  /* the checksum file next to it, as the delete through ShadowMountPlus takes it (Kraken Mount deletes only its source; test at the Pro, 28.11.2026) */
+  char sums[400];
+  struct stat sb;
+  if(snprintf(sums, sizeof(sums), "%s" PS5TM_SUMS_EXT, a->path) < (int)sizeof(sums) && lstat(sums, &sb) == 0 && S_ISREG(sb.st_mode)) unlink(sums);
   pthread_mutex_lock(&g_lock);
   g_job.bytes = smp.initial;
   pthread_mutex_unlock(&g_lock);

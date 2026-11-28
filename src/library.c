@@ -594,12 +594,16 @@ kraken_own_lib(const char *nm, int dlc_ini) {
 static void
 kraken_source(lib_game_t *g, const ps5tm_kraken_game_t *kr, int n) {
   ps5tm_smp_game_t s;
-  /* only a title with a mount.lnk of ShadowMountPlus: one from Kraken-Games has none and stays as before (the mark KrakenMount, its cache) */
-  if(!kr || n <= 0 || !g->source[0] || ps5tm_smp_find(g->title_id, &s) == 0) return;
+  if(!kr || n <= 0 || ps5tm_smp_find(g->title_id, &s) == 0) return;
   for(int i = 0; i < n; i++) {
     const ps5tm_kraken_game_t *k = &kr[i];
     if(strcmp(k->title_id, g->title_id) || k->duplicate) continue;      /* the copy it does not play is never the source */
     if(strcmp(k->kind, "folder") || !k->path[0]) return;                /* it plays a .pkg: as before */
+    /* one in Kraken-Games stays as before (the mark KrakenMount, its cache): only ShadowMountPlus's folders and the drives' main folders, where a
+       game Kraken Mount registered while ShadowMountPlus did not run has no mount.lnk at all, and one ShadowMountPlus registered once has a dead one
+       (test at the Pro, 28.11.2026) */
+    const char *data = k->image[0] ? k->image : k->path;
+    if(strstr(data, "/" PS5TM_KRAKEN_GAMES "/") || strstr(data, "/" PS5TM_KRAKEN_GAMES_OLD "/")) return;
     /* the copy holds 191 bytes of a path: one that fills it may be cut, and a wrong path is worse than none */
     if(strlen(k->path) >= sizeof(k->path) - 1 || strlen(k->image) >= sizeof(k->image) - 1 || strlen(k->path) >= sizeof(g->source)) return;
     snprintf(g->source, sizeof(g->source), "%s", k->path);

@@ -97,6 +97,8 @@ static void rm_tree(const char *p) {                          /* the stub's "del
   snprintf(cmd, sizeof(cmd), "rm -rf '%s'", b);
   if(system(cmd) != 0) printf("rm failed\n");
 }
+/* Kraken Mount plays none of the test's originals */
+int ps5tm_kraken_find_source(const char *tid, const char *src, char *kpath, size_t n) { (void)tid; (void)src; if(n) kpath[0] = 0; return 0; }
 int ps5tm_gamedelete_original_ok(const char *id, const char *path, char *why, size_t n) {
   (void)id;
   struct stat st;

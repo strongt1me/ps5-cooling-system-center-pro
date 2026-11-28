@@ -331,6 +331,18 @@ check_dest(const char *path, const char *dest_in, uint64_t size, oa_dest_t *d, c
 
 /* ------------------------------------------------------------------ prepare / arm / commit */
 
+/* Kraken Mount plays this original (it has ShadowMountPlus's folders while that does not run, or it lies in Kraken-Games): it cannot follow a
+   move - the title would stay registered on a path that is gone. Said before the start and in the destination check, not only after the copy
+   (28.11.2026). 0: the move may go on; else why says it. */
+static int
+kraken_blocks_move(const char *title_id, const char *path, char *why, size_t n) {
+  char kp[1024];
+  const int kf = ps5tm_kraken_find_source(title_id, path, kp, sizeof(kp));
+  if(kf == 1 || kf == -3) { snprintf(why, n, "Kraken Mount spielt das Original gerade; verschieben lässt es sich so nicht. Löschen geht."); return 1; }
+  if(kf == -2) { snprintf(why, n, "Kraken Mount antwortet gerade nicht (es sucht oder baut auf). Bitte gleich noch einmal versuchen."); return 1; }
+  return 0;
+}
+
 int
 ps5tm_orig_prepare_for(const char *kind, const char *title_id, const char *after, const char *dest, const char *expect_path, ps5tm_orig_req_t *r, char *err, size_t err_len) {
   memset(r, 0, sizeof(*r));
@@ -354,6 +366,10 @@ ps5tm_orig_prepare_for(const char *kind, const char *title_id, const char *after
   if(ps5tm_gamedelete_original_ok(title_id, r->path, why, sizeof(why)) != 0) {
     if(r->mode == PS5TM_ORIG_MOVE) snprintf(err, err_len, "Das Original lässt sich nicht verschieben: %s", why);
     else snprintf(err, err_len, "Das Original lässt sich nicht löschen: %s", why);
+    return 409;
+  }
+  if(r->mode == PS5TM_ORIG_MOVE && kraken_blocks_move(title_id, r->path, why, sizeof(why))) {
+    snprintf(err, err_len, "Das Original lässt sich nicht verschieben: %s", why);
     return 409;
   }
   struct stat st;
@@ -1084,8 +1100,11 @@ ps5tm_orig_plan_json(const char *title_id, int *http) {
   int can = ps5tm_gamedelete_original_ok(title_id, path, why, sizeof(why)) == 0;
   cJSON_AddBoolToObject(o, "can_delete", can);
   cJSON_AddStringToObject(o, "delete_why", can ? "" : why);
-  cJSON_AddBoolToObject(o, "can_move", can && nd > 0);
-  cJSON_AddStringToObject(o, "move_why", can ? (nd > 0 ? "" : "Es gibt kein Laufwerk, auf das sich das Original verschieben ließe.") : why);
+  /* Kraken Mount plays the original: the choice "move" is greyed out at once, not only refused at the destination check (test at the Pro, 28.11.2026) */
+  char kwhy[200] = "";
+  const int kraken_blocks = can && kraken_blocks_move(title_id, path, kwhy, sizeof(kwhy));
+  cJSON_AddBoolToObject(o, "can_move", can && nd > 0 && !kraken_blocks);
+  cJSON_AddStringToObject(o, "move_why", !can ? why : kraken_blocks ? kwhy : nd > 0 ? "" : "Es gibt kein Laufwerk, auf das sich das Original verschieben ließe.");
   cJSON_AddStringToObject(o, "default_folder", PS5TM_ORIG_FOLDER);
   cJSON *arr = cJSON_AddArrayToObject(o, "drives");
   for(int i = 0; i < nd; i++) {
@@ -1114,7 +1133,7 @@ ps5tm_orig_check_json(const char *title_id, const char *dest, int *http) {
   uint64_t osz = 0;
   int ok = 0;
   if(OA_LSTAT(path, &st) != 0) snprintf(why, sizeof(why), "Das Original ist nicht mehr da.");
-  else if(ps5tm_gamedelete_original_ok(title_id, path, why, sizeof(why)) == 0)
+  else if(ps5tm_gamedelete_original_ok(title_id, path, why, sizeof(why)) == 0 && !kraken_blocks_move(title_id, path, why, sizeof(why)))
     { osz = size_of_original(title_id, path, &st); ok = check_dest(path, dest, osz, &d, why, sizeof(why), 1) == 0; }
   if(ok) {
     char a[24], b[24];
