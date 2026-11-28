@@ -125,4 +125,84 @@ ps5tm_krmig_folder(const char *base, ps5tm_krmig_folder_t *r) {
   if(!r->kept) r->err = errno;
 }
 
+/* ------------------------------------------------------------------ ShadowMountPlus's folders (28.11.2026)
+ * Wish of the user: while ShadowMountPlus does not run, Kraken Mount plays the games in homebrew and etaHEN/games too. Those are the folders
+ * ShadowMountPlus searches by itself, and Kraken Mount's own defaults (its storage.rs default_scan_roots, in this order). kraken.c adds them to
+ * the app's own list while no ShadowMountPlus runs and takes them out again when one starts; the lists are built here, so a host test sees them. */
+
+#define PS5TM_KRMIG_OWN_N 11                /* /data/<folder>, /mnt/usb0..7/<folder>, /mnt/ext0..1/<folder> */
+#define PS5TM_KRMIG_SMP_N 32                /* ShadowMountPlus's folders, below */
+
+/* Entry i of the app's list for the folder name `folder`, with ShadowMountPlus's folders after its own when with_smp: 0 when it fits into buf. */
+static inline int
+ps5tm_krmig_root(const char *folder, int with_smp, int i, char *buf, size_t n) {
+  if(!folder || !buf || !n || i < 0) return -1;
+  int w;
+  if(i < PS5TM_KRMIG_OWN_N) {
+    if(i == 0) w = snprintf(buf, n, "/data/%s", folder);
+    else if(i <= 8) w = snprintf(buf, n, "/mnt/usb%d/%s", i - 1, folder);
+    else w = snprintf(buf, n, "/mnt/ext%d/%s", i - 9, folder);
+    return w >= 0 && (size_t)w < n ? 0 : -1;
+  }
+  i -= PS5TM_KRMIG_OWN_N;
+  if(!with_smp || i >= PS5TM_KRMIG_SMP_N) return -1;
+  if(i < 2) w = snprintf(buf, n, "/data/%s", i ? "etaHEN/games" : "homebrew");
+  else if(i < 6) w = snprintf(buf, n, "/mnt/ext%d/%s", (i - 2) / 2, (i - 2) % 2 ? "etaHEN/games" : "homebrew");
+  else if(i < 14) w = snprintf(buf, n, "/mnt/usb%d/homebrew", i - 6);
+  else if(i < 22) w = snprintf(buf, n, "/mnt/usb%d/etaHEN/games", i - 14);
+  else if(i < 30) w = snprintf(buf, n, "/mnt/usb%d", i - 22);       /* the root of a drive: its top folders, as ShadowMountPlus looks there */
+  else w = snprintf(buf, n, "/mnt/ext%d", i - 30);
+  return w >= 0 && (size_t)w < n ? 0 : -1;
+}
+
+static inline int
+ps5tm_krmig_roots_n(int with_smp) {
+  return PS5TM_KRMIG_OWN_N + (with_smp ? PS5TM_KRMIG_SMP_N : 0);
+}
+
+/* The line "scanpath = [...]" of that list, as Kraken Mount writes it back (one line, ", " between the quoted paths). 0 when it fits into buf.
+   With with_smp == 0 it is the same line as ps5tm_krmig_scanpath. */
+static inline int
+ps5tm_krmig_scanpath_list(const char *folder, int with_smp, char *buf, size_t n) {
+  if(!folder || !buf || !n) return -1;
+  size_t o = (size_t)snprintf(buf, n, "scanpath = [");
+  for(int i = 0; i < ps5tm_krmig_roots_n(with_smp); i++) {
+    char r[96];
+    if(ps5tm_krmig_root(folder, with_smp, i, r, sizeof r) != 0 || o >= n) return -1;
+    o += (size_t)snprintf(buf + o, n - o, "%s\"%s\"", i ? ", " : "", r);
+  }
+  if(o < n) o += (size_t)snprintf(buf + o, n - o, "]");
+  return o < n ? 0 : -1;
+}
+
+/* The config text with the line `from` (spaces and a CR at its end do not count) replaced by `to`; the line end and everything else stay as they
+   were. 1 and *out (malloc'd) when the line is there, 0 when not, -1 without memory. */
+static inline int
+ps5tm_krmig_swap(const char *text, size_t len, const char *from, const char *to, char **out) {
+  if(out) *out = NULL;
+  if(!text || !from || !to) return 0;
+  const size_t fl = strlen(from), tl = strlen(to);
+  for(size_t at = 0; at < len;) {
+    const char *line = text + at;
+    const char *end = memchr(line, '\n', len - at);
+    const size_t full = end ? (size_t)(end - line) : len - at;
+    size_t k = full;
+    while(k && (line[k - 1] == '\r' || line[k - 1] == ' ' || line[k - 1] == '\t')) k--;
+    if(k == fl && !memcmp(line, from, k)) {
+      if(!out) return 1;
+      const size_t rest = len - (at + k);
+      char *o = malloc(at + tl + rest + 1);
+      if(!o) return -1;
+      memcpy(o, text, at);
+      memcpy(o + at, to, tl);
+      memcpy(o + at + tl, line + k, rest);
+      o[at + tl + rest] = 0;
+      *out = o;
+      return 1;
+    }
+    at += full + 1;
+  }
+  return 0;
+}
+
 #endif

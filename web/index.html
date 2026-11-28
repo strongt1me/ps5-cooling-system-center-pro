@@ -628,7 +628,9 @@
               </div>
               <p class="muted p4m-intro">Spielt Spiele ohne Installation, mit dem Programm Kraken Mount von quer3q (GPL-3.0), das die App mitbringt und startet: Debug-FPKG (.pkg, zum Beispiel aus Dump Forge), Spielordner (ungepackt, zstd oder LZ4) und Abbilder (.exfat, .ffpkg, .ffpfs, .ffpfsc). Lege sie in den Ordner Kraken-Games (auf dem internen Speicher /data/Kraken-Games, auf einem USB- oder M.2-Laufwerk der Ordner Kraken-Games im Hauptordner), direkt hinein oder in einen Unterordner darin; Kraken Mount meldet das Spiel von selbst mit Symbol auf dem Startbildschirm an. Die Datei bleibt, wo sie liegt.</p>
               <p class="muted" id="fp-roots"></p>
-              <div class="pt-note">Kraken Mount ist ab Werk ausgeschaltet; hast du es eingeschaltet, startet die App es bei jedem eigenen Start von selbst. Es muss laufen, damit die Spiele sichtbar bleiben. Sucht es in Ordnern, die auch ShadowMountPlus durchsucht, würden deren Ordner-Spiele doppelt angemeldet.</div>
+              <!-- homebrew und etaHEN/games, solange ShadowMountPlus nicht läuft (kraken.c, 28.11.2026) -->
+              <p class="muted fp-smp" id="fp-smp" hidden><span class="fp-lamp" id="fp-lamp" aria-hidden="true"></span><span id="fp-smp-text"></span></p>
+              <div class="pt-note">Kraken Mount ist ab Werk ausgeschaltet; hast du es eingeschaltet, startet die App es bei jedem eigenen Start von selbst. Es muss laufen, damit die Spiele sichtbar bleiben. Die Ordner homebrew und etaHEN/games gibt ihm die App nur, solange ShadowMountPlus nicht läuft.</div>
               <div class="pt-note" id="fp-note" hidden></div>
               <!-- Titel, die Kraken Mount und ShadowMountPlus oder PS4Mount zugleich wollen (app.js, dupFill) -->
               <div class="gm-dup" id="fp-dup" role="status" hidden></div>

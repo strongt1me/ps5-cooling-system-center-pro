@@ -969,6 +969,12 @@ struct KrakenState
     std::vector<KrakenGame> games;
     std::vector<std::string> log;       // the last lines of its log
     std::vector<std::string> scanpaths; // the folders it searches (empty: its own defaults)
+    // ShadowMountPlus's folders while it does not run (kraken.c, 28.11.2026): "running", "gone"
+    // or "unknown"; the list "app" (Kraken-Games), "app_smp" (with homebrew and etaHEN/games),
+    // "old", "hand" or "unknown"; seconds until the app adds them (-1: not waiting)
+    std::string smp;
+    std::string smp_list;
+    int smp_in_s = -1;
 };
 
 struct Ps4Update

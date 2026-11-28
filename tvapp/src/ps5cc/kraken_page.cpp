@@ -15,6 +15,7 @@
 #include "ps5cc/pages.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -277,6 +278,10 @@ class KrakenPage final : public Page
             if (!g->error.empty() && g->conflict_with.empty())
                 paragraph(canvas, g->error, card.x + 30.0f, below + 10.0f, card.w - 60.0f, kWarning,
                           3);
+            // homebrew and etaHEN/games while ShadowMountPlus does not run (28.11.2026): where the
+            // warning or the error would stand
+            else if (g->conflict_with.empty())
+                smp_note(canvas, card.x + 30.0f, below + 10.0f, card.w - 60.0f, 3);
         }
         else
         {
@@ -288,12 +293,13 @@ class KrakenPage final : public Page
                       card.x + 30.0f, card.y + 130.0f, card.w - 60.0f, kMuted, 5);
             paragraph(canvas, roots_text(), card.x + 30.0f, card.y + 300.0f, card.w - 60.0f, kInk,
                       5);
-            paragraph(
+            const float after = paragraph(
                 canvas,
                 "Nach einem Neustart der Konsole muss Kraken Mount laufen, damit die Spiele "
-                "sichtbar bleiben. Sucht es in Ordnern, die auch ShadowMountPlus durchsucht, "
-                "würden deren Ordner-Spiele doppelt angemeldet.",
-                card.x + 30.0f, card.y + 470.0f, card.w - 60.0f, kWarning, 6);
+                "sichtbar bleiben. Die Ordner homebrew und etaHEN/games gibt ihm die App nur, "
+                "solange ShadowMountPlus nicht läuft.",
+                card.x + 30.0f, card.y + 470.0f, card.w - 60.0f, kWarning, 4);
+            smp_note(canvas, card.x + 30.0f, after + 10.0f, card.w - 60.0f, 3);
         }
         const float line_y = kBottom - 96.0f;
         list.line(card.x + 30.0f, line_y, card.x + card.w - 30.0f, line_y, 1.0f,
@@ -455,6 +461,12 @@ class KrakenPage final : public Page
             return "Suchordner unter dem alten Namen FPKG-Games. Kraken Mount einmal aus- und "
                    "wieder einschalten: Dann benennt die App die Ordner FPKG-Games in Kraken-Games "
                    "um und stellt die Suchordner um.";
+        // with homebrew and etaHEN/games while ShadowMountPlus does not run (kraken.c, 28.11.2026)
+        if (state_.smp_list == "app_smp")
+            return "Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und "
+                   "M.2-Laufwerk, dazu, solange ShadowMountPlus nicht läuft, homebrew und "
+                   "etaHEN/games (intern und auf jedem Laufwerk) sowie der Hauptordner jedes "
+                   "Laufwerks.";
         if (state_.scanpaths == own)
             return "Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und "
                    "M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel "
@@ -464,6 +476,70 @@ class KrakenPage final : public Page
         for (std::size_t i = 0; i < state_.scanpaths.size(); ++i)
             out += (i == 0 ? "" : ", ") + state_.scanpaths[i];
         return out;
+    }
+
+    // ShadowMountPlus's folders (kraken.c, 28.11.2026): whether Kraken Mount searches homebrew and
+    // etaHEN/games because ShadowMountPlus does not run - the same texts as the web page
+    std::string smp_text() const
+    {
+        if (!state_.running || state_.stopping)
+            return {};
+        if (state_.smp_list == "app_smp")
+            return "ShadowMountPlus läuft nicht: Kraken Mount spielt auch die Spiele aus homebrew "
+                   "und etaHEN/games.";
+        if (state_.smp == "gone" && state_.smp_list == "app" && state_.smp_in_s > 0)
+            return "ShadowMountPlus läuft nicht: In " + std::to_string(state_.smp_in_s) +
+                   " s übernimmt Kraken Mount auch homebrew und etaHEN/games.";
+        if (state_.smp == "gone" && state_.smp_list == "hand")
+            return "ShadowMountPlus läuft nicht. Die Suchordner von Kraken Mount wurden auf seiner "
+                   "Seite geändert; die App gibt ihm homebrew und etaHEN/games deshalb nicht von "
+                   "selbst.";
+        if (state_.smp == "running" && state_.smp_list == "app")
+            return "ShadowMountPlus läuft: homebrew und etaHEN/games gehören ihm. Läuft es nicht, "
+                   "übernimmt Kraken Mount diese Ordner nach einer Minute.";
+        return {};
+    }
+
+    // The line about ShadowMountPlus's folders with a round lamp in front of it (user, 28.11.2026:
+    // "damit man gleich darauf aufmerksam wird ... ein rundes leuchtendes Lämpchen, somit weiß der
+    // Nutzer gleich, was gerade gilt"): green and breathing while Kraken Mount plays homebrew and
+    // etaHEN/games, amber and blinking while it takes them over in a moment, blue while
+    // ShadowMountPlus has them, grey for a list changed by hand. Drawn like the dot of a loaded
+    // payload (payloads_page); the web page has the same lamp. Returns the y below the text.
+    float smp_note(ui::Canvas &canvas, float x, float y, float width, int max_lines) const
+    {
+        const std::string text = smp_text();
+        if (text.empty())
+            return y;
+        Color core = Color::rgb(0x6b7896);
+        float glow = -1.0f; // < 0: no light around it
+        if (state_.smp_list == "app_smp")
+        {
+            core = Color::rgb(0x2fd44a);
+            glow = 0.5f + 0.5f * std::sin(canvas.time * 2.6f);
+        }
+        else if (state_.smp == "gone" && state_.smp_list == "app")
+        {
+            core = kWarning;
+            glow = 0.5f + 0.5f * std::sin(canvas.time * 6.0f);
+        }
+        else if (state_.smp == "running")
+        {
+            core = Color::rgb(0x3880ff);
+            glow = 0.7f;
+        }
+        // the first line's middle: the text is drawn on its baseline
+        const float cx = x + 11.0f, cy = y - 7.0f;
+        if (glow >= 0.0f)
+        {
+            canvas.list.circle(cx, cy, 19.0f + 4.0f * glow, core.with_alpha(0.10f + 0.12f * glow));
+            canvas.list.circle(cx, cy, 13.0f + 2.0f * glow, core.with_alpha(0.28f + 0.22f * glow));
+            canvas.list.circle(cx, cy, 9.5f, core.with_alpha(0.6f));
+        }
+        canvas.list.circle(cx, cy, 7.5f, core);
+        if (glow >= 0.0f) // the bright middle of a lit lamp
+            canvas.list.circle(cx - 1.5f, cy - 1.5f, 2.5f, Color::rgb(0xffffff).with_alpha(0.55f));
+        return paragraph(canvas, text, x + 40.0f, y, width - 40.0f, kMuted, max_lines);
     }
 
     std::string status_line() const

@@ -5104,6 +5104,14 @@ void HttpSource::poll_kraken()
                 k.scanpaths.emplace_back(p->valuestring);
         }
     }
+    // homebrew and etaHEN/games while ShadowMountPlus does not run (28.11.2026)
+    if (const cJSON *sf = cJSON_GetObjectItemCaseSensitive(root, "smp_folders"))
+    {
+        k.smp = str(sf, "smp");
+        k.smp_list = str(sf, "list");
+        const cJSON *in = cJSON_GetObjectItemCaseSensitive(sf, "in_s");
+        k.smp_in_s = cJSON_IsNumber(in) ? static_cast<int>(in->valuedouble) : -1;
+    }
     cJSON_Delete(root);
     std::lock_guard<std::mutex> lock(mutex_);
     k.fetch_result = data_.kraken.fetch_result;

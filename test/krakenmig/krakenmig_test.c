@@ -174,6 +174,67 @@ main(void) {
   ps5tm_krmig_folder(b, &r);
   CHECK(r.state == PS5TM_KRMIG_NONE && is_file("f/FPKG-Games", "datei") && gone("f/Kraken-Games"));
 
+  /* 4. ShadowMountPlus's folders (28.11.2026): the app's own list first, then Kraken Mount's defaults in its order */
+  {
+    char rr[96];
+    CHECK(ps5tm_krmig_roots_n(0) == 11 && ps5tm_krmig_roots_n(1) == 43);
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 0, rr, sizeof rr) == 0 && !strcmp(rr, "/data/Kraken-Games"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 10, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/ext1/Kraken-Games"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 11, rr, sizeof rr) == 0 && !strcmp(rr, "/data/homebrew"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 12, rr, sizeof rr) == 0 && !strcmp(rr, "/data/etaHEN/games"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 13, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/ext0/homebrew"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 16, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/ext1/etaHEN/games"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 17, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/usb0/homebrew"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 25, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/usb0/etaHEN/games"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 33, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/usb0"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 40, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/usb7"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 42, rr, sizeof rr) == 0 && !strcmp(rr, "/mnt/ext1"));
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, 43, rr, sizeof rr) != 0);
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 0, 11, rr, sizeof rr) != 0);
+    CHECK(ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, -1, rr, sizeof rr) != 0);
+    /* no entry twice (Kraken Mount drops a second one) */
+    int twice = 0;
+    for(int i = 0; i < 43; i++)
+      for(int j = i + 1; j < 43; j++) {
+        char x[96], y[96];
+        ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, i, x, sizeof x);
+        ps5tm_krmig_root(PS5TM_KRAKEN_GAMES, 1, j, y, sizeof y);
+        twice += !strcmp(x, y);
+      }
+    CHECK(twice == 0);
+
+    /* the line without them is the very line ps5tm_krmig_scanpath writes */
+    char a[640], b2[2048], c[2048];
+    CHECK(ps5tm_krmig_scanpath_list(PS5TM_KRAKEN_GAMES, 0, a, sizeof a) == 0 && !strcmp(a, line_new));
+    CHECK(ps5tm_krmig_scanpath_list(PS5TM_KRAKEN_GAMES, 1, b2, sizeof b2) == 0);
+    CHECK(!strncmp(b2, line_new, strlen(line_new) - 1) && strstr(b2, "\"/mnt/ext1/Kraken-Games\", \"/data/homebrew\", \"/data/etaHEN/games\"") != NULL);
+    CHECK(strstr(b2, "\"/mnt/usb7\", \"/mnt/ext0\", \"/mnt/ext1\"]") != NULL);
+    CHECK(ps5tm_krmig_scanpath_list(PS5TM_KRAKEN_GAMES, 1, c, 300) != 0);   /* does not fit */
+
+    /* the swap at a start: the list with them becomes the list without them, the rest of the config and the line end stay */
+    char text[4096], want[4096], *out = NULL;
+    snprintf(text, sizeof text, "# from the page\ninject_ampr = true\n%s\r\nlog = true\n", b2);
+    snprintf(want, sizeof want, "# from the page\ninject_ampr = true\n%s\r\nlog = true\n", a);
+    CHECK(ps5tm_krmig_swap(text, strlen(text), b2, a, &out) == 1 && out && !strcmp(out, want));
+    free(out); out = NULL;
+    /* the last line without a line end, trailing spaces */
+    snprintf(text, sizeof text, "x = 1\n%s  ", b2);
+    snprintf(want, sizeof want, "x = 1\n%s  ", a);
+    CHECK(ps5tm_krmig_swap(text, strlen(text), b2, a, &out) == 1 && out && !strcmp(out, want));
+    free(out); out = NULL;
+    /* the app's list without them, or a list changed by hand: nothing swapped */
+    snprintf(text, sizeof text, "%s\n", a);
+    CHECK(ps5tm_krmig_swap(text, strlen(text), b2, a, &out) == 0 && out == NULL);
+    const char *hand = "scanpath = [\"/data/homebrew\"]\n";
+    CHECK(ps5tm_krmig_swap(hand, strlen(hand), b2, a, &out) == 0 && out == NULL);
+    /* a line that only starts like it */
+    snprintf(text, sizeof text, "%.*s, \"/data/mehr\"]\n", (int)strlen(b2) - 1, b2);
+    CHECK(ps5tm_krmig_swap(text, strlen(text), b2, a, &out) == 0 && out == NULL);
+    /* the old name is no part of it: the migration's classification still sees the app's new line only */
+    snprintf(text, sizeof text, "%s\n", b2);
+    CHECK(ps5tm_krmig_config(text, strlen(text), NULL) == PS5TM_KRMIG_CFG_OTHER);
+  }
+
   char cmd[400];
   snprintf(cmd, sizeof cmd, "rm -rf '%s'", g_root);
   if(system(cmd) != 0) printf("note: %s stays\n", g_root);

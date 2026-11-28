@@ -10,6 +10,10 @@
  *   smp        a game ShadowMountPlus mounts from an image or a folder on a drive: SMP takes it off first (its own
  *              uninstall, which unmounts it; alone it would mount the file again at its next scan), then the image or
  *              the folder is deleted, and the checksum file next to it if there is one.
+ *   kraken     a game Kraken Mount registered (a .pkg, a game folder or an image, 28.11.2026): Kraken Mount's own delete, which
+ *              unmounts it, deletes the data, uninstalls the tile and empties its cache. The console's uninstall alone was undone at
+ *              Kraken Mount's next pass (0.4.2 registers a title again that was uninstalled behind its back). While Kraken Mount is off,
+ *              a title its cache names is not deleted: the plan asks to switch it on first.
  *   ps4mount   a PS4 game PS4Mount serves from a pkg on a drive (22.11.2026): PS4Mount's own "remove", which unmounts
  *              it and then has the system uninstall it, and keeps it from being taken in again. The system's uninstall
  *              alone was refused while the title was still mounted (0x80AF5002, Slim, after its pkgs had been deleted).
@@ -554,7 +558,7 @@ find_backup(const char *path, backup_t *out) {
 /* ------------------------------------------------------------------ the plan */
 
 typedef struct {
-  char    kind[12];         /* "installed", "smp", "ps4mount", "backup" */
+  char    kind[12];         /* "installed", "smp", "kraken", "ps4mount", "backup" */
   char    name[160];
   char    path[320];
   char    format[12];
@@ -574,6 +578,9 @@ make_plan(const char *kind, const char *id, plan_t *p) {
   if(!kind || !id) return 400;
   if(!strcmp(kind, "game")) {
     if(!title_id_ok(id)) return 400;
+    ps5tm_kraken_game_t kg;
+    char ksrc[320];
+    int kr = 0;
     ps5tm_libdel_t li;
     if(ps5tm_library_delete_info(id, &li) != 0) return 404;
     snprintf(p->name, sizeof(p->name), "%s", li.name);
@@ -612,6 +619,22 @@ make_plan(const char *kind, const char *id, plan_t *p) {
         return 0;
       }
       int64_t sz = size_of(s.path);
+      if(sz >= 0) p->size = sz;
+    } else if((kr = ps5tm_kraken_game_of(id, &kg)) == 1 || (kr < 0 && ps5tm_kraken_source_of(id, ksrc, sizeof(ksrc)))) {
+      /* A game of Kraken Mount (28.11.2026): it deletes it itself. Shown is the data that goes: the image file of an image game, else the folder or
+         the .pkg its list names. */
+      snprintf(p->kind, sizeof(p->kind), "kraken");
+      if(kr != 1) {
+        snprintf(p->path, sizeof(p->path), "%s", ksrc);
+        snprintf(p->why, sizeof(p->why), "Das Spiel gehört zu Kraken Mount, und Kraken Mount ist gerade aus. Schalte es im Reiter KrakenMount ein; dann lässt sich das Spiel hier löschen (sonst meldete Kraken Mount es beim nächsten Start wieder an).");
+        return 0;
+      }
+      snprintf(p->path, sizeof(p->path), "%s", kg.image[0] ? kg.image : kg.path);
+      if(!deletable_root(p->path)) {
+        snprintf(p->why, sizeof(p->why), "Die Spieldaten liegen an einem Ort, an dem die App nichts löscht: %.200s", p->path);
+        return 0;
+      }
+      int64_t sz = size_of(p->path);
       if(sz >= 0) p->size = sz;
     } else {
       /* Everything else on the list the system uninstalls itself, as its own menu "Löschen" does: an installed
@@ -670,6 +693,12 @@ ps5tm_gamedelete_plan(const char *kind, const char *id, int *http) {
   } else if(!strcmp(p.kind, "ps4mount")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("das Spiel in der Bibliothek: PS4Mount hängt es aus, dann deinstalliert es die Konsole"));
     cJSON_AddItemToArray(items, cJSON_CreateString("die Updates und Zusatzinhalte, die PS4Mount dafür eingehängt hat"));
+  } else if(!strcmp(p.kind, "kraken")) {
+    cJSON_AddItemToArray(items, cJSON_CreateString("der Eintrag bei Kraken Mount (das Spiel wird ausgehängt und abgemeldet)"));
+    char t[400];
+    snprintf(t, sizeof(t), "die Spieldaten: %s", p.path);
+    cJSON_AddItemToArray(items, cJSON_CreateString(t));
+    cJSON_AddItemToArray(items, cJSON_CreateString("der Zwischenspeicher, den Kraken Mount für das Spiel angelegt hat"));
   } else if(!strcmp(p.kind, "smp")) {
     cJSON_AddItemToArray(items, cJSON_CreateString("der Eintrag bei ShadowMountPlus (das Spiel wird ausgehängt und abgemeldet)"));
     char t[400];
@@ -748,6 +777,7 @@ typedef struct {
   char     id[16];
   uint64_t initial;
   int      stop;
+  char     path[320];         /* when set: this folder or file is measured, not the title's folders (Kraken Mount deletes it) */
 } sampler_t;
 
 static void *
@@ -758,7 +788,8 @@ sampler_thread(void *arg) {
       if(__atomic_load_n(&s->stop, __ATOMIC_ACQUIRE)) return NULL;
       usleep(100 * 1000);
     }
-    int64_t left = title_bytes(s->id);
+    struct stat st;
+    int64_t left = !s->path[0] ? title_bytes(s->id) : lstat(s->path, &st) != 0 && errno == ENOENT ? 0 : size_of(s->path);
     if(left >= 0 && (uint64_t)left <= s->initial) job_done_bytes(s->initial - (uint64_t)left);
   }
 }
@@ -769,7 +800,7 @@ run_installed(const dl_args_t *a) {
   /* the bar: 5 % to start, then as the title's folders shrink up to 99 %; when they cannot be counted, 5 % until the
      system said yes, 60 % while it cleans up */
   int64_t initial = title_bytes(a->id);
-  sampler_t smp = { "", initial > 0 ? (uint64_t)initial : 0, 0 };
+  sampler_t smp = { "", initial > 0 ? (uint64_t)initial : 0, 0, "" };
   snprintf(smp.id, sizeof(smp.id), "%s", a->id);
   job_stage(5, 99, smp.initial);
   pthread_t sth;
@@ -991,6 +1022,41 @@ run_smp(const dl_args_t *a) {
   job_end(DL_DONE, NULL, NULL);
 }
 
+/* A game of Kraken Mount (28.11.2026): Kraken Mount deletes it as its own page does. The bar follows the data shrinking while it works. */
+static void
+run_kraken(const dl_args_t *a) {
+  ps5tm_kraken_game_t kg;
+  if(ps5tm_kraken_game_of(a->id, &kg) != 1 || strcmp(kg.image[0] ? kg.image : kg.path, a->path)) {
+    job_end(DL_FAILED, "Kraken Mount führt das Spiel nicht mehr so oder läuft nicht. Es wurde nichts gelöscht.", NULL);
+    return;
+  }
+  job_phase("Kraken Mount löscht das Spiel");
+  const int64_t initial = size_of(a->path);
+  sampler_t smp = { "", initial > 0 ? (uint64_t)initial : 0, 0, "" };
+  snprintf(smp.path, sizeof(smp.path), "%s", a->path);
+  job_stage(5, 99, smp.initial);
+  pthread_t sth;
+  pthread_attr_t sat;
+  pthread_attr_init(&sat);
+  pthread_attr_setstacksize(&sat, 256 * 1024);              /* size_of walks the folder recursively (as run_installed's sampler) */
+  const int sampling = smp.initial > 0 && pthread_create(&sth, &sat, sampler_thread, &smp) == 0;
+  pthread_attr_destroy(&sat);
+  char msg[400];
+  const int rc = ps5tm_kraken_delete_game(a->id, kg.path, msg, sizeof(msg));
+  if(sampling) { __atomic_store_n(&smp.stop, 1, __ATOMIC_RELEASE); pthread_join(sth, NULL); }
+  ps5tm_library_forget();
+  if(rc != 200) {
+    PS5TM_WARN("game_delete_failed", "Löschen von %s über Kraken Mount: %.150s", a->id, msg);
+    job_end(DL_FAILED, msg, NULL);
+    return;
+  }
+  pthread_mutex_lock(&g_lock);
+  g_job.bytes = smp.initial;
+  pthread_mutex_unlock(&g_lock);
+  PS5TM_INFO("game_delete_done", "%s über Kraken Mount gelöscht: %s.", a->id, a->path);
+  job_end(DL_DONE, NULL, NULL);
+}
+
 /* The folders of path, made as far as they are not there (mode 0777 like every folder this app makes for a copy). path is changed and put back. */
 static int
 mkdirs(char *path) {
@@ -1121,6 +1187,7 @@ delete_thread(void *arg) {
   if(orig) run_orig(a);
   else if(!strcmp(kind, "installed")) run_installed(a);
   else if(!strcmp(kind, "smp")) run_smp(a);
+  else if(!strcmp(kind, "kraken")) run_kraken(a);
   else if(!strcmp(kind, "ps4mount")) run_ps4mount(a);
   else run_backup(a);
   ps5tm_powerguard_release();
@@ -1137,7 +1204,7 @@ delete_thread(void *arg) {
   if(waited && st == DL_DONE) ps5tm_notify("„%s“ ist gelöscht.", name);
   else if(waited && st == DL_FAILED) ps5tm_notify("„%s“ wurde nicht gelöscht: %.120s", name, error);
   if((st == DL_DONE || st == DL_FAILED) && !(ren && st == DL_FAILED && strstr(error, "EXDEV")))
-    ps5tm_hist_add("delete", name, orig ? (ren ? "Original verschoben" : "Original") : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : !strcmp(kind, "ps4mount") ? "Spiel von PS4Mount" : "Spiel",
+    ps5tm_hist_add("delete", name, orig ? (ren ? "Original verschoben" : "Original") : !strcmp(kind, "backup") ? "Sicherung" : !strcmp(kind, "installed") ? "installiertes Spiel" : !strcmp(kind, "ps4mount") ? "Spiel von PS4Mount" : !strcmp(kind, "kraken") ? "Spiel von Kraken Mount" : "Spiel",
                    st == DL_DONE ? "done" : "failed", error, bytes, dur);
   free(a);
   return NULL;

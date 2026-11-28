@@ -1012,6 +1012,12 @@ int ps5tm_kraken_searches(const char *folder);
 /* 1 when Kraken Mount's config still names the app's own folders under the old name FPKG-Games (the app moves them to Kraken-Games the next
    time it starts Kraken Mount, kraken.c migrate_folders); 0 for every other list: toggling Kraken Mount changes nothing then. */
 int ps5tm_kraken_config_old(void);
+/* A game of Kraken Mount deleted from the page Spiele (gamedelete.c, 28.11.2026): its entry (1 found, 0 not listed, -1 Kraken Mount does not answer),
+   the delete by Kraken Mount itself (200 when done, msg otherwise; it may take minutes), and while it is off the source its cache names (1 when
+   there is one and it is still there). */
+int ps5tm_kraken_game_of(const char *title_id, ps5tm_kraken_game_t *out);
+int ps5tm_kraken_delete_game(const char *title_id, const char *path, char *msg, size_t n);
+int ps5tm_kraken_source_of(const char *title_id, char *out, size_t n);
 
 /* Titles two mounters want at once (src/mounters.c, 14.11.2026): a game Kraken Mount lists that ShadowMountPlus (a folder or an image) or
    PS4Mount manages too. Both write /user/app/<ID> and mount /system_ex/app/<ID>; ShadowMountPlus also rewrites the param.json. An array of

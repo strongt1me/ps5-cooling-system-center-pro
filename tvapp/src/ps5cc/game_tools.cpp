@@ -373,6 +373,8 @@ const char *delete_kind(const std::string &kind)
         return "Installiertes Spiel";
     if (kind == "smp")
         return "Spiel von ShadowMountPlus";
+    if (kind == "kraken")
+        return "Spiel von Kraken Mount";
     if (kind == "ps4mount")
         return "Spiel von PS4Mount";
     return "Spiel";

@@ -8725,11 +8725,26 @@
     const isOwn = roots && roots.length === own.length && roots.every((r, i) => r === own[i]);
     /* the same list under the folder's old name (until 27.11.2026): the app renames it at the next start of Kraken Mount by the app (kraken.c migrate_folders) */
     const isOld = roots && roots.length === own.length && roots.every((r, i) => r === own[i].replace("/Kraken-Games", "/FPKG-Games"));
+    /* 28.11.2026: solange ShadowMountPlus nicht läuft, ergänzt die App ihre Liste um homebrew und etaHEN/games (kraken.c, "smp_folders") */
+    const sf = d.smp_folders || {};
     txt("#fp-roots", isOld ? "Suchordner unter dem alten Namen FPKG-Games. Kraken Mount einmal aus- und wieder einschalten: Dann benennt die App die Ordner FPKG-Games in Kraken-Games um und stellt die Suchordner um."
+      : sf.list === "app_smp" ? "Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk, dazu, solange ShadowMountPlus nicht läuft, homebrew und etaHEN/games (intern und auf jedem Laufwerk) sowie der Hauptordner jedes Laufwerks."
       : isOwn ?"Suchordner: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk. ShadowMountPlus sucht dort nicht. Liegt dasselbe Spiel (dieselbe Titel-ID) auch bei ShadowMountPlus, kommen sich beide doch in die Quere; die App meldet es dann."
       : roots ? `Suchordner: ${roots.join(", ")}`
       : d.settings ? "Suchordner (Grundeinstellung von Kraken Mount): /data/homebrew, /data/etaHEN/games, homebrew und etaHEN/games sowie der Hauptordner jedes USB- und M.2-Laufwerks. Diese Ordner durchsucht auch ShadowMountPlus: Lege Spiele für Kraken Mount besser in den Ordner Kraken-Games (/data/Kraken-Games oder Kraken-Games auf dem Laufwerk) und trage ihn auf der Seite von Kraken Mount als Suchordner ein."
       : "Kraken Mount ist ausgeschaltet. Die App trägt beim ersten Start den Ordner Kraken-Games ein: /data/Kraken-Games und der Ordner Kraken-Games auf jedem USB- und M.2-Laufwerk.");
+    const smpTxt = !k || d.stopping ? ""
+      : sf.list === "app_smp" ? "ShadowMountPlus läuft nicht: Kraken Mount spielt auch die Spiele aus homebrew und etaHEN/games. Startet ShadowMountPlus, gibt die App ihm diese Ordner sofort zurück."
+      : sf.smp === "gone" && sf.list === "app" && sf.in_s > 0 ? `ShadowMountPlus läuft nicht: In ${sf.in_s} s übernimmt Kraken Mount auch homebrew und etaHEN/games.`
+      : sf.smp === "gone" && sf.list === "hand" ? "ShadowMountPlus läuft nicht. Die Suchordner von Kraken Mount wurden auf seiner Seite geändert; die App gibt ihm homebrew und etaHEN/games deshalb nicht von selbst."
+      : sf.smp === "running" && sf.list === "app" ? "ShadowMountPlus läuft: homebrew und etaHEN/games gehören ihm. Läuft es nicht, übernimmt Kraken Mount diese Ordner nach einer Minute."
+      : "";
+    /* das Lämpchen davor (Wunsch des Users, 28.11.2026: „damit man gleich darauf aufmerksam wird“): grün = Kraken Mount spielt
+       homebrew und etaHEN/games, gelb = übernimmt sie gleich, blau = ShadowMountPlus hat sie, grau = eigene Ordnerliste */
+    const lamp = sf.list === "app_smp" ? "on" : sf.smp === "gone" && sf.list === "app" ? "wait" : sf.smp === "running" ? "smp" : "hand";
+    $("#fp-smp").hidden = !smpTxt;
+    $("#fp-lamp").className = `fp-lamp ${lamp}`;
+    txt("#fp-smp-text", smpTxt);
     const note = $("#fp-note");
     note.hidden = !!k && !k.waiting && !(k.cache && k.cache.low_space) && !k.paused && !d.restart_needed;
     if (!k) note.textContent = d.starting ? "Kraken Mount startet. Das dauert einige Sekunden." : "Kraken Mount ist ausgeschaltet. Einschalten, damit die Spiele gesucht und angemeldet werden.";
@@ -10220,6 +10235,7 @@
     const p = dl.plan;
     const what = p.kind === "installed" ? "installiertes Spiel"
       : p.kind === "smp" ? "Spiel von ShadowMountPlus"
+      : p.kind === "kraken" ? "Spiel von Kraken Mount"
       : p.kind === "ps4mount" ? "Spiel von PS4Mount"
       : p.kind === "backup" ? "Sicherung der App" : "Spiel";
     const size = p.size_bytes > 0 ? ` · ${bytes(p.size_bytes)}` : "";
