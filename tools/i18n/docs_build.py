@@ -157,8 +157,9 @@ def main():
         d = json.load(open(os.path.join(SRC_DIR, "docs_src.%s.json" % lang), encoding="utf-8"))
         for mode in modes:
             m_path, f_path = names(lang, mode)
-            open(m_path, "w", encoding="utf-8").write(build_manual(lang, d, mode, logo_uri))
-            open(f_path, "w", encoding="utf-8").write(build_faq(lang, d, mode, logo_uri))
+            # LF on every system: the pages are embedded byte for byte (.gitattributes web/*.html eol=lf)
+            open(m_path, "w", encoding="utf-8", newline="\n").write(build_manual(lang, d, mode, logo_uri))
+            open(f_path, "w", encoding="utf-8", newline="\n").write(build_faq(lang, d, mode, logo_uri))
             made += [m_path, f_path]
             print("%s %-4s %6d KB + %5d KB" % (lang, mode, os.path.getsize(m_path) // 1024, os.path.getsize(f_path) // 1024), flush=True)
     print("%d Dateien geschrieben" % len(made))
