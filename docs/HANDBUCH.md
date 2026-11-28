@@ -401,7 +401,7 @@ entpacken) und wenn sich das nicht prüfen lässt; für **ffpfsc** gibt es die W
 
 ### Debug-FPKG mit Dump Forge
 
-Das Format **FPKG (Debug-.pkg)** schreibt **Dump Forge** (quer3q, GPL-3.0), ein eigenes PS5-Programm, das in der App steckt
+Das Format **FPKG (Debug-.pkg)** schreibt **Dump Forge** (quer3q, GPL-3.0-or-later), ein eigenes PS5-Programm, das in der App steckt
 (Fassung 0.6.0, zstd-gepackt in der ELF und damit auch in beiden Kacheln). Die App entpackt es für jeden Auftrag im Speicher,
 prüft Größe und SHA-256, startet es über den Payload-Lader, zeigt seine Schritte und beendet es danach.
 
@@ -666,7 +666,7 @@ ein laufendes Spiel kann höchstens etwa 30 Pakete nutzen (Grenze der Konsole).
 
 Der Reiter **KrakenMount** spielt (F)PKG-Spiele, Spielordner (roh, zstd, LZ4) und Abbilder (`.exfat`, `.ffpkg`, `.ffpfs`,
 `.ffpfsc`) direkt von der Platte oder vom USB-Laufwerk, ohne sie zu installieren. Dafür bringt die App **Kraken Mount** von
-quer3q mit (GPL-3.0, Version 0.4.2; ein eigenes Programm), startet es und zeigt seine Spiele. Die Vollbild-App hat dieselbe Seite
+quer3q mit (GPL-3.0-or-later, Version 0.4.2; ein eigenes Programm), startet es und zeigt seine Spiele. Die Vollbild-App hat dieselbe Seite
 unter Spiele → KrakenMount.
 
 **Was die App an Kraken Mount ändert.** Im Original wartet Kraken Mount, bis ShadowMountPlus beendet ist. Damit beide

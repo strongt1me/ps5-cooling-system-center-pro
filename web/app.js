@@ -8680,7 +8680,7 @@
 
 
   /* ── KrakenMount (kraken.c, 13.11.2026) ───────────────────────────────
-   * Kraken Mount von quer3q (GPL-3.0) meldet (F)PKG-Spiele und Spielordner an, ohne sie zu installieren. Die App bringt das Programm mit,
+   * Kraken Mount von quer3q (GPL-3.0-or-later) meldet (F)PKG-Spiele und Spielordner an, ohne sie zu installieren. Die App bringt das Programm mit,
    * startet und beendet es und zeigt seine Liste (GET /api/v1/kraken; „kraken“ darin ist die Antwort seiner eigenen Schnittstelle). */
   const fp = { data: null, timer: 0 };
   const FP_STATE = {
