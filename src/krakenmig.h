@@ -118,7 +118,11 @@ ps5tm_krmig_folder(const char *base, ps5tm_krmig_folder_t *r) {
     r->moved++;
   }
   closedir(d);
-  r->state = !r->kept && rmdir(from) == 0 ? PS5TM_KRMIG_MERGED : PS5TM_KRMIG_PARTLY;
+  /* Every entry moved and the old folder still does not go (an entry the listing did not name while its neighbours were moved out, a folder
+     in use): PARTLY with kept == 0 and the reason in err; the next start tries again. */
+  if(!r->kept && rmdir(from) == 0) { r->state = PS5TM_KRMIG_MERGED; return; }
+  r->state = PS5TM_KRMIG_PARTLY;
+  if(!r->kept) r->err = errno;
 }
 
 #endif

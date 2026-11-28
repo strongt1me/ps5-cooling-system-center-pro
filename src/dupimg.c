@@ -173,9 +173,9 @@ add_file(di_list_t *l, const char *path, const char *name) {
   l->n++;
 }
 
-/* the files of dir; with depth 1 also those of the folders in it */
+/* the files of dir; with depth 1 also those of the folders in it. aside_only: only images set aside (Kraken Mount's folders, below) */
 static void
-scan_dir(di_list_t *l, const char *dir, int depth) {
+scan_dir(di_list_t *l, const char *dir, int depth, int aside_only) {
   DIR *d = opendir(dir);
   if(!d) return;
   struct dirent *e;
@@ -185,8 +185,11 @@ scan_dir(di_list_t *l, const char *dir, int depth) {
     if(snprintf(p, sizeof(p), "%s/%s", dir, e->d_name) >= (int)sizeof(p)) continue;
     struct stat st;
     if(lstat(p, &st) != 0) continue;
-    if(S_ISREG(st.st_mode)) add_file(l, p, e->d_name);
-    else if(S_ISDIR(st.st_mode) && depth > 0 && strcasecmp(e->d_name, "ps4") && strcasecmp(e->d_name, "backports")) scan_dir(l, p, depth - 1);
+    if(S_ISREG(st.st_mode)) { if(!aside_only || image_name(e->d_name) == 2) add_file(l, p, e->d_name); }
+    else if(S_ISDIR(st.st_mode) && depth > 0 && strcasecmp(e->d_name, "ps4") && strcasecmp(e->d_name, "backports"))
+      /* Kraken Mount's folder (28.11.2026): what lies there is not ShadowMountPlus's, in its default settings it does not look there. An image
+         set aside there before (when the search still looked) stays listed, so that it can be taken back. */
+      scan_dir(l, p, depth - 1, aside_only || !strcasecmp(e->d_name, "Kraken-Games") || !strcasecmp(e->d_name, "FPKG-Games"));
   }
   closedir(d);
 }
@@ -198,7 +201,7 @@ search_thread(void *arg) {
     struct stat st;
     if(ps5tm_usbeject_settling(k_roots[r])) continue;      /* a drive that is being ejected is not read */
     if(stat(k_roots[r], &st) != 0 || !S_ISDIR(st.st_mode)) continue;
-    scan_dir(l, k_roots[r], 1);
+    scan_dir(l, k_roots[r], 1, 0);
   }
   pthread_mutex_lock(&g_lock);                   /* this search is the cache of the next one */
   free(g_cache);

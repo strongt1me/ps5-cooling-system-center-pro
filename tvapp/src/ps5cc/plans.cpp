@@ -61,6 +61,8 @@ PlanDest parse_dest(const cJSON *object, const char *path_key)
     d.unfinished_bytes = bytes(object, "unfinished_bytes");
     d.enough_space = tri(object, "enough_space");
     d.path_too_long = flag(object, "path_too_long");
+    d.not_searched = flag(object, "not_searched");
+    d.config_old = flag(object, "config_old");
     return d;
 }
 

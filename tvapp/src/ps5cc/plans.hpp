@@ -29,6 +29,8 @@ struct PlanDest
     std::uint64_t unfinished_bytes = 0;
     int enough_space = -1; // -1: not said, 0 or 1
     bool path_too_long = false;
+    bool not_searched = false; // copy into Kraken-Games: Kraken Mount's list does not name the folder
+    bool config_old = false;   // ... because it is still the app's own list with the old name
 };
 
 // The kinds of target, as the console names them: homebrew (ShadowMountPlus finds it), backup (kept

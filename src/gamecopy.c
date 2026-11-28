@@ -1145,6 +1145,7 @@ ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len) {
   cJSON_AddBoolToObject  (root, "busy", busy);
   /* A conversion runs: no copy starts beside it (the start says so too). */
   cJSON_AddBoolToObject  (root, "other_busy", ps5tm_gameconvert_busy());
+  int kraken_answers = 1, config_old = -1;             /* Kraken Mount is asked about its folders, per drive, while it answers */
 
   ps5tm_sysinfo_t info;
   ps5tm_sysinfo_get(&info);
@@ -1196,6 +1197,20 @@ ps5tm_gamecopy_plan(const char *title_id, char *err, size_t err_len) {
     cJSON_AddBoolToObject  (d, "enough_space", fits_any);
     cJSON_AddItemToArray(arr, d);
     ps5tm_drive_leave(gate);
+    /* Kraken Mount registers what lies in the folders it searches; its list may not name this drive's Kraken-Games (changed on its own page:
+       "not_searched"; or still the app's own with the old name FPKG-Games: "config_old" too; the convert check says the same, gameconvert.c
+       kraken_dir). Asked outside the drive's gate (an eject does not wait for it) and while it answers: once it does not, no drive is asked. */
+    cJSON *ko = cJSON_GetObjectItem(d, "kraken");
+    char kdir[200];
+    if(ko && kraken_answers && snprintf(kdir, sizeof(kdir), "%s/%s", base, PS5TM_KRAKEN_GAMES) < (int)sizeof(kdir)) {
+      const int s = ps5tm_kraken_searches(kdir);
+      if(s < 0) kraken_answers = 0;
+      if(s == 0) {
+        cJSON_AddBoolToObject(ko, "not_searched", 1);
+        if(config_old < 0) config_old = ps5tm_kraken_config_old();
+        if(config_old) cJSON_AddBoolToObject(ko, "config_old", 1);
+      }
+    }
   }
   return root;
 }
@@ -1271,6 +1286,11 @@ copy_start_impl(const char *title_id, const char *mount, const char *mode, const
   folder = folder ? folder + 1 : "";
   if(!folder_name_ok(folder)) {
     snprintf(err, err_len, "Der Spielordner hat keinen brauchbaren Namen.");
+    return 400;
+  }
+  /* Kraken Mount plays PS5 games; the pages do not offer its folder for a PS4 title, a hand-made request might (review 28.11.2026) */
+  if(!dest_dir && !strcmp(mode, "kraken") && !strncmp(title_id, "CUSA", 4)) {
+    snprintf(err, err_len, "Kraken Mount spielt PS5-Spiele, keine PS4-Spiele.");
     return 400;
   }
 

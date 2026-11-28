@@ -355,7 +355,7 @@ df_format(const cv_args_t *a) {
    for (see gamecopy.c), or a PS4 game's sce_sys/param.sfo (ps4_folder); a folder without either has nothing to
    convert into. */
 static void
-ops_for(const char *source, int *can_exfat, int *can_ffpfsc, int *can_ffpkg, int *can_fpkg) {
+ops_for(const char *source, const char *title_id, int *can_exfat, int *can_ffpfsc, int *can_ffpkg, int *can_fpkg) {
   *can_exfat = *can_ffpfsc = *can_ffpkg = *can_fpkg = 0;
   if(is_dir(source)) {
     char param[PATH_MAX];
@@ -368,7 +368,10 @@ ops_for(const char *source, int *can_exfat, int *can_ffpfsc, int *can_ffpkg, int
   const char *e = ext_of(source);
   if(!strcasecmp(e, ".exfat") || !strcasecmp(e, ".ffpkg") || !strcasecmp(e, ".ffpfs"))
     *can_ffpfsc = 1;
-  if(!strcasecmp(e, ".exfat") || !strcasecmp(e, ".ffpkg") || !strcasecmp(e, ".ffpfs") || !strcasecmp(e, ".ffpfsc"))
+  /* A debug FPKG is a PS5 package, out of an image as out of a folder: the image of a PS4 title (known by its id; the folder above by its
+     param.sfo) has none (review 28.11.2026: the ending alone offered it, and Kraken Mount, which takes the package, plays PS5 games only). */
+  if((!strcasecmp(e, ".exfat") || !strcasecmp(e, ".ffpkg") || !strcasecmp(e, ".ffpfs") || !strcasecmp(e, ".ffpfsc")) &&
+     !(title_id && !strncmp(title_id, "CUSA", 4)))
     *can_fpkg = 1;
 }
 
@@ -1887,7 +1890,7 @@ plan_body(const char *title_id, char *err, size_t err_len) {
     return NULL;
   }
   int can_exfat, can_ffpfsc, can_ffpkg, can_fpkg;
-  ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
+  ops_for(source, title_id, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
   int folder = is_dir(source);
   int ps4 = folder && ps4_folder(source);
   if(ps4) {
@@ -2210,7 +2213,7 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
   if(!pc.valid) { snprintf(err, err_len, "Das Spiel ließ sich nicht vermessen."); return NULL; }
 
   int can_exfat, can_ffpfsc, can_ffpkg, can_fpkg;
-  ops_for(pc.source, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
+  ops_for(pc.source, title_id, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
   if(!(!strcmp(op, "exfat") && can_exfat) && !(!strcmp(op, "ffpfsc") && can_ffpfsc) && !(!strcmp(op, "ffpkg") && can_ffpkg) &&
      !(is_fpkg_op(op) && can_fpkg)) {
     snprintf(err, err_len, "Diese Umwandlung gibt es für dieses Spiel nicht.");
@@ -2307,6 +2310,12 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
     errors++;
   }
 
+  /* Kraken Mount plays PS5 games (its release says so); the page does not offer it for a PS4 title, an older page or a hand-made request might
+     (review 28.11.2026: pc.ps4 names a PS4 folder only, an image is known by its title id) */
+  if((!strcmp(mode, "kraken") || (is_fpkg_op(op) && !strcmp(mode, "homebrew"))) && (pc.ps4 || !strncmp(title_id, "CUSA", 4))) {   /* FPKG + homebrew goes there too */
+    chk_add(arr, "kraken_ps4", "error", is_fpkg_op(op) ? "Wähle „Sicherung“." : "Wähle „Spielbar mit ShadowMountPlus“ oder „Sicherung“.", "Kraken Mount spielt PS5-Spiele, keine PS4-Spiele.");
+    errors++;
+  }
   /* a PS4 title only goes to a plugged-in drive */
   if(pc.ps4 && !image_drive_ok(mount)) {
     chk_add(arr, "ps4", "error", "Ein PS4-Titel aus dem Speicher der Konsole bringt sie zum Absturz.",
@@ -2338,11 +2347,10 @@ ps5tm_gameconvert_check(const char *title_id, const char *op, const char *mount,
        that was there before (or changed on its own page) may not name this one: the result would be written and never registered. One that
        still names the folder's old name FPKG-Games (Kraken Mount ran when the app was updated) is moved at the next start by the app. */
     if((!strcmp(mode, "kraken") || (is_fpkg_op(op) && !strcmp(mode, "homebrew"))) && ps5tm_kraken_searches(dir) == 0) {
-      char old_dir[160];
-      const int old_name = snprintf(old_dir, sizeof old_dir, "%s/%s", base, PS5TM_KRAKEN_GAMES_OLD) < (int)sizeof old_dir &&
-                           ps5tm_kraken_searches(old_dir) == 1;
+      /* only the app's own list is moved by toggling; a list changed by hand that names FPKG-Games stays (review 28.11.2026) */
+      const int old_name = ps5tm_kraken_config_old();
       chk_add(arr, "kraken_dir", "warn", old_name
-              ? "Kraken Mount einmal aus- und wieder einschalten (Reiter KrakenMount): Die App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine Suchordner um."
+              ? "Kraken Mount einmal aus- und wieder einschalten (Reiter KrakenMount): Die App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine Suchordner um. Läuft dabei ein Spiel oder ein Auftrag, oder hält Kraken Mount noch ein Abbild aus FPKG-Games, wartet sie damit; im zweiten Fall bis nach einem Neustart der Konsole."
               : "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern eintragen, sonst meldet es das Spiel nicht an.",
               "Kraken Mount sucht in %s nicht.", dir);
     }
@@ -2558,11 +2566,17 @@ ps5tm_gameconvert_start(const char *title_id, const char *op, int ampr_index, co
     return 404;
   }
   int can_exfat, can_ffpfsc, can_ffpkg, can_fpkg;
-  ops_for(source, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
+  ops_for(source, title_id, &can_exfat, &can_ffpfsc, &can_ffpkg, &can_fpkg);
   int want_exfat = !strcmp(op, "exfat"), want_ffpfsc = !strcmp(op, "ffpfsc"),
       want_ffpkg = !strcmp(op, "ffpkg"), want_fpkg = is_fpkg_op(op);
   if(!(want_exfat && can_exfat) && !(want_ffpfsc && can_ffpfsc) && !(want_ffpkg && can_ffpkg) && !(want_fpkg && can_fpkg)) {
     snprintf(err, err_len, "Diese Umwandlung gibt es für dieses Spiel nicht.");
+    return 400;
+  }
+  /* the check says it (kraken_ps4); the start holds it too, for a request that skipped the check (review 28.11.2026) */
+  if((!strcmp(mode, "kraken") || (want_fpkg && !strcmp(mode, "homebrew"))) &&
+     (!strncmp(title_id, "CUSA", 4) || (is_dir(source) && ps4_folder(source)))) {
+    snprintf(err, err_len, "Kraken Mount spielt PS5-Spiele, keine PS4-Spiele.");
     return 400;
   }
   if(want_fpkg && !ps5tm_dumpforge_installed(NULL, 0)) {

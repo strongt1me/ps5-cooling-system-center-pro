@@ -375,13 +375,16 @@ ps5tm_smp_call(const char *route, const cJSON *body, int timeout_ms,
   pthread_mutex_unlock(&g_lock);
   if(was_kraken) {
     cJSON *ver = post("/version", "{}", 1500);
-    const int still = answer_is_kraken(ver);
+    /* Only an answer that is ShadowMountPlus's own lets the request through. No answer in time (Kraken Mount busy with a scan) proves nothing: the
+       request would go to whoever holds the port (review 28.11.2026). */
+    const int smp_back = status_ok(ver) && !answer_is_kraken(ver), kraken = answer_is_kraken(ver);
     cJSON_Delete(ver);
-    if(still) {
-      snprintf(err, err_len, "ShadowMountPlus ist nicht erreichbar: Auf seinem Port antwortet Kraken Mount.");
+    if(!smp_back) {
+      snprintf(err, err_len, kraken ? "ShadowMountPlus ist nicht erreichbar: Auf seinem Port antwortet Kraken Mount." : "ShadowMountPlus antwortet nicht.");
       return NULL;
     }
     pthread_mutex_lock(&g_lock);
+    if(g_not_smp) PS5TM_WARN("smp_port_kraken", "Auf 127.0.0.1:10101 antwortet wieder ShadowMountPlus.");
     g_not_smp = 0;
     g_games_ms = 0;                             /* the list is asked again with ShadowMountPlus */
     pthread_mutex_unlock(&g_lock);

@@ -21,6 +21,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/mount.h>
+#include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -577,11 +579,11 @@ static int make_dir(const char *p);
 /* Writes `text` as Kraken Mount's config: into a file of its own and renamed, so that a full disk or a power cut never leaves half a config
    behind (audit 15.11.2026). 0 when done. */
 static int
-write_config(const char *text) {
+write_config(const char *text, size_t len) {
   const char *tmp = KR_CONFIG ".tmp";
-  FILE *f = fopen(tmp, "w");
+  FILE *f = fopen(tmp, "wb");                           /* by length: what was read is written back byte for byte (review 28.11.2026) */
   if(!f) { PS5TM_WARN("kraken_config", "%s ließ sich nicht anlegen: %s", KR_CONFIG, strerror(errno)); return -1; }
-  int ok = fputs(text, f) >= 0;
+  int ok = fwrite(text, 1, len, f) == len;
   ok = (fflush(f) == 0) && ok;
   if(ok) fsync(fileno(f));
   ok = (fclose(f) == 0) && ok;
@@ -611,8 +613,12 @@ migrate_folder(const char *base) {
     PS5TM_INFO("kraken_folder_renamed", "Inhalt von %s nach %s/%s verschoben (%u Einträge), der leere alte Ordner ist weg.", from, base, PS5TM_KRAKEN_GAMES, r.moved);
     break;
   case PS5TM_KRMIG_PARTLY:
-    PS5TM_WARN("kraken_folder_rename", "%s: %u Einträge nach %s verschoben, %u blieben (der Name ist dort schon vergeben, zum Beispiel %s).",
-               from, r.moved, PS5TM_KRAKEN_GAMES, r.kept, r.first_kept[0] ? r.first_kept : "?");
+    if(r.kept)
+      PS5TM_WARN("kraken_folder_rename", "%s: %u Einträge nach %s verschoben, %u blieben (der Name ist dort schon vergeben, zum Beispiel %s).",
+                 from, r.moved, PS5TM_KRAKEN_GAMES, r.kept, r.first_kept[0] ? r.first_kept : "?");
+    else
+      PS5TM_WARN("kraken_folder_rename", "%s: %u Einträge nach %s verschoben, der alte Ordner ließ sich noch nicht entfernen (%s). Beim nächsten Einschalten noch einmal.",
+                 from, r.moved, PS5TM_KRAKEN_GAMES, strerror(r.err));
     break;
   case PS5TM_KRMIG_FAILED:
     PS5TM_WARN("kraken_folder_rename", "%s ließ sich nicht in %s umbenennen: %s", from, PS5TM_KRAKEN_GAMES, strerror(r.err));
@@ -629,27 +635,126 @@ migrate_folder(const char *base) {
    config under the old name is rewritten, and the folders on the internal storage and on the drives there now are renamed; with the new list (or no
    config yet, which seed_config then writes) the folders are renamed too, so a drive that was not there last time follows at the next start. A list
    changed by hand is left alone, and so are its folders. */
+/* Is it safe to rename now? Kraken Mount must really be gone (alive: the answer of its /api/state; anything but "nothing listens" may be a
+   program that is there and busy), none of its image mounts may be left (they outlive a stop, and their records name the old paths), no game
+   may run (one of its own would, after a crash of Kraken Mount, still read from the old folder) and no job of the app may work (a copy or a
+   conversion into the folder would lose its path). Otherwise it waits for the next start (review 28.11.2026). */
+/* 1 only when the connection to Kraken Mount's port is refused: nothing listens. lhttp's -1 also stands for a full backlog, a failed socket or
+   an answer that is no HTTP, and a program that hangs must not have its folders renamed under it (review 28.11.2026). */
+static int
+port_refused(void) {
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if(fd < 0) return 0;
+  struct sockaddr_in sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sin_family = AF_INET;
+  sa.sin_port = htons(KR_PORT);
+  sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  struct timeval tv = { 2, 0 };
+  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
+  const int rc = connect(fd, (struct sockaddr *)&sa, sizeof sa);
+  const int refused = rc != 0 && errno == ECONNREFUSED;
+  close(fd);
+  return refused;
+}
+
+static int
+migrate_safe(int alive) {
+  if(alive != -1 || !port_refused()) return 0;
+  char why[160];
+  if(ps5tm_any_job_running(why, sizeof why)) return 0;
+  /* A game: the kernel says it where it can (it does not count the app's own tiles: "Einschalten" is pressed from one); else only a fresh reading
+     that says "kein Spiel" counts as none, as smphold.c takes it (a probe switched off or stuck, a title without a name: a game may run) */
+  if(ps5tm_procmgr_appinfo_ready()) {
+    char t[16] = { 0 };
+    if(ps5tm_procmgr_game_title(0, t, sizeof(t)) == 0 && t[0]) return 0;
+    /* "none" is also what a process table that could not be read gives: a fresh reading that names a game counts too */
+    ps5tm_gamestate_t gs;
+    ps5tm_gamestate_get(&gs);
+    if(ps5tm_gamestate_measured() && ps5tm_gamestate_age_ms() <= 15000 && gs.title_id[0]) return 0;
+  } else {
+    if(!ps5tm_gamestate_measured() || ps5tm_gamestate_age_ms() > 15000) return 0;
+    ps5tm_gamestate_t gs;
+    ps5tm_gamestate_get(&gs);
+    if(gs.title_id[0] || !gs.state || strcmp(gs.state, "kein Spiel") != 0) return 0;
+  }
+  /* An image Kraken Mount still holds out of an old folder (its mounts outlive a stop; /data/krakenmount/images/<name> = "<unit>\n<image>"):
+     the folder under it is not renamed. A mount of an image that lies elsewhere does not matter; a record that cannot be read counts as held. */
+  int count = getfsstat(NULL, 0, MNT_NOWAIT);
+  if(count < 0) return 0;
+  if(count == 0) return 1;
+  struct statfs *list = malloc(sizeof(*list) * (size_t)(count + 16));
+  if(!list) return 0;
+  count = getfsstat(list, (long)(sizeof(*list) * (size_t)(count + 16)), MNT_NOWAIT);
+  int held = count < 0;
+  for(int i = 0; i < count && !held; i++) {
+    /* Anything mounted out of an old folder (a game of Kraken Mount, also a homebrew one without a PPSA/CUSA id, is put into its sandbox
+       by a nullfs of its folder while it runs): held (review 28.11.2026). */
+    const char *from = list[i].f_mntfromname, *hit = strstr(from, "/" PS5TM_KRAKEN_GAMES_OLD);
+    if(hit && (hit[sizeof(PS5TM_KRAKEN_GAMES_OLD)] == '/' || hit[sizeof(PS5TM_KRAKEN_GAMES_OLD)] == 0)) { held = 1; break; }
+    const char *on = list[i].f_mntonname;
+    if(strncmp(on, "/mnt/krakenmount/", 17) || !on[17] || strchr(on + 17, '/')) continue;
+    char rec[sizeof(PS5TM_KRAKEN_DATA "/images/") + sizeof(list[0].f_mntonname)], buf[1100];
+    snprintf(rec, sizeof rec, PS5TM_KRAKEN_DATA "/images/%s", on + 17);
+    int fd = open(rec, O_RDONLY | O_NONBLOCK);
+    ssize_t got = fd >= 0 ? read(fd, buf, sizeof(buf) - 1) : -1;
+    if(fd >= 0) close(fd);
+    if(got <= 0) { held = 1; break; }
+    buf[got] = 0;
+    held = strstr(buf, "/" PS5TM_KRAKEN_GAMES_OLD "/") != NULL;
+  }
+  free(list);
+  return !held;
+}
+
 static void
-migrate_folders(void) {
+migrate_folders(int alive) {
+  /* a config that is there and cannot be read says nothing: the folders stay (review 28.11.2026: it used to count as "no config") */
+  struct stat cst;
+  const int sr = stat(KR_CONFIG, &cst);
+  if(sr != 0 && errno != ENOENT) return;
+  const int have_cfg = sr == 0 && cst.st_size > 0;
   unsigned char *raw = NULL;
   size_t len = 0;
-  int kind = PS5TM_KRMIG_CFG_NEW;                        /* no config: seed_config writes the new list */
-  if(read_file(KR_CONFIG, &raw, &len, 256 * 1024) == 0) {
+  int kind = PS5TM_KRMIG_CFG_NEW;                        /* no config (or an empty one): seed_config writes the new list */
+  if(have_cfg) {
+    if(read_file(KR_CONFIG, &raw, &len, 256 * 1024) != 0) return;
+    if(memchr(raw, 0, len)) { free(raw); return; }     /* no text: nothing is rewritten, nothing renamed */
     char *out = NULL;
     kind = ps5tm_krmig_config((const char *)raw, len, &out);
+    if(kind != PS5TM_KRMIG_CFG_OTHER && !migrate_safe(alive)) {
+      static int said;
+      if(kind == PS5TM_KRMIG_CFG_OLD && !said++)
+        PS5TM_INFO("kraken_folder_wait", "Der Ordner %s wird erst umbenannt, wenn kein Spiel und kein Auftrag läuft und Kraken Mount kein Abbild mehr hält.", PS5TM_KRAKEN_GAMES_OLD);
+      free(out);
+      free(raw);
+      return;
+    }
     if(kind == PS5TM_KRMIG_CFG_OLD) {
-      if(out && write_config(out) == 0)
+      if(out && write_config(out, strlen(out)) == 0)
         PS5TM_INFO("kraken_config", "Suchordner von Kraken Mount umgestellt: %s heißt jetzt %s.", PS5TM_KRAKEN_GAMES_OLD, PS5TM_KRAKEN_GAMES);
       else
         kind = PS5TM_KRMIG_CFG_OTHER;                   /* the list still names the old folders: they stay */
     }
     free(out);
     free(raw);
+  } else if(!migrate_safe(alive)) {
+    return;
   }
   if(kind == PS5TM_KRMIG_CFG_OTHER) return;
   migrate_folder("/data");
   for(int i = 0; i < 8; i++) { char b[16]; snprintf(b, sizeof b, "/mnt/usb%d", i); migrate_folder(b); }
   for(int i = 0; i < 2; i++) { char b[16]; snprintf(b, sizeof b, "/mnt/ext%d", i); migrate_folder(b); }
+}
+
+int
+ps5tm_kraken_config_old(void) {
+  unsigned char *raw = NULL;
+  size_t len = 0;
+  if(read_file(KR_CONFIG, &raw, &len, 256 * 1024) != 0) return 0;
+  const int kind = ps5tm_krmig_config((const char *)raw, len, NULL);
+  free(raw);
+  return kind == PS5TM_KRMIG_CFG_OLD;
 }
 
 static void
@@ -661,7 +766,7 @@ seed_config(void) {
   char line[640], buf[900];
   if(ps5tm_krmig_scanpath(KR_FPKG_FOLDER, line, sizeof line) != 0) return;
   if(snprintf(buf, sizeof buf, "# search folders set by the app (page KrakenMount); ShadowMountPlus does not search them\n%s\n", line) >= (int)sizeof buf) return;
-  if(write_config(buf) != 0) return;
+  if(write_config(buf, strlen(buf)) != 0) return;
   PS5TM_INFO("kraken_config", "Suchordner für Kraken Mount angelegt: /data/%s und %s auf den Laufwerken.", KR_FPKG_FOLDER, KR_FPKG_FOLDER);
 }
 
@@ -691,7 +796,7 @@ start_kraken(char *msg, size_t n, int by_person) {
   pthread_mutex_unlock(&g_lock);
   if(again) { snprintf(msg, n, "Kraken Mount wird gerade gestartet. Das dauert einige Sekunden."); return 409; }
   keep_tile_away();
-  migrate_folders();                                     /* FPKG-Games -> Kraken-Games, while it does not run (27.11.2026) */
+  migrate_folders(alive);                                /* FPKG-Games -> Kraken-Games, while it does not run (27.11.2026) */
   seed_config();
   unsigned char *elf = NULL;
   size_t elf_len = 0;

@@ -1009,6 +1009,9 @@ int ps5tm_kraken_games(ps5tm_kraken_game_t *out, int max);
 void ps5tm_kraken_cache_dir(char *out, size_t n);
 /* Does Kraken Mount search this folder (its settings name it under scanpath)? 1 yes; 0 it runs and does not; -1 not running or not known. */
 int ps5tm_kraken_searches(const char *folder);
+/* 1 when Kraken Mount's config still names the app's own folders under the old name FPKG-Games (the app moves them to Kraken-Games the next
+   time it starts Kraken Mount, kraken.c migrate_folders); 0 for every other list: toggling Kraken Mount changes nothing then. */
+int ps5tm_kraken_config_old(void);
 
 /* Titles two mounters want at once (src/mounters.c, 14.11.2026): a game Kraken Mount lists that ShadowMountPlus (a folder or an image) or
    PS4Mount manages too. Both write /user/app/<ID> and mount /system_ex/app/<ID>; ShadowMountPlus also rewrites the param.json. An array of

@@ -115,51 +115,141 @@ const char *level_short(int level)
     }
 }
 
-// The words under "Ziel" (one line): what the chosen kind does. An FPKG is not for ShadowMountPlus,
-// a PS4 game is not for Kraken Mount (27.11.2026); a kind that does not fit is never chosen, the row
-// says why at the one that is.
-std::string mode_text(int mode, bool fpkg, bool ps4)
+// What decides which kinds of target the row "Ziel" offers (28.11.2026). An FPKG is not for
+// ShadowMountPlus, a PS4 game is not for Kraken Mount; an older app on the console does not know the
+// kind "kraken" (its plan names no such target): then B is not there, and an FPKG goes through A as it
+// did (to that app's FPKG-Games).
+struct ModeRules
+{
+    bool fpkg = false;
+    bool ps4 = false;
+    bool has_kraken = false;
+};
+
+ModeRules rules_of(Tool tool, const Plan &plan, const PlanChoice &choice)
+{
+    ModeRules r;
+    r.fpkg = tool == Tool::convert && choice.op == kOpFpkg;
+    // the copy plan carries no "ps4": the title id says it
+    r.ps4 = plan.ps4 || plan.id.rfind("CUSA", 0) == 0;
+    for (const PlanDrive &d : plan.drives)
+    {
+        if (d.copy[static_cast<std::size_t>(kModeKraken)].present)
+            r.has_kraken = true;
+        for (const PlanDest &dest : d.convert[static_cast<std::size_t>(kModeKraken)])
+        {
+            if (dest.present)
+                r.has_kraken = true;
+        }
+    }
+    return r;
+}
+
+bool mode_fits(int mode, const ModeRules &r)
+{
+    if (mode == kModeKraken)
+        return r.has_kraken && !r.ps4;
+    if (mode == kModeHomebrew)
+        return !(r.fpkg && r.has_kraken);
+    return mode == kModeBackup;
+}
+
+const char *mode_label(int mode)
 {
     switch (mode)
     {
     case kModeHomebrew:
-        return ps4 ? "Ordner homebrew: ShadowMountPlus bindet es ein. Kraken Mount spielt keine "
-                     "PS4-Spiele."
-                   : "Ordner homebrew: ShadowMountPlus bindet es ein.";
+        return "A · Spielbar mit ShadowMountPlus";
     case kModeKraken:
-        return fpkg ? "Ordner Kraken-Games: Kraken Mount meldet es an. ShadowMountPlus bindet kein "
-                      "FPKG ein."
-                    : "Ordner Kraken-Games: Kraken Mount meldet es an, ShadowMountPlus sucht dort "
-                      "nicht.";
-    case kModeBackup:
-        return "Ordner PS5-Sicherung/Spiele: nur aufbewahrt.";
+        return "B · Spielbar mit Kraken Mount";
     default:
-        return "A: ShadowMountPlus · B: Kraken Mount · C: nur aufbewahrt";
+        return "C · Sicherung";
     }
 }
 
-// The row "Ziel" lists "bitte wählen", then the kinds in kModeOrder; the number of a kind and its
-// place in the row.
-int mode_of_choice(int index)
+// The row "Ziel" lists "bitte wählen", then the kinds that fit, in kModeOrder: a kind that does not fit
+// is not there at all (a row that jumped back made the ones behind it unreachable going forward).
+std::vector<std::string> mode_choices(const ModeRules &r)
 {
-    return index >= 1 && index <= kModes ? kModeOrder[index - 1] : -1;
+    std::vector<std::string> out = {"bitte wählen"};
+    for (const int mode : kModeOrder)
+    {
+        if (mode_fits(mode, r))
+            out.emplace_back(mode_label(mode));
+    }
+    return out;
 }
 
-int choice_of_mode(int mode)
+int mode_of_choice(int index, const ModeRules &r)
 {
-    for (int i = 0; i < kModes; ++i)
+    int at = 0;
+    for (const int mode : kModeOrder)
     {
-        if (kModeOrder[i] == mode)
-            return i + 1;
+        if (mode_fits(mode, r) && ++at == index)
+            return mode;
+    }
+    return -1;
+}
+
+int choice_of_mode(int mode, const ModeRules &r)
+{
+    int at = 0;
+    for (const int m : kModeOrder)
+    {
+        if (!mode_fits(m, r))
+            continue;
+        ++at;
+        if (m == mode)
+            return at;
     }
     return 0;
 }
 
-// A kind that does not fit the result: ShadowMountPlus does not mount an FPKG, Kraken Mount does not
-// play a PS4 game.
-bool mode_fits(int mode, bool fpkg, bool ps4)
+// The kind after the format or the plan changed: one that no longer fits is given up; an FPKG takes
+// Kraken Mount's folder from the start (ShadowMountPlus does not mount a .pkg), the person can still
+// pick the backup.
+int settled_mode(int mode, const ModeRules &r)
 {
-    return !(fpkg && mode == kModeHomebrew) && !(ps4 && mode == kModeKraken);
+    if (mode >= 0 && !mode_fits(mode, r))
+        mode = -1;
+    if (mode < 0 && r.fpkg && mode_fits(kModeKraken, r))
+        mode = kModeKraken;
+    return mode;
+}
+
+// The words under "Ziel" (one line): what the chosen kind does, and why one is missing.
+std::string mode_text(int mode, const ModeRules &r)
+{
+    switch (mode)
+    {
+    case kModeHomebrew:
+        if (r.fpkg)
+            return "Ordner FPKG-Games: Kraken Mount meldet es an.";
+        return r.ps4 ? "Ordner homebrew: ShadowMountPlus bindet es ein. Kraken Mount spielt keine "
+                       "PS4-Spiele."
+                     : "Ordner homebrew: ShadowMountPlus bindet es ein.";
+    case kModeKraken:
+        return r.fpkg ? "Ordner Kraken-Games: Kraken Mount meldet es an. ShadowMountPlus bindet "
+                        "kein FPKG ein."
+                      : "Ordner Kraken-Games: Kraken Mount meldet es an, ShadowMountPlus sucht dort "
+                        "nicht.";
+    case kModeBackup:
+        return "Ordner PS5-Sicherung/Spiele: nur aufbewahrt.";
+    default:
+        break;
+    }
+    // nothing chosen yet: the kinds on offer, parts divided by " · " (each one is looked up)
+    std::string out;
+    for (const int m : kModeOrder)
+    {
+        if (!mode_fits(m, r))
+            continue;
+        out += out.empty() ? "" : " · ";
+        out += m == kModeHomebrew ? "A: ShadowMountPlus"
+               : m == kModeKraken ? "B: Kraken Mount"
+                                  : "C: nur aufbewahrt";
+    }
+    return out;
 }
 
 std::string verify_text(bool quick, bool fpkg)
@@ -617,6 +707,8 @@ void GameTools::build_form(int keep_focus)
     op_index_.clear();
     if (!plan_.ok)
         return;
+    // FPKG as the first or only format, a plan that came anew: the kind is settled before the row shows it
+    choice_.mode = settled_mode(choice_.mode, rules_of(tool_, plan_, choice_));
     const auto add_drives = [this](const char *header)
     {
         form_.add_header(header);
@@ -630,12 +722,9 @@ void GameTools::build_form(int keep_focus)
     const auto add_mode = [this](const char *header)
     {
         form_.add_header(header);
-        form_
-            .add_choice(kRowMode, "Ziel",
-                        {"bitte wählen", "A · Spielbar mit ShadowMountPlus",
-                         "B · Spielbar mit Kraken Mount", "C · Sicherung"},
-                        choice_of_mode(choice_.mode))
-            .description = mode_text(choice_.mode, choice_.op == kOpFpkg, plan_.ps4);
+        const ModeRules rules = rules_of(tool_, plan_, choice_);
+        form_.add_choice(kRowMode, "Ziel", mode_choices(rules), choice_of_mode(choice_.mode, rules))
+            .description = mode_text(choice_.mode, rules);
     };
     int first = kRowStart;
     switch (tool_)
@@ -828,7 +917,7 @@ void GameTools::refresh()
     }
     // the words under "Ziel" follow the kind chosen (copy and convert)
     if (ui::FormRow *row = form_.row(kRowMode))
-        row->description = mode_text(choice_.mode, choice_.op == kOpFpkg, plan_.ps4);
+        row->description = mode_text(choice_.mode, rules_of(tool_, plan_, choice_));
     if (tool_ == Tool::convert)
     {
         request_check();
@@ -1191,17 +1280,11 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
     if (event == ui::Event::changed)
     {
         if (id == kRowMode)
-        {
-            const int mode = mode_of_choice(form_.choice_index(kRowMode));
-            // a kind that does not fit stays unchosen: the row goes back, its words say why
-            if (mode_fits(mode, choice_.op == kOpFpkg, plan_.ps4))
-                choice_.mode = mode;
-            else
-                form_.set_choice(kRowMode, choice_of_mode(choice_.mode));
-        }
+            choice_.mode = mode_of_choice(form_.choice_index(kRowMode), rules_of(tool_, plan_, choice_));
         else if (id == kRowOp)
         {
             const bool had_pack_rows = pack_rows(plan_, choice_.op);
+            const bool was_fpkg = choice_.op == kOpFpkg;
             const int index = form_.choice_index(kRowOp);
             const bool known = index >= 0 && index < static_cast<int>(op_index_.size());
             choice_.op = known ? op_index_[static_cast<std::size_t>(index)].first : -1;
@@ -1209,17 +1292,10 @@ void GameTools::handle(const InputFrame &input, ui::Feedback &feedback)
             if (ui::FormRow *row = form_.row(kRowOp))
                 row->description =
                     choice_.op >= 0 ? op_text(plan_, choice_.op, choice_.level) : std::string();
-            // FPKG: Kraken Mount's folder Kraken-Games is the right place, so it is chosen from the
-            // start (the person can still pick C); ShadowMountPlus does not mount a .pkg
-            if (choice_.op == kOpFpkg && (choice_.mode < 0 || choice_.mode == kModeHomebrew) &&
-                form_.row(kRowMode))
-            {
-                choice_.mode = kModeKraken;
-                form_.set_choice(kRowMode, choice_of_mode(kModeKraken));
-            }
-            // the rows of packing stand under exFAT and ffpkg only: the form is built anew where
-            // they come or go, with the focus on the format
-            if (pack_rows(plan_, choice_.op) != had_pack_rows)
+            // The row "Ziel" lists other kinds for an FPKG (no ShadowMountPlus), and the rows of packing
+            // stand under exFAT and ffpkg only: the form is built anew where either changes, with the
+            // focus on the format (build_form settles the kind: an FPKG takes Kraken-Games).
+            if (pack_rows(plan_, choice_.op) != had_pack_rows || (choice_.op == kOpFpkg) != was_fpkg)
                 build_form(kRowOp);
         }
         else if (id == kRowPack)
@@ -1778,6 +1854,22 @@ void GameTools::draw_side(ui::Canvas &canvas, const Rect &box) const
                               ? " (" + format_bytes(dest->unfinished_bytes) + " werden dabei frei)."
                               : std::string(".")),
                      kWarning, 3);
+        }
+        if (const PlanDest *dest = dest_of(plan_, choice_);
+            choice_.mode == kModeKraken && dest != nullptr && dest->not_searched)
+        {
+            // Kraken Mount's list of folders was changed on its own page and does not name this one
+            const std::string::size_type cut = dest->path.rfind('/');
+            para("Kraken Mount sucht in " + dest->path.substr(0, cut) + " nicht.", kWarning, 2);
+            para(dest->config_old
+                     ? "Kraken Mount einmal aus- und wieder einschalten (Reiter KrakenMount): Die "
+                       "App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine "
+                       "Suchordner um. Läuft dabei ein Spiel oder ein Auftrag, oder hält Kraken "
+                       "Mount noch ein Abbild aus FPKG-Games, wartet sie damit; im zweiten Fall bis "
+                       "nach einem Neustart der Konsole."
+                     : "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern "
+                       "eintragen, sonst meldet es das Spiel nicht an.",
+                 kWarning, 6);
         }
         if (choice_.mode == kModeKraken && (!orig_side || choice_.orig == kOrigKeep))
             para("Das Original und das Ergebnis haben beide die Titel-ID " + plan_.id +

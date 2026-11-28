@@ -6307,6 +6307,12 @@
         if (n === "mv-dest") mv.dest = e.target.value;
         if (n === "cv-drive") cv.drive = e.target.value;
         if (n === "cv-mode") cv.mode = e.target.value;
+        /* eine Art, die es für dieses Spiel und Format nicht gibt, bleibt nicht still gewählt (Prüfung 28.11.2026) */
+        const cvDropMode = () => {
+          if (!cv.plan) return;
+          const fpkg = cvIsFpkg(cv.op), hk = planHasKraken(cv.plan), p4 = planIsPs4(cv.plan);
+          if ((cv.mode === "homebrew" && fpkg && (hk || p4)) || (cv.mode === "kraken" && (p4 || !hk))) cv.mode = "";
+        };
         if (n === "cv-ampr") cv.ampr = e.target.checked;
         if (n === "cv-verify") cv.verify = e.target.value;
         if (n === "cv-pk") cv.pack = e.target.value;
@@ -6316,7 +6322,8 @@
           if (e.target.value === "unpack") { mvOpen(cv.id, "unpack"); return; }
           cv.op = e.target.value === "fpkg" ? (cv.fl || "fpkg") : e.target.value;   /* the format "FPKG" carries the level chosen last */
           /* FPKG: Kraken Mount's folder Kraken-Games is the right place, chosen from the start (ShadowMountPlus does not mount a .pkg) */
-          if (cvIsFpkg(cv.op) && (!cv.mode || cv.mode === "homebrew")) cv.mode = "kraken";
+          if (cvIsFpkg(cv.op) && (!cv.mode || cv.mode === "homebrew") && cv.plan && planHasKraken(cv.plan) && !planIsPs4(cv.plan)) cv.mode = "kraken";
+          cvDropMode();
         }
         if (n === "cv-fl") { cv.fl = e.target.value; cv.op = e.target.value; }
         if (n.startsWith("mv-")) mvRenderPlan();
@@ -6329,17 +6336,25 @@
 
   /* „Als was?“ beim Kopieren und Konvertieren (27.11.2026): spielbar mit ShadowMountPlus (homebrew), spielbar mit Kraken Mount (Kraken-Games, Reiter
      KrakenMount: .pkg, Spielordner und Abbilder) oder nur aufbewahrt. Ein FPKG bindet ShadowMountPlus nicht ein, ein PS4-Spiel spielt Kraken Mount nicht. */
-  const playModes = (name, cur, fpkg, ps4) => `
-        <label class="cp-choice${fpkg ? " off" : ""}">
-          <input type="radio" name="${name}" value="homebrew" ${cur === "homebrew" && !fpkg ? "checked" : ""} ${fpkg ? "disabled" : ""}>
+  /* Ein PS4-Spiel: der Plan des Konvertierens nennt es nur bei Ordnern (ps4), der des Kopierens gar nicht; die Spieleliste und die Titel-ID sagen es
+     auch bei einem Abbild (Prüfung 28.11.2026). */
+  const planIsPs4 = (p) => !!p.ps4 || /^CUSA/.test(p.title_id || "") || (gm.list.find((x) => x.title_id === p.title_id) || {}).platform === "PS4";
+  /* Nennt der Plan das Ziel „kraken“? Eine ältere App auf der Konsole (die Seite ist neuer als sie) kennt es nicht: B ist dann gesperrt, ein FPKG geht
+     wie früher über A. */
+  const planHasKraken = (p) => Array.isArray(p.targets) && p.targets.some((d) => d && d.kraken);
+  const playModes = (name, cur, fpkg, ps4, hasKraken = true) => `
+        <label class="cp-choice${fpkg && hasKraken ? " off" : ""}">
+          <input type="radio" name="${name}" value="homebrew" ${cur === "homebrew" && !(fpkg && hasKraken) ? "checked" : ""} ${fpkg && hasKraken ? "disabled" : ""}>
           <span class="cp-choice-text"><b>A · Spielbar mit ShadowMountPlus</b>
-            <span class="muted">${fpkg ? "ShadowMountPlus bindet kein FPKG (.pkg) ein."
+            <span class="muted">${fpkg && !hasKraken ? "Ordner FPKG-Games: Kraken Mount meldet es an."
+              : fpkg ? "ShadowMountPlus bindet kein FPKG (.pkg) ein."
               : `In den Ordner <code>homebrew</code> des Ziels. ShadowMountPlus findet das Spiel dort und bindet es ein.`}</span></span>
         </label>
-        <label class="cp-choice${ps4 ? " off" : ""}">
-          <input type="radio" name="${name}" value="kraken" ${cur === "kraken" && !ps4 ? "checked" : ""} ${ps4 ? "disabled" : ""}>
+        <label class="cp-choice${ps4 || !hasKraken ? " off" : ""}">
+          <input type="radio" name="${name}" value="kraken" ${cur === "kraken" && !ps4 && hasKraken ? "checked" : ""} ${ps4 || !hasKraken ? "disabled" : ""}>
           <span class="cp-choice-text"><b>B · Spielbar mit Kraken Mount</b>
             <span class="muted">${ps4 ? "Kraken Mount spielt PS5-Spiele, keine PS4-Spiele."
+              : !hasKraken ? "Die App auf der Konsole kennt dieses Ziel noch nicht (ältere Fassung). Die App aktualisieren oder die Seite neu laden."
               : `In den Ordner <code>Kraken-Games</code> des Ziels (intern, M.2-SSD oder USB). Kraken Mount (Reiter „KrakenMount“) findet das Spiel dort und meldet es an; ShadowMountPlus sucht dort nicht.`}</span></span>
         </label>
         <label class="cp-choice">
@@ -6403,7 +6418,7 @@
           ? ` · ${num(p.skipped)} Verknüpfungen oder Sonderdateien bleiben weg` : ""}</span></p>
 
       <h4 class="cp-step">1. Als was?</h4>
-      <div class="cp-list">${playModes("cp-mode", cp.mode, false, !!p.ps4 || /^CUSA/.test(p.title_id || ""))}
+      <div class="cp-list">${playModes("cp-mode", cp.mode, false, planIsPs4(p), planHasKraken(p))}
       </div>
       ${cp.mode === "kraken" ? krakenTwinWarn(p.title_id)
         : cp.mode === "homebrew" && !ogOffered(cp.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
@@ -6419,6 +6434,10 @@
       ${dest ? `<p class="cp-dest"><span class="muted">Ziel</span> <code>${esc(dest.path)}</code>
         ${dest.unfinished ? `<span class="cp-why">Dort liegt eine abgebrochene Kopie dieser App, sie wird ersetzt${
           dest.unfinished_bytes > 0 ? ` (${bytes(dest.unfinished_bytes)} werden dabei frei)` : ""}.</span>` : ""}</p>` : ""}
+      ${dest && cp.mode === "kraken" && dest.not_searched ? `<div class="cp-warn"><b>Kraken Mount sucht in ${
+        esc(dest.path.slice(0, dest.path.lastIndexOf("/")))} nicht.</b>
+        <span>${dest.config_old ? "Kraken Mount einmal aus- und wieder einschalten (Reiter KrakenMount): Die App benennt den Ordner FPKG-Games dann in Kraken-Games um und stellt seine Suchordner um. Läuft dabei ein Spiel oder ein Auftrag, oder hält Kraken Mount noch ein Abbild aus FPKG-Games, wartet sie damit; im zweiten Fall bis nach einem Neustart der Konsole."
+          : "Den Ordner auf der Seite von Kraken Mount (Port 8097) bei den Suchordnern eintragen, sonst meldet es das Spiel nicht an."}</span></div>` : ""}
       ${blockedRun ? `<p class="cp-err">${esc(blockedRun)}</p>` : ""}
       ${dest ? `<p class="muted">Jede Datei wird gleich nach dem Schreiben vom Ziel zurückgelesen und mit
         dem Original verglichen; das dauert etwa noch einmal so lange wie das Kopieren. Daneben entsteht
@@ -7194,7 +7213,7 @@
       </label>` : ""}
 
       <h4 class="cp-step">2. Als was?</h4>
-      <div class="cp-list">${playModes("cv-mode", cv.mode, cvIsFpkg(cv.op), !!p.ps4)}
+      <div class="cp-list">${playModes("cv-mode", cv.mode, cvIsFpkg(cv.op), planIsPs4(p), planHasKraken(p))}
       </div>
       ${cv.mode === "kraken" ? krakenTwinWarn(p.title_id)
         : cv.mode === "homebrew" && !ogOffered(cv.id) ? `<div class="cp-warn"><b>⚠ ShadowMountPlus findet das Spiel
@@ -7502,6 +7521,7 @@
       if (seq !== dlg.seq || !$("#cp-overlay")) return;
       cv.plan = plan;
       cv.op = plan.ops.find((op) => CV_OPS[op] && !cvOpWhy(plan, op)) || "";
+      if (cvIsFpkg(cv.op) && planHasKraken(plan) && !planIsPs4(plan)) cv.mode = "kraken";   /* FPKG als erstes Format: B von Anfang an */
       const first = plan.targets.find((d) => !d.source_here && d.enough_space && !d.fat32_too_big)
                  || plan.targets.find((d) => d.enough_space && !d.fat32_too_big);
       cv.drive = first ? first.mount : "";

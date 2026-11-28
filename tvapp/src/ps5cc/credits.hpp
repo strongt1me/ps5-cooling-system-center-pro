@@ -67,8 +67,7 @@ inline constexpr Credit kCredits[] = {
      "AMPR EMU NG: eine Weiterentwicklung von ampr_emu, die auch zstd-Pakete liest. Die zwei "
      "neuesten Fassungen (0.5.1 und 0.5.0) stecken eingebettet in der App, neuere lädt sie auf "
      "Knopfdruck. Kraken Mount: das Programm hinter dem Reiter „KrakenMount“, es spielt "
-     "(F)PKG-Spiele "
-     "ohne Installation. Danke!"},
+     "FPKG, Spielordner und Abbilder ohne Installation. Danke!"},
     {"Zusammenspiel, Wissen und Vorbilder", "", "Knutwurst", "@knutwurst",
      "PatchDL: Die eigene Namensauflösung und der HTTPS-Abruf der App (für den Payload-Store) "
      "stammen daraus. Danke!"},
