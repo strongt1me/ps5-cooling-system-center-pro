@@ -2,7 +2,7 @@
 
 > **This changelog is in German.** The release notes on the [Releases page](https://github.com/strongt1me/ps5-cooling-system-center-pro/releases) are in English, with the German version folded below them.
 
-## Unveröffentlicht
+## v1.98.0 – 28.11.2026
 
 ### Fremdbaustein: Kraken Mount v0.4.2 (quer3q, 27.11.2026; Hinweis des Users, 27.11.2026)
 - **Kraken Mount 0.4.1 → 0.4.2** eingebettet (7.601.584 Bytes, SHA-256 gleich `SHA256SUMS`). Die drei Änderungen der App (kein Warten auf ShadowMountPlus, keine eigene Update-Abfrage, Port 18097 statt 10101) greifen unverändert an je zwei Stellen.
