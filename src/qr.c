@@ -1,7 +1,8 @@
 /* A QR code for the address of the web interface (08.10.2026), so that a phone gets in by pointing its camera at the
  * screen (System page).
  *
- * Adapted from qr.c of webhb 0.4.1 (https://github.com/slopmaster33/webhb, Copyright (C) 2026 slopmaster33, GPL-3.0-or-later):
+ * Adapted from qr.c of webhb 0.4.1 (Copyright (C) 2026 slopmaster33, GPL-3.0-or-later; the webhb repository is not public,
+ * its release is pinned in webhb.lock of https://github.com/EchoStretch/ps5-app-dumper, checked on 28.11.2026):
  * byte mode, error correction level M, versions 1 to 6 (up to 106 bytes), mask 0, written after ISO 18004. Changes: the
  * name of the function and its header, nothing in the encoding. The test (a decoder reading the pictures back) is this
  * project's own.

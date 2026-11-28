@@ -98,7 +98,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="PS4-spel från USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Spel: bibliotek i kompakt vy (standard) med start, kopiering, konvertering</sub></td>
+    <td align="center"><sub>Spel: bibliotek i kompakt vy med start, kopiering, konvertering</sub></td>
     <td align="center"><sub>PS4 PKG från USB: fake-PKG utan installation</sub></td>
   </tr>
   <tr>
@@ -124,7 +124,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Temperaturhistorik, sensorer och profiler per spel"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Fläktkurva, temperaturhistorik och sensorer"></td>
     <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Säkerhetskopiering av spelsparningar"></td>
   </tr>
   <tr>
@@ -137,10 +137,10 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   </tr>
   <tr>
     <td><img src="docs/images/en/spiele-gross.jpg" alt="Spel i stor vy"></td>
-    <td align="center" valign="middle"><sub>Spel i stor vy: stora omslag, knappar med text (växlas på sidan Spel)</sub></td>
+    <td align="center" valign="middle"><sub>Spel i stor vy (standard): stora omslag, knappar med text (växlas på sidan Spel)</sub></td>
   </tr>
 </table>
-<sub>Alla bilder använder exempeldata och påhittade spel och togs med tidigare versioner; gränssnittet visas på engelska.</sub>
+<sub>Alla bilder använder exempeldata och påhittade spel och togs med version 1.99.0; gränssnittet visas på engelska.</sub>
 </details>
 
 ### Vyer i helskärmsappen
@@ -152,7 +152,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
   </tr>
   <tr>
     <td align="center"><sub>Spel: bibliotek med start, detaljer och åtgärder</sub></td>
-    <td align="center"><sub>Filhanterare: kopiering med hastighet och återstående tid</sub></td>
+    <td align="center"><sub>Filhanterare: en mapp på USB-enheten</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Helskärmsapp: payloads"></td>
@@ -163,7 +163,7 @@ En app, två sätt att använda den. Helskärmsappen kan nästan allt som webbap
     <td align="center"><sub>Speltid med dagsöversikt</sub></td>
   </tr>
 </table>
-<sub>Alla bilder använder exempeldata och påhittade spel och togs med tidigare versioner; gränssnittet visas på engelska.</sub>
+<sub>Alla bilder använder exempeldata och påhittade spel och togs med version 1.99.0; gränssnittet visas på engelska.</sub>
 
 <details>
 <summary><b>Alla funktioner i detalj</b></summary>
@@ -321,7 +321,7 @@ Det här projektet står på axlarna av PS5-homebrew-gemenskapen. **Tack!** Ett 
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) och de som bidrar till [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT-, PFS- och PFSC-avbilder.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): förebilden för UFS2-/ffpkg-skrivaren.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-asset-paket, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) och [dlc_emu](https://github.com/drakmor/dlc_emu) (inbyggda versioner, GPL-3.0).
-- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), en vidareutveckling av ampr_emu som också läser zstd-paket (0.5.1 och 0.5.0 inbyggda, nyare på begäran); [Kraken Mount](https://github.com/quer3q/kraken-mount), programmet bakom fliken ”KrakenMount” (inbyggt, ändrat i några få byte för att köras bredvid ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), motorn för FPKG och för packning vid konvertering (inbyggt oförändrat). Appens zstd-paket och fejksignering följer deras format.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0-or-later): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), en vidareutveckling av ampr_emu som också läser zstd-paket (0.5.1 och 0.5.0 inbyggda, nyare på begäran); [Kraken Mount](https://github.com/quer3q/kraken-mount), programmet bakom fliken ”KrakenMount” (inbyggt, ändrat i några få byte för att köras bredvid ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), motorn för FPKG och för packning vid konvertering (inbyggt oförändrat). Appens zstd-paket och fejksignering följer deras format.
 - **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl och ps5-native-app-boilerplate** (GPL-3.0): helskärmsappen bygger på ps5-homebrew-ui (från den bevarade kopian hos [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), webbläsarrutan efter boilerplaten.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): paketens uppbyggnad och installationsförloppet (egen kod efter denna förebild).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profilfunktionen och profilbildens format.

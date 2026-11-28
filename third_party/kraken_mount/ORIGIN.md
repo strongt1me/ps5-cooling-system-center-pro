@@ -155,7 +155,7 @@ gibt es unter der oben genannten Adresse (Tag `v0.4.2`).
   Spielstand-Modul der Konsole und ließ Spielstände verschwinden oder nicht laden (#68, #64; Dank an AstroBoot-Dev, #76, und an strongt1me für die Prüfung).
 - **.pkg-Spiele bekommen immer ampr-emu-ng,** auch bei `inject_ampr` aus: Nur ampr-emu-ng liest ein Spiel aus der `.pkg`. Die Einstellung gilt
   nur noch für Ordner-Spiele (#73).
-- **Mitgelieferte Emulatoren für DLC und PlayGo:** dlc_emu 0.3 und pgo_stub 0.6 von drakmor (beide GPL-3.0) stecken in der ELF.
+- **Mitgelieferte Emulatoren für DLC und PlayGo:** dlc_emu 0.3 und pgo_stub 0.6 von drakmor (dlc_emu GPL-3.0-or-later, pgo_stub GPL-3.0) stecken in der ELF.
   dlc_emu kommt in den `fakelib` eines Spiels mit `dlc_emu.ini`, pgo_stub bei einem Spiel, das PlayGo nutzt, jeweils nur, wenn das Spiel
   keine neuere Kopie mitbringt. Einstellung `add_emulators` (an); siehe `docs/dlcemu.md`, `docs/playgo.md` im Quellprojekt (#71). Deshalb ist
   die ELF von 3,8 auf 6,4 MB gewachsen.

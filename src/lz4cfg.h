@@ -1,6 +1,6 @@
 /* The packing profile of the LZ4 asset packs (12.10.2026): the rules that say which files of a game go into packs, with
  * which block size and compression, and which stay loose. Either built in ("automatic") or read from a TOML file in the
- * format of drakmor's ampr_pack.py (ampr_emu, GPL-3.0, tools/ampr_pack.py load_config): [pack], [groups.NAME], [[rule]],
+ * format of drakmor's ampr_pack.py (ampr_emu, GPL-3.0-or-later, tools/ampr_pack.py load_config): [pack], [groups.NAME], [[rule]],
  * [runtime]. Only that subset of TOML is understood (strings, numbers, booleans, arrays of strings, tables, arrays of
  * tables, comments, multi-line arrays); anything else is an error with the line number. */
 #ifndef PS5TM_LZ4CFG_H

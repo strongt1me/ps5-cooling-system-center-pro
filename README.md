@@ -98,7 +98,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
     <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="PS4 games from USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Games: library in compact view (default) with start, copy, convert</sub></td>
+    <td align="center"><sub>Games: library in compact view with start, copy, convert</sub></td>
     <td align="center"><sub>PS4 PKG from USB: fake PKGs without installing</sub></td>
   </tr>
   <tr>
@@ -124,7 +124,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Temperature history, sensors and per-game profiles"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Fan curve, temperature history and sensors"></td>
     <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Save data backup"></td>
   </tr>
   <tr>
@@ -137,10 +137,10 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
   </tr>
   <tr>
     <td><img src="docs/images/en/spiele-gross.jpg" alt="Games in the large view"></td>
-    <td align="center" valign="middle"><sub>Games in the large view: big covers, labelled buttons (switch on the Games page)</sub></td>
+    <td align="center" valign="middle"><sub>Games in the large view (default): big covers, labelled buttons (switch on the Games page)</sub></td>
   </tr>
 </table>
-<sub>All pictures use sample data and made-up games and were taken with earlier versions.</sub>
+<sub>All pictures use sample data and made-up games and were taken with version 1.99.0.</sub>
 </details>
 
 ### Screens of the fullscreen app
@@ -152,7 +152,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
   </tr>
   <tr>
     <td align="center"><sub>Games: library with start, details and actions</sub></td>
-    <td align="center"><sub>File manager: copying with speed and time left</sub></td>
+    <td align="center"><sub>File manager: a folder on the USB drive</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Fullscreen app: payloads"></td>
@@ -163,7 +163,7 @@ One app, two ways to use it. The fullscreen app can do almost everything the bro
     <td align="center"><sub>Play time with a daily overview</sub></td>
   </tr>
 </table>
-<sub>All pictures use sample data and made-up games and were taken with earlier versions.</sub>
+<sub>All pictures use sample data and made-up games and were taken with version 1.99.0.</sub>
 
 <details>
 <summary><b>All features in detail</b></summary>
@@ -321,7 +321,7 @@ This project stands on the shoulders of the PS5 homebrew community. **Thank you!
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) and the contributors to [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): exFAT, PFS and PFSC images.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): the model for the UFS2/ffpkg writer.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4 asset packs, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) and [dlc_emu](https://github.com/drakmor/dlc_emu) (embedded builds, GPL-3.0).
-- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), a further development of ampr_emu that also reads zstd packs (0.5.1 and 0.5.0 embedded, newer ones on request); [Kraken Mount](https://github.com/quer3q/kraken-mount), the program behind the “KrakenMount” tab (embedded, a few bytes patched to run next to ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), the engine of FPKG and of packing while converting (embedded unchanged). The app's zstd packs and fake signing follow their formats.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0-or-later): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), a further development of ampr_emu that also reads zstd packs (0.5.1 and 0.5.0 embedded, newer ones on request); [Kraken Mount](https://github.com/quer3q/kraken-mount), the program behind the “KrakenMount” tab (embedded, a few bytes patched to run next to ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), the engine of FPKG and of packing while converting (embedded unchanged). The app's zstd packs and fake signing follow their formats.
 - **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl and ps5-native-app-boilerplate** (GPL-3.0): the fullscreen app is built on ps5-homebrew-ui (from the preserved copy by [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), the browser tile after the boilerplate.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): package layout and the install flow (own code after this model).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): profile function and profile picture format.

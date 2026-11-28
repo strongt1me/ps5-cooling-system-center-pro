@@ -1,4 +1,4 @@
-/* Dump Forge (quer3q, GPL-3.0, https://github.com/quer3q/ps5-dump-forge) as the engine of the format "FPKG (Debug-.pkg)" (14.11.2026,
+/* Dump Forge (quer3q, GPL-3.0-or-later, https://github.com/quer3q/ps5-dump-forge) as the engine of the format "FPKG (Debug-.pkg)" (14.11.2026,
  * wish of the user: the format next to exFAT, ffpkg and ffpfsc in the window of the conversions, "Dump Forge als Motor").
  *
  * Writing a debug FPKG is about 18 000 lines of Rust in Dump Forge (container, PFS image, signature, SHA3 digests, PlayGo, Kraken

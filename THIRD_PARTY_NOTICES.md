@@ -16,12 +16,12 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 | **UFS2Tool** v4.1 (SvenGDK) — dessen Aufbau eines UFS2-Abbilds (Superblock, Zylindergruppen, Inodes, Verzeichniseinträge, Wiederherstellungsblock; `newfs -D` mit den Parametern, die ShadowMountPlus empfiehlt) als Vorlage für einen eigenen UFS2/ffpkg-Schreiber nach C übertragen; nichts davon wird mitgeliefert oder verteilt, nur die Formatkenntnis daraus portiert | `src/conv_ufs2.c` | BSD-2-Clause | <https://github.com/SvenGDK/UFS2Tool> |
 | **ps5upload** (phantomptr) — Profilfunktion (lokalen Anzeigenamen lesen und ändern, Profilbild-Dateien einsetzen) nach C übertragen; Format, Größen und Vorlage der Profilbild-Dateien im Browser-Teil | `src/profile.c`, Profilbild-Teil von `web/app.js` | GPL-3.0 (README und LICENSE des Projekts; GitHub erkennt die Datei nicht automatisch) | <https://github.com/phantomptr/ps5upload> |
 | **ps5-pkg-manager** 1.5.1 (itsPLK) — Aufbau der PS4-/PS5-Pakete (Kopf, Tabelle, `param.json`/`param.sfo`, Bild), seit 1.5.1 dazu die Erkennung der Rückportier-Patches (Kopf `LIH`, Inhaltsmarken `0x40100000`) und das Lesen der SDK-Version des Programms, das Teile-Format `PS5MPKG1` und der Ordnerplan der Suche; für das Installieren der Ablauf (die Konsole liest das Paket von einem kleinen Server auf der eigenen Adresse, ein eigener Prozess ruft die Installationsbibliothek AppInstUtil auf und fragt den Stand ab, die Wiederholung bei kurzzeitigen Fehlern) und der Aufbau der Strukturen, die diesem Aufruf übergeben werden. Die Programme `pkgparse.c`, `pkgscan.c`, `pkgsplit.c`, `pkgstream.c`, `pkginstall.c` und das Hilfsprogramm `helper/pkginst_helper.c` sind eigener Code nach diesem Wissen und nach dem öffentlich beschriebenen Paketformat; nichts davon ist eingebettet oder mitgeliefert (das Hilfsprogramm ist unser eigenes und steckt als Bytefolge in der App) | `src/pkgparse.c`, `src/pkgscan.c`, `src/pkgsplit.c`, `src/pkgstream.c`, `src/pkginstall.c`, `src/helper/pkginst_helper.c` | GPL-3.0 | <https://github.com/itsPLK/ps5-pkg-manager>, Version 1.5.1 |
-| **webhb** 0.4.1 (slopmaster33, aus ps5-app-dumper von EchoStretch gelöst) — der QR-Encoder in `src/qr.c` (Byte-Modus, Stufe M, Version 1 bis 6) ist daraus übernommen, GPL-3.0-or-later wie diese App; geändert nur der Name der Funktion und der Kopf. | `src/qr.c` | GPL-3.0-or-later | <https://github.com/slopmaster33/webhb> (seit Oktober 2026 nicht mehr erreichbar) |
+| **webhb** 0.4.1 (slopmaster33, aus ps5-app-dumper von EchoStretch gelöst) — der QR-Encoder in `src/qr.c` (Byte-Modus, Stufe M, Version 1 bis 6) ist daraus übernommen, GPL-3.0-or-later wie diese App; geändert nur der Name der Funktion und der Kopf. | `src/qr.c` | GPL-3.0-or-later | Das Projektarchiv von webhb ist nicht öffentlich (geprüft am 28.11.2026); Fassung, Adresse und SHA-256 der Veröffentlichung stehen in `webhb.lock` von <https://github.com/EchoStretch/ps5-app-dumper> |
 | **ps5-app-dumper** 2.10 (EchoStretch, slopmaster33) — Grundlage des Dumpens im Reiter „Disc“: übernommen und für die App neu geschrieben sind das Entschlüsseln der SELF/SPRX-Dateien eines Dumps (`decrypt.c`; Kernel-Teil und Firmware-Tabelle wie im Original, mit dem Self-Pager von idlesauce aus `ps5-self-pager`, dessen SELF-Strukturen Cryptogenics PS5-SELF-Decrypter folgen), das Schreiben als FSELF (`elf2fself.c`), das Senken der SDK-Version (die Tabellen und Regeln aus `ps4_backport.c`/`ps5_backport.c`); nach seinem Vorbild neu geschrieben sind der Ablauf eines Dumps samt DLC (`ps5_dumper.c`, `dump_job.c`, `dump_store.c`, `app_scan.c`), die Marken der Spieleliste und die Suche nach Dumps, die Warteschlange, die `sce_sys`-Dateien aus `app.pkg`/`ac.pkg` (`unpkg_ps5()`) und das Entpacken des PFS-Abbilds eines PS4-Spiels (`unpfs()`; die PS4-Aufteilung nach der Idee von ps4-app-dumper, Alazif, Scene-Collective) | `src/dump_self.c`, `src/dump_fself.c`, `src/dump_backport.c`, `src/dump_job.c`, `src/dump_lib.c`, `src/dump_queue.c`, `src/dump_unpkg.c`, `src/dump_ps4.c` | GPL-3.0-or-later | <https://github.com/EchoStretch/ps5-app-dumper>, Version 2.10 |
 | **libdeflate** 1.26 (Eric Biggers, Google LLC) — zlib-Kompression und -Dekompression sowie CRC-32, unverändert bis auf eine ergänzte Datei: `lib/crc32.c` (der Einstieg `libdeflate_crc32()`, eigen geschrieben nach dem Muster von `adler32.c`; die Tabellen und Routinen darunter sind libdeflates; siehe `README.PS5TM` dort) | `src/third_party/libdeflate/` | MIT (`COPYING` dort) | <https://github.com/ebiggers/libdeflate>, Tag `v1.26` |
 | **PS5-NTFS-BROWSER** v1.4.0 (abcde6543) — der NTFS-Treiber zum Lesen und Schreiben (`ntfs.c`, `ntfs_write.c`, Blockgerät `bdev.c`, Partitionstabellen `part.c`, UTF-16 `utf.c` mit ihren Kopfdateien), geändert nur um Prüfungen gegen beschädigte oder präparierte Sticks (23.11.2026), einen Schreib-Cache für die Verwaltungsdaten, die Behandlung des Journals und der Schreibreihenfolge (24.11.2026, teils aus den Pull Requests #16, #17, #21 und #22 an das Projekt) und die Korrekturen der Durchsicht vom 26.11.2026 (alles in `ORIGIN.md` einzeln genannt); die Anbindung an den Dateimanager (`src/ntfsvol.c`, `src/fm_ntfs.inc`) ist eigener Code, Webserver, Oberfläche und Auftragsliste des Originals sind nicht übernommen | `src/third_party/ntfsb/` (Herkunft und SHA-256 in `ORIGIN.md`) | GPL-3.0-or-later (README des Projekts, Lizenztext GPL-3.0) | <https://github.com/abcde6543/PS5-NTFS-BROWSER>, Fassung v1.4.0, Commit `1ca8e2d` |
 | **OffAct** v0.4.2 (John Törnblom) — die Registrierungsschlüssel der Konten (Platz 1 bis 16), die Formel der Konto-ID und der Ablauf der Aktivierung (Konto-ID, Typ `np`, Kennzeichen 4098; der Name wird nicht geschrieben) nach C übertragen; `master` hat seit dieser Fassung keinen weiteren Commit (geprüft am 04.11.2026). Das fertig gebaute `OffAct.elf` wird nicht mitgeliefert | `src/account.c` | GPL-3.0-or-later | <https://github.com/ps5-payload-dev/offact> |
-| **ampr_emu** (drakmor) — das Format des AMPR-Index (`AMPRIDX3`) und die Bauregeln aus `build_ampr_index.py`, nach C übertragen | `src/amprindex.c` | GPL-3.0 | <https://github.com/drakmor/ampr_emu> |
+| **ampr_emu** (drakmor) — das Format des AMPR-Index (`AMPRIDX3`) und die Bauregeln aus `build_ampr_index.py`, nach C übertragen | `src/amprindex.c` | GPL-3.0-or-later | <https://github.com/drakmor/ampr_emu> |
 | **BearSSL** 0.6 (Thomas Pornin) — TLS-Client der Downloads der App (Payload-Store, neuere Fassungen von Kraken Mount, Dump Forge und AMPR EMU NG; `src/upd_http.c`), unverändert (nur `src/` und `inc/` des Archivs) | `src/third_party/bearssl/` | MIT (`LICENSE.txt` dort) | <https://bearssl.org/>, Archiv `bearssl-0.6.tar.gz` |
 | **cJSON** 1.7.19 (Dave Gamble und Mitwirkende) | `src/third_party/cJSON*` | MIT | <https://github.com/DaveGamble/cJSON> |
 | **PS5-Payload-SDK** v0.50 (John Törnblom und Mitwirkende) — Werkzeugkette und Laufzeit, mit der jedes ELF gebaut wird (die App, beide Kacheln, die Hilfsprogramme); v0.50 kennt jede Firmware von 1.00 bis 14.22, der Bau prüft diese Fälle und lehnt ein älteres SDK ab | nicht im Quellbaum; `PS5_PAYLOAD_SDK/` beim Bauen | GPLv3+ (Kopfdateien unter `include/freebsd`: BSD) | <https://github.com/ps5-payload-dev/sdk> |
@@ -29,12 +29,12 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
 ## Eingebettete Fassungen, einzelne übernommene Dateien, Vorbilder und Schnittstellen (bei jedem Eintrag steht, was genau übernommen ist)
 
 - **np-fake-signin** 1.3 (earthonion): Die fertige ELF (117 KiB, Port 9021) ist unverändert eingebettet und wird nur auf Wunsch an den lokalen ELF-Lader geschickt; kein Quelltext ist übernommen, eine Lizenz nennt das Projekt nicht (siehe `third_party/np_fake_signin/ORIGIN.md`). Die Datei liegt nicht im Repository (`.gitignore` schließt `*.elf` aus); wer die App baut, legt sie selbst nach `third_party/np_fake_signin/np-fake-signin_v1.3.elf`.
-- **ampr_emu** (drakmor, GPL-3.0): Drei Bauten der APR-EMU-Dateien (`libSceAmpr.sprx`, Fassung 0.4.2.1,
-  GPL-3.0, siehe `third_party/ampr_emu/ORIGIN.md`) sind gepackt in die App eingebettet; sie
+- **ampr_emu** (drakmor, GPL-3.0-or-later): Drei Bauten der APR-EMU-Dateien (`libSceAmpr.sprx`, Fassung 0.4.2.1,
+  GPL-3.0-or-later, siehe `third_party/ampr_emu/ORIGIN.md`) sind gepackt in die App eingebettet; sie
   kommen nur auf Wunsch in den Ordner `/data/PS5-Cooling-Center/AMPR_EMU` oder in ein Spiel
   (`src/amprlib.c`). Quelltext der Programme: das Projekt unten. Bauarten (`test-pack`,
   `test-nopack`, `test-debug-pack`) nach <https://github.com/drakmor/ampr_emu>.
-- **AMPR EMU NG** (quer3q, GPL-3.0, Projekt `ampr-emu-ng`): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.5.1 (vom 23.11.2026) und
+- **AMPR EMU NG** (quer3q, GPL-3.0-or-later, Projekt `ampr-emu-ng`): Je zwei Bauten der zwei neuesten Veröffentlichungen, 0.5.1 (vom 23.11.2026) und
   0.5.0 (vom 20.11.2026) (`libSceAmpr.sprx`, `libSceAmpr-debug.sprx`, SHA-256 aus der `SHA256SUMS` der Veröffentlichung,
   siehe `third_party/ampr_emu/ORIGIN.md`) sind wie die anderen gepackt eingebettet, als `libSceAmpr.sprx-0.5.1-ng`,
   `libSceAmpr.sprx-0.5.0-ng` und je `-ng-debug`. Die App erkennt die Bauten dieser Weiterentwicklung von ampr_emu an ihrer Kennung und lädt auf Wunsch
@@ -44,7 +44,7 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   Protokoll, siehe `third_party/playgo/ORIGIN.md`) sind gepackt in die App eingebettet; sie kommen nur auf Wunsch in den
   Ordner `/data/PS5-Cooling-Center/PlayGo` oder in ein Spiel (`src/amprlib.c`). Quelltext der Programme:
   <https://github.com/drakmor/pgo_stub>.
-- **dlc_emu** (drakmor, GPL-3.0): Drei Bauten der DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`,
+- **dlc_emu** (drakmor, GPL-3.0-or-later): Drei Bauten der DLC-Module (`libSceAppContent.sprx`, `libSceGameUpdate.sprx`,
   `libSceNpEntitlementAccess.sprx`, Fassung 0.3, „log“, siehe `third_party/dlc_emu/ORIGIN.md`) sind gepackt in die App
   eingebettet; sie kommen nur in ein Spiel, dessen Ordner eine `dlc_emu.ini` enthält (`src/plugins.c`). Quelltext der Programme:
   <https://github.com/drakmor/dlc_emu>.
@@ -76,7 +76,7 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   `tools/gen_blob.py`) und bei „Kraken Mount starten“ an den ELF-Lader gesendet; die App bedient es über seine Schnittstelle auf
   Port 8097 (`src/kraken.c`). **Geänderte Kopie:** Die eingebettete ELF (und eine von GitHub geladene Fassung) trägt drei Änderungen, jede an zwei Stellen: die Zeichenkette `shadowmountplus.elf` (Prozessname, auf den Kraken Mount seit v0.2.0 beim Start wartet, ein Byte), damit es neben ShadowMountPlus arbeitet, ab v0.3.2 die Adresse seiner eigenen Update-Abfrage (`https://` wird `xttps://`, ein Byte), damit seine Seite keine ungeänderte Fassung lädt, die auf ShadowMountPlus wartet, und ab v0.4.1 der Port seiner Schnittstelle für Programme, die nur ShadowMountPlus kennen (10101 wird 18097, sonst bekäme es die Verbindungen der App an ShadowMountPlus) (`tools/patch_kraken.py`, `src/kraken.c`, siehe `third_party/kraken_mount/ORIGIN.md`); Quelltext des Projekts: <https://github.com/quer3q/kraken-mount> (Tag `v0.4.2`). Aus seinem Quelltext ist nichts übernommen
   (er ist in Rust geschrieben); der Quelltext dieser Fassung steht unter der genannten Adresse. Die ELF enthält ihrerseits ampr-emu-ng 0.5.1 (quer3q), dlc_emu 0.3 und
-  pgo_stub 0.6 von drakmor (GPL-3.0; Quelltext: <https://github.com/drakmor/dlc_emu/tree/0.3>, <https://github.com/drakmor/pgo_stub/tree/0.6>)
+  pgo_stub 0.6 von drakmor (dlc_emu GPL-3.0-or-later, pgo_stub GPL-3.0; Quelltext: <https://github.com/drakmor/dlc_emu/tree/0.3>, <https://github.com/drakmor/pgo_stub/tree/0.6>)
   sowie die Fremdbausteine, die Kraken Mount in seiner Datei `THIRD_PARTY_NOTICES` nennt (unter anderem SQLite, gemeinfrei, und ab v0.4.2 die Abbild-Leser aus Dump Forge). Eine neuere Veröffentlichung lädt die
   App nur auf Knopfdruck von dort (HTTPS, Prüfsumme aus `SHA256SUMS`).
 - **Dump Forge** (quer3q, GPL-3.0-or-later, Version 0.6.0, <https://github.com/quer3q/ps5-dump-forge>, Tag `v0.6.0`): Motor des
@@ -100,13 +100,13 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   (`src/upd_dns.c`, aus `patchdl_dns.c`), der HTTPS-Abruf (`src/upd_http.c`) und die Stammzertifikate (`src/upd_ca.h`); der
   Payload-Store benutzt sie. Die Spiel-Updates, für die mehr aus PatchDL portiert war, sind seit dem 29.10.2026 entfernt.
   Einzelheiten: `third_party/patchdl/ORIGIN.md`.
-- **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0 mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
+- **exFAT2AMPR** (V-10, „Made by V-10“, GPL-3.0-or-later mit Zusatzbedingungen): Anregung und Wissen für die Liste, die „Automatisch“
   lose lässt, für den Mitschnitt zur Profil-Erzeugung (`src/trace.c`, ein C-Nachbau von `ampr_pack_profile.py`, Gegenprobe mit
   dem Python-Werkzeug) und für die Prüfsummen-Tabelle der Spiel-Plugins; seit 1.104 (gelesen am 18.10.2026) auch für das Beiseitelegen
-  doppelter Abbilder (`src/dupimg.c`), die Startprüfung gepackter Spiele, das Ablehnen von Verknüpfungen vor dem Packen und die Zeitschätzung je
+  doppelter Abbilder (`src/dupimg.c`; in exFAT2AMPR seit 1.95), die Startprüfung gepackter Spiele, das Ablehnen von Verknüpfungen vor dem Packen und die Zeitschätzung je
   LZ4-Stufe (deren Startwerte sind die von exFAT2AMPR). Kein Quelltext von V-10 ist übernommen.
   <https://github.com/exFAT2AMPR/exfat2ampr>.
-- **ampr_emu, LZ4-Pakete** (drakmor, GPL-3.0): Format und Regeln der LZ4-Pakete (AMPRPAK4, AMPRDAT3, AMPRCRC1, die TOML-Profile) sind ein
+- **ampr_emu, LZ4-Pakete** (drakmor, GPL-3.0-or-later): Format und Regeln der LZ4-Pakete (AMPRPAK4, AMPRDAT3, AMPRCRC1, die TOML-Profile) sind ein
   C-Nachbau von `tools/ampr_pack.py` und `ampr_pack_format.py` (`src/lz4pack.c`, `src/lz4cfg.c`); gelesen am 12.10.2026 in
   <https://github.com/drakmor/ampr_emu> (`docs/ASSET_PACKS.md`). Gegenprobe in beide Richtungen mit dessen Python-Werkzeug.
 - **Getestete LZ4-Profile** (danthespal, GPL-3.0, veröffentlicht mit MkPFS.CSharp): `astrobot.toml`, `ufc6-PPSA23566.toml`,
@@ -133,11 +133,11 @@ ihrer Beiträge gibt es in der [README](README.de.md#credits-und-danksagung).
   (Kompressor und Dekompressor der Bibliothek ohne Mehrfädigkeit und ohne Assembler-Entpacker, unverändert), für die zstd-Pakete
   (`src/zstdpack.c`). Lizenztext: `src/third_party/zstd/LICENSE`. Herkunft: <https://github.com/facebook/zstd>, Archiv-Prüfsumme in
   `src/third_party/zstd/README.PS5TM`.
-- **zstd-Pakete von AMPR EMU NG** (quer3q, GPL-3.0): Aufbau von `ampr_zstd.index` (AMPRZPK1) und `ampr_zstd-NNN.pak` (AMPRZDT1) nach
+- **zstd-Pakete von AMPR EMU NG** (quer3q, GPL-3.0-or-later): Aufbau von `ampr_zstd.index` (AMPRZPK1) und `ampr_zstd-NNN.pak` (AMPRZDT1) nach
   `docs/zstd-format.md` von ampr-emu-ng und `docs/zstd.md` von ps5-dump-forge (Fassung 0.5.3, gelesen am 06.11.2026); nachgebaut
   in C (`src/zstdpack.c`), kein Quelltext übernommen. <https://github.com/quer3q/ampr-emu-ng>, <https://github.com/quer3q/ps5-dump-forge>
-- **Fake-Signieren unsignierter Programmdateien** (quer3q, ps5-dump-forge 0.5.4, GPL-3.0, `crates/ps5-dump-forge-core/src/fself.rs`, gelesen am
-  07.11.2026; und `tools/make_fself.py` von ampr-emu-ng, GPL-3.0, nur zum Vergleich in den Tests, nicht im Projekt): Aufbau der FSELF-Datei und
+- **Fake-Signieren unsignierter Programmdateien** (quer3q, ps5-dump-forge 0.5.4, GPL-3.0-or-later, `crates/ps5-dump-forge-core/src/fself.rs`, gelesen am
+  07.11.2026; und `tools/make_fself.py` von ampr-emu-ng, GPL-3.0-or-later, nur zum Vergleich in den Tests, nicht im Projekt): Aufbau der FSELF-Datei und
   Erkennung der Programmdateien; nachgebaut in C (`src/fsign.c`), kein Quelltext übernommen.
   <https://github.com/quer3q/ps5-dump-forge>, <https://github.com/quer3q/ampr-emu-ng>
 - **PS5 Dump & Image Converter** (eigenes Projekt des Autors, Modul `shadowmount_generation.py` und der

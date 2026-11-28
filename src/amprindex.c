@@ -2,7 +2,7 @@
  * find them by name, without regard to case.
  *
  * The format and the way it is built are a C port of build_ampr_index.py from drakmor's ampr_emu
- * (https://github.com/drakmor/ampr_emu, tools/build_ampr_index.py, GPL-3.0, read on 11.10.2026):
+ * (https://github.com/drakmor/ampr_emu, tools/build_ampr_index.py, GPL-3.0-or-later, read on 11.10.2026):
  *
  *   header   "AMPRIDX3", version 3, record size 24, count, path blob size, hash table offset, slot size 16, slots
  *            (little endian: 8s I I Q Q Q I I = 48 bytes)

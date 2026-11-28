@@ -98,7 +98,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="Giochi PS4 PKG da USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Giochi: libreria in vista compatta (predefinita) con avvio, copia, conversione</sub></td>
+    <td align="center"><sub>Giochi: libreria in vista compatta con avvio, copia, conversione</sub></td>
     <td align="center"><sub>PS4 PKG da USB: PKG falsi senza installazione</sub></td>
   </tr>
   <tr>
@@ -124,7 +124,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Andamento della temperatura, sensori e profili per gioco"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Curva della ventola, andamento della temperatura e sensori"></td>
     <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Backup dei salvataggi"></td>
   </tr>
   <tr>
@@ -137,10 +137,10 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
   </tr>
   <tr>
     <td><img src="docs/images/en/spiele-gross.jpg" alt="Giochi in vista grande"></td>
-    <td align="center" valign="middle"><sub>Giochi in vista grande: copertine grandi, pulsanti con testo (si cambia nella pagina Giochi)</sub></td>
+    <td align="center" valign="middle"><sub>Giochi in vista grande (predefinita): copertine grandi, pulsanti con testo (si cambia nella pagina Giochi)</sub></td>
   </tr>
 </table>
-<sub>Tutte le immagini con dati di esempio e giochi inventati, riprese con versioni precedenti; l'interfaccia è mostrata in inglese.</sub>
+<sub>Tutte le immagini con dati di esempio e giochi inventati, riprese con la versione 1.99.0; l'interfaccia è mostrata in inglese.</sub>
 </details>
 
 ### Schermate dell'app a schermo intero
@@ -152,7 +152,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
   </tr>
   <tr>
     <td align="center"><sub>Giochi: libreria con avvio, dettagli e azioni</sub></td>
-    <td align="center"><sub>Gestione file: copia con velocità e tempo rimanente</sub></td>
+    <td align="center"><sub>Gestione file: una cartella dell'unità USB</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="App a schermo intero: payload"></td>
@@ -163,7 +163,7 @@ Una sola app, due modi di usarla. L'app a schermo intero fa quasi tutto ciò che
     <td align="center"><sub>Tempo di gioco con panoramica giornaliera</sub></td>
   </tr>
 </table>
-<sub>Tutte le immagini con dati di esempio e giochi inventati, riprese con versioni precedenti; l'interfaccia è mostrata in inglese.</sub>
+<sub>Tutte le immagini con dati di esempio e giochi inventati, riprese con la versione 1.99.0; l'interfaccia è mostrata in inglese.</sub>
 
 <details>
 <summary><b>Tutte le funzioni in dettaglio</b></summary>
@@ -321,7 +321,7 @@ Questo progetto poggia sulle spalle della comunità homebrew della PS5. **Grazie
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) e i collaboratori di [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): immagini exFAT, PFS e PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): modello per lo scrittore UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (asset pack LZ4, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) e [dlc_emu](https://github.com/drakmor/dlc_emu) (versioni integrate, GPL-3.0).
-- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), un'evoluzione di ampr_emu che legge anche i pacchetti zstd (0.5.1 e 0.5.0 integrate, quelle più recenti su richiesta); [Kraken Mount](https://github.com/quer3q/kraken-mount), il programma dietro la scheda «KrakenMount» (incluso, modificato in pochi byte per funzionare accanto a ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), il motore per FPKG e per la compressione durante la conversione (incluso invariato). I pacchetti zstd e la firma fittizia dell'app seguono i loro formati.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0-or-later): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), un'evoluzione di ampr_emu che legge anche i pacchetti zstd (0.5.1 e 0.5.0 integrate, quelle più recenti su richiesta); [Kraken Mount](https://github.com/quer3q/kraken-mount), il programma dietro la scheda «KrakenMount» (incluso, modificato in pochi byte per funzionare accanto a ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), il motore per FPKG e per la compressione durante la conversione (incluso invariato). I pacchetti zstd e la firma fittizia dell'app seguono i loro formati.
 - **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl e ps5-native-app-boilerplate** (GPL-3.0): l'app a schermo intero è costruita su ps5-homebrew-ui (dalla copia conservata da [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), il riquadro del browser secondo il boilerplate.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): struttura dei pacchetti e procedura di installazione (codice proprio su questo modello).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): funzione del profilo e formato dell'immagine del profilo.

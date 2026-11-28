@@ -1,5 +1,5 @@
 /* ampr-emu-ng in the choice of APR-EMU versions (03.11.2026, wish of the user): quer3q's fork of drakmor's ampr_emu
- * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
+ * (https://github.com/quer3q/ampr-emu-ng, GPL-3.0-or-later). It reads the same LZ4 packs and zstd ones, and its builds carry the mark
  * "ampr-emu-ng <version>" instead of "[AMPR_EMU]"; amprlib.c recognises them by that and shows them as "NG <version>".
  *
  * Two versions of it are offered at any time (wish of the user, 13.11.2026: the two newest; 15.11.2026: a newer one comes on top by a button, the

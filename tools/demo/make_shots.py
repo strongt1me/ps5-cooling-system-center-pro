@@ -107,4 +107,5 @@ def main():
                 print("  demo server said:\n    " + "\n    ".join(sorted(set(err.strip().splitlines()))))
 
 
-main()
+if __name__ == "__main__":
+    main()

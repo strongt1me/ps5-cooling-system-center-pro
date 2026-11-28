@@ -1,226 +1,185 @@
 <#
 .SYNOPSIS
-  One-command pre-release workflow: build, local release checks, optional GitHub release sync.
+  Checks the release folder of a version and, if it is published, the GitHub release against it. Builds nothing and
+  publishes nothing: building, committing, pushing and creating the release is tools/release.sh (28.11.2026).
+
+.DESCRIPTION
+  Local checks (folder "PS5 Cooling and System Center v<version>", the version comes from src/ps5tm.h):
+  - exactly the five release files: the ELF, FAKE86921.zip, FAKE86922.zip, LIESMICH.txt, payload-manager.json
+    (Thumbs.db and desktop.ini are tolerated; a *.pkg is an error, no tile package has shipped since 19.10.2026)
+  - the ELF is an ELF and names its version
+  - each zip: stored without compression, every entry under "<tile>/", eboot.bin first, sce_sys/param.json present,
+    and the release ELF lies byte for byte inside the eboot.bin (each tile carries its own copy of the app)
+  - LIESMICH.txt names the version; payload-manager.json names the version, links this release's ELF and carries its SHA-256
+  GitHub checks (unless -SkipGitHub, and only when the release exists): the same five files, every digest equal to the
+  local file, and whether the release is the latest one.
 
 .EXAMPLE
   .\tools\pre-release-check.ps1
 
 .EXAMPLE
-  .\tools\pre-release-check.ps1 -CreateOrUpdateRelease
-
-.EXAMPLE
-  .\tools\pre-release-check.ps1 -Repo "strongt1me/ps5-cooling-system-center-pro" -Tag "v1.32.1"
-
-.PARAMETER LlvmMajor
-  The LLVM major version the WSL build must run on (default 21; 0 switches the
-  check off). The SDK's prospero-llvm-config takes the highest llvm-config-NN it
-  finds, so a newer or older LLVM in the distro would otherwise build quietly
-  with a different toolchain than the one the releases were made with.
+  .\tools\pre-release-check.ps1 -Version 1.98.0 -SkipGitHub
 #>
 
 param(
   [string]$Repo = "strongt1me/ps5-cooling-system-center-pro",
+  [string]$Version,
   [string]$Tag,
   [switch]$SkipGitHub,
-  [switch]$CreateOrUpdateRelease,
-  [int]$LlvmMajor = 21
+  # kept so that an old call says what to do instead of failing on an unknown parameter
+  [switch]$CreateOrUpdateRelease
 )
 
 $ErrorActionPreference = "Stop"
 
-function ConvertTo-WslPath {
-  param([Parameter(Mandatory=$true)][string]$WindowsPath)
-  $full = [System.IO.Path]::GetFullPath($WindowsPath)
-  if ($full.Length -lt 3 -or $full[1] -ne ':') {
-    throw "Windows path expected: $WindowsPath"
-  }
-  $drive = $full.Substring(0, 1).ToLowerInvariant()
-  $rest = $full.Substring(2).Replace('\', '/')
-  return "/mnt/$drive$rest"
-}
-
-function Assert-Command {
-  param([Parameter(Mandatory=$true)][string]$Name)
-  if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-    throw "Required command not found: $Name"
-  }
-}
-
-function Get-VersionFromHeader {
-  param([Parameter(Mandatory=$true)][string]$HeaderPath)
-  $text = Get-Content -Raw -Path $HeaderPath
-  $m = [regex]::Match($text, '^\s*#define\s+PS5TM_VERSION\s+"([^"]+)"',
-                      [System.Text.RegularExpressions.RegexOptions]::Multiline)
-  if (-not $m.Success) {
-    throw "Could not read PS5TM_VERSION from $HeaderPath"
-  }
-  return $m.Groups[1].Value
+if ($CreateOrUpdateRelease) {
+  throw ("-CreateOrUpdateRelease is gone (28.11.2026): it published only three of the five files, with placeholder notes. " +
+         "Publish with tools/release.sh <X.Y.Z>; replace one file of a published release with " +
+         "gh release upload <tag> <file> --repo $Repo --clobber.")
 }
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $projectRoot
 
-Assert-Command "wsl"
-Assert-Command "make"
+if (-not $Version) {
+  $header = Get-Content -Raw -Path (Join-Path $projectRoot "src/ps5tm.h")
+  $m = [regex]::Match($header, '^\s*#define\s+PS5TM_VERSION\s+"([^"]+)"', [System.Text.RegularExpressions.RegexOptions]::Multiline)
+  if (-not $m.Success) { throw "Could not read PS5TM_VERSION from src/ps5tm.h" }
+  $Version = $m.Groups[1].Value
+}
+if (-not $Tag) { $Tag = "v$Version" }
 
-$version = Get-VersionFromHeader (Join-Path $projectRoot "src/ps5tm.h")
-if (-not $Tag) {
-  $Tag = "v$version"
-}
+$errors = New-Object System.Collections.Generic.List[string]
+function Add-Failure([string]$text) { $script:errors.Add($text); Write-Host "FAIL: $text" -ForegroundColor Red }
+function Write-Ok([string]$text) { Write-Host "ok: $text" }
 
-# The assets are built from the working tree, and a tag that gh creates points
-# at the remote's default branch, not at what was built. Said now, before the
-# long build, so there is still time to stop - a warning, not a refusal.
-if ($CreateOrUpdateRelease -and (Get-Command git -ErrorAction SilentlyContinue)) {
-  $dirty = @(& git -C $projectRoot status --porcelain 2>$null)
-  if ($dirty.Count -gt 0) {
-    Write-Warning ("The working tree has $($dirty.Count) uncommitted change(s). " +
-                   "The release will be built from them and published as $Tag, " +
-                   "which may not match any commit. Ctrl+C now to stop.")
-  }
-}
-
-$sdk = $env:PS5_PAYLOAD_SDK
-if (-not $sdk) {
-  $userSdk = [Environment]::GetEnvironmentVariable("PS5_PAYLOAD_SDK", "User")
-  if ($userSdk) { $sdk = $userSdk }
-}
-if (-not $sdk) {
-  $candidate1 = Join-Path $projectRoot "PS5_PAYLOAD_SDK"
-  $candidate2 = Join-Path (Split-Path $projectRoot -Parent) "PS5 SDK usw\PS5_PAYLOAD_SDK"
-  if (Test-Path $candidate1) {
-    $sdk = $candidate1
-  } elseif (Test-Path $candidate2) {
-    $sdk = $candidate2
-  }
-}
-if (-not $sdk) {
-  throw "PS5_PAYLOAD_SDK is not set and no local fallback was found."
-}
-if (-not (Test-Path (Join-Path $sdk "toolchain/prospero.mk"))) {
-  throw "Invalid PS5_PAYLOAD_SDK: prospero.mk not found under $sdk"
-}
-
-$projectWsl = ConvertTo-WslPath $projectRoot
-$sdkWsl = ConvertTo-WslPath $sdk
-
-# A space anywhere in the SDK's path breaks the WSL build, far from the cause:
-# the SDK's prospero.mk works out PS5_PAYLOAD_SDK again from MAKEFILE_LIST,
-# which splits at spaces, and its linker wrapper passes the linker-script path
-# unquoted. make then stops with "Error 127" on the first compile. (The project
-# folder may contain spaces; only the SDK may not. The Windows route,
-# tools/build-windows.sh, gets round it with 8.3 short names, which WSL has not.)
-# Both fallback locations above contain spaces, so this is the usual case.
-if ($sdkWsl -match '\s') {
-  throw ("The SDK path contains a space: $sdk`n" +
-         "The WSL build cannot use it (make would stop with Error 127 on the first compile).`n" +
-         "Copy the SDK to a folder without spaces, e.g. C:\ps5sdk, and set PS5_PAYLOAD_SDK to it,`n" +
-         "or build with tools/build-windows.sh instead.")
-}
+# Latin-1 maps every byte to one char, so byte searches become ordinal string searches
+$latin1 = [System.Text.Encoding]::GetEncoding(28591)
 
 Write-Host "== Pre-release check ==" -ForegroundColor Cyan
 Write-Host "Project: $projectRoot"
-Write-Host "Version: $version"
-Write-Host "Tag: $Tag"
-Write-Host "SDK: $sdk"
+Write-Host "Version: $Version (tag $Tag)"
 
-# The toolchain is whatever the SDK's own llvm-config wrapper finds - the build
-# runs through it - so ask the wrapper, in a call of its own. (Not as part of the
-# build command below: wsl.exe hands that to a shell first, which would expand
-# any $variable in it before bash ever sees it.)
-if ($LlvmMajor -gt 0) {
-  $llvmFound = (& wsl.exe bash -lc "'$sdkWsl/bin/prospero-llvm-config' --version" 2>$null | Select-Object -First 1)
-  $llvmFoundMajor = if ($llvmFound) { ([string]$llvmFound -split '\.')[0].Trim() } else { "" }
-  if ($llvmFoundMajor -ne "$LlvmMajor") {
-    $seen = if ($llvmFound) { "LLVM $llvmFound" } else { "no LLVM" }
-    throw ("The WSL build would run on $seen, but LLVM $LlvmMajor is expected: another major builds " +
-           "an ELF with another layout than the releases have. Install LLVM $LlvmMajor in the WSL distro, " +
-           "or pass -LlvmMajor <n> to build with the one it has on purpose (0 skips the check).")
-  }
-}
-
-$buildCmd = "cd '$projectWsl' && export PS5_PAYLOAD_SDK='$sdkWsl' && make clean && make -j1 && make release"
-& wsl.exe bash -lc $buildCmd
-if ($LASTEXITCODE -ne 0) {
-  throw "Build/release failed in WSL."
-}
-
-$releaseDir = Join-Path $projectRoot "PS5 Cooling and System Center v$version"
+$releaseDir = Join-Path $projectRoot "PS5 Cooling and System Center v$Version"
 if (-not (Test-Path $releaseDir)) {
-  throw "Release directory not found: $releaseDir"
+  throw "Release folder not found: $releaseDir (tools/release.sh builds it)"
 }
 
-$mainElf = Join-Path $releaseDir "PS5_Cooling_System_Center_v$version.elf"
-$starterZip = Join-Path $releaseDir "FAKE86921.zip"
-$browserZip = Join-Path $releaseDir "FAKE86922.zip"
-$liesmich = Join-Path $releaseDir "LIESMICH.txt"
+$elfName = "PS5_Cooling_System_Center_v$Version.elf"
+$tiles = @("FAKE86921", "FAKE86922")
+$expected = @($elfName, "FAKE86921.zip", "FAKE86922.zip", "LIESMICH.txt", "payload-manager.json")
 
-foreach ($p in @($mainElf, $starterZip, $browserZip, $liesmich)) {
-  if (-not (Test-Path $p)) {
-    throw "Missing release asset: $p"
-  }
+# --- the folder holds the five files and nothing else -------------------------------------------------------------
+$present = @(Get-ChildItem -Path $releaseDir -File | ForEach-Object { $_.Name })
+foreach ($n in $expected) {
+  if ($n -notin $present) { Add-Failure "missing in the release folder: $n" }
 }
-if (Get-ChildItem -Path $releaseDir -Filter "*.pkg" -File) {
-  throw "A *.pkg lies in $releaseDir: since 19.10.2026 no tile package ships (the app installs the tile itself)."
+foreach ($n in $present) {
+  if ($n -like "*.pkg") { Add-Failure "a tile package lies in the folder: $n (none has shipped since 19.10.2026)" }
+  elseif ($n -notin $expected -and $n -notin @("Thumbs.db", "desktop.ini")) { Add-Failure "a file that is not part of a release: $n" }
+}
+if ($errors.Count -gt 0) {
+  throw "The release folder is incomplete; the other checks need all five files."
 }
 
+$elfPath = Join-Path $releaseDir $elfName
+$elfBytes = [System.IO.File]::ReadAllBytes($elfPath)
+$elfSha = (Get-FileHash -Algorithm SHA256 -Path $elfPath).Hash.ToLowerInvariant()
+
+# --- the ELF ------------------------------------------------------------------------------------------------------
+if ($elfBytes.Length -lt 64 -or $elfBytes[0] -ne 0x7F -or $elfBytes[1] -ne 0x45 -or $elfBytes[2] -ne 0x4C -or $elfBytes[3] -ne 0x46) {
+  Add-Failure "$elfName does not start with an ELF header"
+} elseif ($latin1.GetString($elfBytes).IndexOf($Version, [System.StringComparison]::Ordinal) -lt 0) {
+  Add-Failure "$elfName does not contain its version $Version"
+} else {
+  Write-Ok "$elfName ($($elfBytes.Length) bytes, sha256 $($elfSha.Substring(0, 16))...)"
+}
+
+# --- the two tile zips --------------------------------------------------------------------------------------------
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$elfText = $latin1.GetString($elfBytes)
+foreach ($t in $tiles) {
+  $zipPath = Join-Path $releaseDir "$t.zip"
+  $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+  try {
+    $entries = @($zip.Entries)
+    $files = @($entries | Where-Object { -not $_.FullName.EndsWith("/") })
+    $outside = @($entries | Where-Object { -not $_.FullName.StartsWith("$t/") })
+    $packed = @($files | Where-Object { $_.CompressedLength -ne $_.Length })
+    if ($files.Count -eq 0 -or $files[0].FullName -ne "$t/eboot.bin") { Add-Failure "$t.zip: the first entry is not $t/eboot.bin" ; continue }
+    if ($outside.Count -gt 0) { Add-Failure "$t.zip: $($outside.Count) entries outside the folder $t/" }
+    if ($packed.Count -gt 0) { Add-Failure "$t.zip: $($packed.Count) entries are compressed (the release zips are stored)" }
+    if (-not ($files | Where-Object { $_.FullName -eq "$t/sce_sys/param.json" })) { Add-Failure "$t.zip: no $t/sce_sys/param.json" }
+
+    $eboot = $files[0]
+    $buffer = New-Object byte[] $eboot.Length
+    $stream = $eboot.Open()
+    try {
+      $read = 0
+      while ($read -lt $buffer.Length) {
+        $n = $stream.Read($buffer, $read, $buffer.Length - $read)
+        if ($n -le 0) { break }
+        $read += $n
+      }
+    } finally { $stream.Dispose() }
+    if ($latin1.GetString($buffer).IndexOf($elfText, [System.StringComparison]::Ordinal) -lt 0) {
+      Add-Failure "$t.zip: the release ELF does not lie byte for byte in eboot.bin (a tile from another build?)"
+    } else {
+      Write-Ok "$t.zip ($($files.Count) files, eboot.bin $($eboot.Length) bytes, carries the release ELF)"
+    }
+  } finally { $zip.Dispose() }
+}
+
+# --- LIESMICH and the Payload Manager list ------------------------------------------------------------------------
+$liesmich = Get-Content -Raw -Encoding UTF8 -Path (Join-Path $releaseDir "LIESMICH.txt")
+if ($liesmich.Contains($Version)) { Write-Ok "LIESMICH.txt names $Version" } else { Add-Failure "LIESMICH.txt does not name $Version" }
+
+try {
+  $pm = Get-Content -Raw -Encoding UTF8 -Path (Join-Path $releaseDir "payload-manager.json") | ConvertFrom-Json
+  $p = @($pm.payloads)[0]
+  $url = "https://github.com/$Repo/releases/download/$Tag/$elfName"
+  if (-not $p) { Add-Failure "payload-manager.json has no payload" }
+  elseif ($p.version -ne $Tag) { Add-Failure "payload-manager.json names version '$($p.version)', not $Tag" }
+  elseif ($p.url -ne $url) { Add-Failure "payload-manager.json links '$($p.url)', not $url" }
+  elseif ($p.checksum -ne $elfSha) { Add-Failure "payload-manager.json carries another SHA-256 than the ELF" }
+  else { Write-Ok "payload-manager.json (version, link and SHA-256 of the ELF)" }
+} catch {
+  Add-Failure "payload-manager.json cannot be read: $($_.Exception.Message)"
+}
+
+if ($errors.Count -gt 0) { throw "Local release check failed: $($errors.Count) problem(s)." }
 Write-Host "Local release assets: OK" -ForegroundColor Green
-Write-Host "- $(Split-Path $mainElf -Leaf)"
-Write-Host "- $(Split-Path $starterZip -Leaf)"
-Write-Host "- $(Split-Path $browserZip -Leaf)"
-Write-Host "- $(Split-Path $liesmich -Leaf)"
 
+# --- the published release ----------------------------------------------------------------------------------------
 if (-not $SkipGitHub) {
-  Assert-Command "gh"
-  & gh auth status | Out-Null
+  if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "gh not found (or pass -SkipGitHub)." }
+  & gh auth status 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "gh is not authenticated. Run 'gh auth login' (or pass -SkipGitHub)." }
+
+  $raw = & gh release view $Tag --repo $Repo --json url,assets,isDraft,isPrerelease 2>$null
   if ($LASTEXITCODE -ne 0) {
-    throw "gh is not authenticated. Run 'gh auth login'."
-  }
-
-  $requiredAssetNames = @(
-    (Split-Path $mainElf -Leaf),
-    (Split-Path $starterZip -Leaf),
-    (Split-Path $liesmich -Leaf)
-  )
-
-  $releaseExists = $true
-  $releaseViewRaw = & gh release view $Tag --repo $Repo --json url,assets 2>$null
-  if ($LASTEXITCODE -ne 0) {
-    $releaseExists = $false
-  }
-
-  if ($CreateOrUpdateRelease) {
-    if (-not $releaseExists) {
-      & gh release create $Tag $mainElf $starterZip $liesmich `
-        --repo $Repo --title "PS5 Cooling & System Center - Pro $Tag" `
-        --notes "Automated pre-release upload for $Tag"
-      if ($LASTEXITCODE -ne 0) {
-        throw "gh release create failed."
-      }
-      $releaseViewRaw = & gh release view $Tag --repo $Repo --json url,assets
+    Write-Host "GitHub: $Tag is not published yet (tools/release.sh publishes it)." -ForegroundColor Yellow
+  } else {
+    $release = ($raw -join "`n") | ConvertFrom-Json
+    $assets = @($release.assets)
+    foreach ($n in $expected) {
+      $a = $assets | Where-Object { $_.name -eq $n } | Select-Object -First 1
+      $local = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $releaseDir $n)).Hash.ToLowerInvariant()
+      if (-not $a) { Add-Failure "GitHub: $n is missing in $Tag" }
+      elseif ($a.digest -ne "sha256:$local") { Add-Failure "GitHub: $n differs (local sha256:$local, GitHub '$($a.digest)')" }
+      else { Write-Ok "GitHub: $n sha256:$($local.Substring(0, 16))..." }
     }
-    else {
-      & gh release upload $Tag $mainElf $starterZip $liesmich `
-        --repo $Repo --clobber
-      if ($LASTEXITCODE -ne 0) {
-        throw "gh release upload failed."
-      }
-      $releaseViewRaw = & gh release view $Tag --repo $Repo --json url,assets
+    foreach ($a in $assets) {
+      if ($a.name -notin $expected) { Add-Failure "GitHub: $Tag carries a file that is not part of a release: $($a.name)" }
     }
+    if ($release.isDraft) { Add-Failure "GitHub: $Tag is a draft" }
+    if ($release.isPrerelease) { Write-Host "note: $Tag is marked as a pre-release" -ForegroundColor Yellow }
+    $latest = (& gh api "repos/$Repo/releases/latest" --jq .tag_name 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $latest -ne $Tag) { Write-Host "note: the latest release is $latest, not $Tag" -ForegroundColor Yellow }
+    if ($errors.Count -gt 0) { throw "GitHub release check failed: $($errors.Count) problem(s)." }
+    Write-Host "GitHub release assets: OK" -ForegroundColor Green
+    Write-Host "URL: $($release.url)"
   }
-  elseif (-not $releaseExists) {
-    throw "Release $Tag not found in $Repo. Use -CreateOrUpdateRelease to publish assets."
-  }
-
-  $release = $releaseViewRaw | ConvertFrom-Json
-  $names = @($release.assets | ForEach-Object { $_.name })
-  $missing = @($requiredAssetNames | Where-Object { $_ -notin $names })
-  if ($missing.Count -gt 0) {
-    throw "Release asset verification failed. Missing: $($missing -join ', ')"
-  }
-
-  Write-Host "GitHub release assets: OK" -ForegroundColor Green
-  Write-Host "URL: $($release.url)"
 }
 
 Write-Host "Pre-release check completed successfully." -ForegroundColor Green

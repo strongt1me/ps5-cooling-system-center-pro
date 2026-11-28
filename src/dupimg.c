@@ -1,4 +1,5 @@
-/* The same game in more than one image (18.10.2026, after "Set aside" of exFAT2AMPR 1.95 by V-10, GPL-3.0; own code).
+/* The same game in more than one image (18.10.2026, after "Set aside" of exFAT2AMPR by V-10, there since 1.95, read in
+ * 1.104; GPL-3.0-or-later with additional terms; own code, nothing of it taken over).
  *
  * ShadowMountPlus keeps one source per title id. Two images of one game on the drives make it take one, then the other,
  * scan after scan (it says "duplicate titleId" and asks to keep one source; the test console once moved Assassin's Creed

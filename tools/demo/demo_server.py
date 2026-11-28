@@ -17,7 +17,12 @@ from urllib.parse import urlsplit, parse_qs
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "..", "web")
 FIX = os.path.join(HERE, "fixtures")
+try:
+    VERSION = re.search(r'#define\s+PS5TM_VERSION\s+"([^"]+)"', open(os.path.join(HERE, "..", "..", "src", "ps5tm.h"), encoding="utf-8").read()).group(1)
+except (OSError, AttributeError):
+    VERSION = ""
 GAME = {"de": "Spiel", "en": "Game", "es": "Juego", "fr": "Jeu", "it": "Gioco", "ru": "Игра", "sv": "Spel"}
+PLAYER = {"de": "Spieler", "en": "Player", "es": "Jugador", "fr": "Joueur", "it": "Giocatore", "ru": "Игрок", "sv": "Spelare"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json",
          ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".ico": "image/x-icon", ".webp": "image/webp", ".woff2": "font/woff2"}
 
@@ -70,10 +75,13 @@ class Demo(BaseHTTPRequestHandler):
             self.shift_history(d, now_ms)
         elif route == "playtime":
             self.shift_playtime(d, now_ms // 1000)
+        elif route == "system" and VERSION:
+            d["app_version"] = VERSION          # the sidebar shows the version of the sources, not the one the fixtures were recorded with
         text = json.dumps(d, ensure_ascii=False)
         word = GAME.get(self.lang, "Spiel")
         if word != "Spiel":
             text = text.replace("Spiel ", word + " ")
+        text = text.replace('"Spieler"', '"%s"' % PLAYER.get(self.lang, "Spieler"))     # the account name
         return self.send(200, text)
 
     def cover(self, title_id):

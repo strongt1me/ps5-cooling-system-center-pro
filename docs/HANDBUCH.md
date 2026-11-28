@@ -451,7 +451,7 @@ zeigt, ob es einen gibt und wie viele Dateien er kennt.
   gepacktes Spiel.
 - Beim Konvertieren eines Dump-Ordners kommt der Index mit **AMPR-Index vorher bauen** ins Abbild (bei Spielen mit APR-EMU
   angehakt); bei `.ffpfsc` ist das der einzige Weg.
-- Aufbau nach `build_ampr_index.py` aus [ampr_emu](https://github.com/drakmor/ampr_emu) (drakmor, GPL-3.0), Byte für Byte
+- Aufbau nach `build_ampr_index.py` aus [ampr_emu](https://github.com/drakmor/ampr_emu) (drakmor, GPL-3.0-or-later), Byte für Byte
   verglichen: Kennung `AMPRIDX3`, Pfade klein geschrieben, sortiert, mit FNV-1a-Tabelle.
 
 ### APR-EMU im Spiel
@@ -614,7 +614,7 @@ Danach **Mitschnitt beenden** (entfernt `fakelib2`).
 **Grenzen:** Die APR-EMU lehnt Sätze mit mehr als 2 000 000 Dateien, 16 000 000 Blöcken oder 1 024 Paketdateien ab. Index,
 `.runtime` und Pakete gehören zusammen (gleiche Build-ID): nie einzelne Teile tauschen und nichts ändern, während das Spiel
 läuft. Solange ein Spiel gepackt ist, sind AMPR-Index und die Wahl der APR-EMU eingeschränkt. Vorbilder:
-[drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0), PS5-LZ4-Compression und
+[drakmor/ampr_emu](https://github.com/drakmor/ampr_emu) (GPL-3.0-or-later), PS5-LZ4-Compression und
 [danthespal/MkPFS.CSharp](https://github.com/danthespal/MkPFS.CSharp); von LZ4 Compression (Husam Osman, GPL-3.0) stammen
 die Liste der losen Dateien, die Rechte 0777, die Reparatur beim Prüfen und die Auswahl der getesteten Profile (nachgebaut).
 

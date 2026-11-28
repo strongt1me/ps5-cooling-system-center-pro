@@ -98,7 +98,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     <td width="50%"><img src="docs/images/en/ps4-von-usb.jpg" alt="Игры PS4 PKG с USB"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Игры: библиотека в компактном виде (по умолчанию) с запуском, копированием, конвертацией</sub></td>
+    <td align="center"><sub>Игры: библиотека в компактном виде с запуском, копированием, конвертацией</sub></td>
     <td align="center"><sub>PS4 PKG с USB: fake PKG без установки</sub></td>
   </tr>
   <tr>
@@ -124,7 +124,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
 <br>
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="История температуры, датчики и профили для игр"></td>
+    <td width="50%"><img src="docs/images/en/kuehlung-diagramme.jpg" alt="Кривая вентилятора, история температуры и датчики"></td>
     <td width="50%"><img src="docs/images/en/spielstaende.jpg" alt="Резервное копирование сохранений"></td>
   </tr>
   <tr>
@@ -137,10 +137,10 @@ Homebrew-пейлоад (ELF), который читает датчики тем
   </tr>
   <tr>
     <td><img src="docs/images/en/spiele-gross.jpg" alt="Игры в крупном виде"></td>
-    <td align="center" valign="middle"><sub>Игры в крупном виде: большие обложки, кнопки с подписями (переключается на странице «Игры»)</sub></td>
+    <td align="center" valign="middle"><sub>Игры в крупном виде (по умолчанию): большие обложки, кнопки с подписями (переключается на странице «Игры»)</sub></td>
   </tr>
 </table>
-<sub>Все изображения с примерными данными и вымышленными играми, сняты в более ранних версиях; интерфейс показан на английском.</sub>
+<sub>Все изображения с примерными данными и вымышленными играми, сняты в версии 1.99.0; интерфейс показан на английском.</sub>
 </details>
 
 ### Экраны полноэкранного приложения
@@ -152,7 +152,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
   </tr>
   <tr>
     <td align="center"><sub>Игры: библиотека с запуском, подробностями и действиями</sub></td>
-    <td align="center"><sub>Файловый менеджер: копирование со скоростью и оставшимся временем</sub></td>
+    <td align="center"><sub>Файловый менеджер: папка на USB-накопителе</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/en/vollbild-payloads.jpg" alt="Полноэкранное приложение: пейлоады"></td>
@@ -163,7 +163,7 @@ Homebrew-пейлоад (ELF), который читает датчики тем
     <td align="center"><sub>Время в игре с обзором по дням</sub></td>
   </tr>
 </table>
-<sub>Все изображения с примерными данными и вымышленными играми, сняты в более ранних версиях; интерфейс показан на английском.</sub>
+<sub>Все изображения с примерными данными и вымышленными играми, сняты в версии 1.99.0; интерфейс показан на английском.</sub>
 
 <details>
 <summary><b>Все функции подробно</b></summary>
@@ -321,7 +321,7 @@ make
 - **[RenanGBarreto](https://github.com/RenanGBarreto), [rdmrocha](https://github.com/rdmrocha) и участники [MkPFS](https://github.com/PSBrew/MkPFS)** ([PSBrew](https://github.com/PSBrew), GPL-3.0): образы exFAT, PFS и PFSC.
 - **[SvenGDK](https://github.com/SvenGDK), [UFS2Tool](https://github.com/SvenGDK/UFS2Tool)** (BSD-2-Clause): образец для записи UFS2/ffpkg.
 - **[drakmor](https://github.com/drakmor)**: [ampr_emu](https://github.com/drakmor/ampr_emu) (LZ4-ассет-паки, APR-EMU), [pgo_stub](https://github.com/drakmor/pgo_stub) и [dlc_emu](https://github.com/drakmor/dlc_emu) (встроенные сборки, GPL-3.0).
-- **[quer3q](https://github.com/quer3q)** (GPL-3.0): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), развитие ampr_emu, которое читает и пакеты zstd (встроены 0.5.1 и 0.5.0, более новые — по запросу); [Kraken Mount](https://github.com/quer3q/kraken-mount), программа за вкладкой «KrakenMount» (встроена, изменена в нескольких байтах, чтобы работать рядом с ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), движок FPKG и упаковки при конвертации (встроен без изменений). Пакеты zstd и поддельная подпись приложения следуют их форматам.
+- **[quer3q](https://github.com/quer3q)** (GPL-3.0-or-later): [AMPR EMU NG](https://github.com/quer3q/ampr-emu-ng), развитие ampr_emu, которое читает и пакеты zstd (встроены 0.5.1 и 0.5.0, более новые — по запросу); [Kraken Mount](https://github.com/quer3q/kraken-mount), программа за вкладкой «KrakenMount» (встроена, изменена в нескольких байтах, чтобы работать рядом с ShadowMountPlus); [Dump Forge](https://github.com/quer3q/ps5-dump-forge), движок FPKG и упаковки при конвертации (встроен без изменений). Пакеты zstd и поддельная подпись приложения следуют их форматам.
 - **BlackBearReloaded, ps5-homebrew-ui, ps5-opengl и ps5-native-app-boilerplate** (GPL-3.0): полноэкранное приложение построено на ps5-homebrew-ui (из сохранённой копии [JMUtechnologies](https://github.com/JMUtechnologies/ps5-homebrew-ui)), плитка браузера — по образцу boilerplate.
 - **[itsPLK](https://github.com/itsPLK), [ps5-pkg-manager](https://github.com/itsPLK/ps5-pkg-manager)** (GPL-3.0): структура пакетов и процесс установки (собственный код по этому образцу).
 - **[phantomptr](https://github.com/phantomptr), [ps5upload](https://github.com/phantomptr/ps5upload)** (GPL-3.0): функция профиля и формат изображения профиля.

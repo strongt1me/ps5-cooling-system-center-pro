@@ -140,21 +140,19 @@ Ablauf: Prüfungen (sauberer Baum, Version über dem letzten Tag, Anmeldung, Zwe
 `payload-manager.json`; Seite englisch aus `docs/RELEASE_NOTES.md`, die deutschen Notizen
 `docs/RELEASE_NOTES.de.md` aufklappbar), zuletzt der Abgleich der Prüfsummen.
 
-Ältere Prüfung ohne Veröffentlichung (Bau unter WSL, `make clean && make -j1 && make release`, dann
-Prüfung der Dateien im Release-Ordner; die Kachel-Zips müssen dort schon liegen):
+Prüfung eines Release-Ordners ohne Bau und ohne Veröffentlichung (seit 28.11.2026; vorher baute das Skript
+unter WSL und lud nur drei der fünf Dateien hoch):
 
 ```powershell
-.\tools\pre-release-check.ps1
+.\tools\pre-release-check.ps1                          # Version aus src/ps5tm.h
+.\tools\pre-release-check.ps1 -Version 1.98.0 -SkipGitHub
 ```
 
-Optional mit GitHub-Upload/Update der Release-Assets (nur ELF, `FAKE86921.zip` und LIESMICH; eine
-vollständige Veröffentlichung macht `tools/release.sh`):
-
-```powershell
-.\tools\pre-release-check.ps1 -CreateOrUpdateRelease
-```
-
-Erwartete Erfolgsausgaben bei einem vollständigen Lauf:
+Es prüft im Ordner `PS5 Cooling and System Center v<Version>`: genau die fünf Dateien (kein `*.pkg`), die ELF
+nennt ihre Version, jede Kachel-Zip ist ungepackt, liegt ganz unter `<Kachel>/`, hat die `eboot.bin` vorn und
+`sce_sys/param.json`, und ihre `eboot.bin` trägt die Release-ELF Byte für Byte; LIESMICH nennt die Version,
+`payload-manager.json` Version, Link und SHA-256 der ELF. Ist das Release schon veröffentlicht, vergleicht es die
+fünf Prüfsummen auf GitHub mit den lokalen Dateien und sagt, ob es das neueste ist. Erfolgsausgaben:
 
 ```text
 Local release assets: OK
@@ -162,8 +160,8 @@ GitHub release assets: OK
 Pre-release check completed successfully.
 ```
 
-Wenn einer dieser Marker fehlt, ist der Lauf nicht vollständig erfolgreich
-und sollte vor einem finalen Release erneut geprüft werden.
+Der frühere Schalter `-CreateOrUpdateRelease` bricht mit einem Hinweis ab; eine einzelne Datei eines
+veröffentlichten Releases ersetzt `gh release upload <Tag> <Datei> --clobber`.
 
 `-Repo` steht ohne Angabe auf `strongt1me/ps5-cooling-system-center-pro`.
 
@@ -434,6 +432,9 @@ bleiben es; die Übersetzung geschieht zur Laufzeit im Browser.
   `tools/demo/make_fixtures.py <Ordner>` ersetzen jeden persönlichen Wert (Titel, Kennungen, Konto, Netz, Pfade); am Ende sucht das Skript jeden echten
   Wert in seinem Ergebnis und bricht ab, wenn einer übrig ist. Die Aufnahmen selbst gehören nicht ins Repository (`tools/demo/raw/`, in `.gitignore`).
   Eine Route ohne Fixture meldet der Server auf stderr (404); `qr.json` macht `tools/demo/qr_demo.c` mit dem QR-Kodierer der App.
+  Die README-Bilder (seit 28.11.2026): `tools/demo/tv_readme_snapshots.sh <de|en> <Ordner>` (unter WSL) macht die fünf Schnappschüsse der Vollbild-App
+  mit erfundenen Spieltiteln und der Version aus `src/ps5tm.h`, danach schreibt `python tools/demo/make_readme_images.py --tv-de <Ordner> --tv-en <Ordner>`
+  alle 19 Bilder je Sprache nach `docs/images/` (deutsch) und `docs/images/en/` (englisch, auch für die anderen Sprachen).
 - **Klasse `ps5`:** `web/theme-boot.js` setzt sie an `<html>`, wenn der Browser „PlayStation“ meldet. Sie gilt nur für PS5-eigene Dinge
   (Titelbilder der kompakten Ansicht, Zeichenbereich je Spielkarte, Scroll-Messung). Eine größere Schrift nur für die PS5 gab es kurz am
   10.11.2026 (erzeugter Block `PS5-TEXT`); sie wurde auf Wunsch des Users zurückgenommen, die Schrift ist dort wie überall.
@@ -609,7 +610,7 @@ tools/optimize_png.py          PNG-Dateien kleiner, ohne ein Pixel zu ändern (z
 tools/make_starter.sh          baut beide Kacheln FAKE86921 und FAKE86922; tools/tvapp-build.sh baut darin die Vollbild-App unter WSL
 tools/release.sh               die Veröffentlichung (siehe oben)
 tools/make_payload_json.py     payload-manager.json: die Liste dieser App für den Payload Manager von itsPLK
-tools/pre-release-check.ps1    ältere Prüfung vor einem Release (Bau unter WSL, Dateien im Release-Ordner)
+tools/pre-release-check.ps1    prüft einen Release-Ordner und das veröffentlichte Release (baut und veröffentlicht nichts)
 tools/check-release-liesmich-sync.ps1  vergleicht den Abschnitt KURZDIAGNOSE der LIESMICH in den Release-Ordnern mit docs/LIESMICH.txt
 tools/run-host-tests.sh        alle Host-Tests der CI-Liste und die Simulation (siehe Host-Tests)
 tools/deploy.sh                ELF und Kacheln an eine Konsole; tools/lib/send_elf.ps1 schickt die ELF an Port 9021

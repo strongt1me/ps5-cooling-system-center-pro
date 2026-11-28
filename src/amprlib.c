@@ -29,7 +29,7 @@
  * The variants with "pack" in their name (not "nopack") can read LZ4 asset packs. ShadowMountPlus can also replace the
  * file at the start of a game from /data/shadowmount/emus (update_emulators, on by default): the page says so.
  *
- * ampr-emu-ng (quer3q, GPL-3.0, wish of the user 03.11.2026) is a fork of drakmor's ampr_emu that reads the same packs (and zstd
+ * ampr-emu-ng (quer3q, GPL-3.0-or-later, wish of the user 03.11.2026) is a fork of drakmor's ampr_emu that reads the same packs (and zstd
  * ones). Its builds are kept as libSceAmpr.sprx-<version>-ng and -ng-debug, shown as "NG <version>" and listed first. The app
  * carries release 0.3.1 (06.11.2026, in place of the old 0.3.6.6 builds) and fetches a newer known release on request
  * (amprng.c). */

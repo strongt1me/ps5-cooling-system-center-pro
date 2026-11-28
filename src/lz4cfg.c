@@ -1,5 +1,5 @@
 /* The packing profile of the LZ4 asset packs: built-in rules and a reader for the TOML profiles of drakmor's
- * ampr_pack.py (https://github.com/drakmor/ampr_emu, tools/ampr_pack.py load_config, GPL-3.0). See lz4cfg.h. */
+ * ampr_pack.py (https://github.com/drakmor/ampr_emu, tools/ampr_pack.py load_config, GPL-3.0-or-later). See lz4cfg.h. */
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>

@@ -1,6 +1,6 @@
 # DLC-Module (dlc_emu) – eingebettete Fassungen
 
-Die drei Dateien hier sind die „log“-Bauten von **dlc_emu** 0.3 (drakmor, GPL-3.0, <https://github.com/drakmor/dlc_emu>,
+Die drei Dateien hier sind die „log“-Bauten von **dlc_emu** 0.3 (drakmor, GPL-3.0-or-later, <https://github.com/drakmor/dlc_emu>,
 Veröffentlichung „dlc_emu 0.3“ vom 28.06.2026); `LICENSE` ist der Lizenztext aus demselben Paket, `dlc_emu.example.ini` das
 Beispiel dazu. Sie werden von `tools/gen_emu_blob.py dlc` gepackt in die App eingebettet (`gen/dlc_blob.c`) und von der Zeile
 „Spiel-Plugins“ (`src/plugins.c`) nur in ein Spiel gelegt, dessen Ordner eine `dlc_emu.ini` enthält; ohne diese Datei würden die

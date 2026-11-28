@@ -13,8 +13,8 @@
 # "System V" and a different dynamic layout. LLVM 21 reproduced the v1.43.0
 # release byte for byte, build ID aside (24.09.2026).
 #
-# WSL stays the reference route (tools/pre-release-check.ps1). This one is for
-# machines without a WSL distribution.
+# tools/release.sh builds every release with this script; the Makefile builds
+# the same under WSL or Linux with the SDK there.
 
 set -euo pipefail
 

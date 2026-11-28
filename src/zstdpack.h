@@ -1,5 +1,5 @@
 /* zstd asset packs of a game (06.11.2026): the second format next to the LZ4 packs (lz4pack.h), read by AMPR EMU NG only
- * (ampr-emu-ng, quer3q, GPL-3.0; libSceAmpr.sprx of the NG series). The format is NG's "AMPRZPK1" index (ampr_zstd.index)
+ * (ampr-emu-ng, quer3q, GPL-3.0-or-later; libSceAmpr.sprx of the NG series). The format is NG's "AMPRZPK1" index (ampr_zstd.index)
  * with "AMPRZDT1" volumes (ampr_zstd-NNN.pak), described in the project's docs/zstd-format.md
  * (https://github.com/quer3q/ampr-emu-ng/blob/main/docs/zstd-format.md, read on 06.11.2026); this is a C version of the packer on
  * zstd 1.6.0 (BSD-3-Clause, src/third_party/zstd; 1.5.7 until 24.11.2026). The runtime picks the format at load by whether /app0/ampr_zstd.index exists.

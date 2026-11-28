@@ -2,7 +2,7 @@
  * Unsigned PS5 executables written as fake-signed SELFs, for converting a game and for packing it into a new folder (07.11.2026).
  *
  * Why: the console's loader refuses a plain ELF (e_type 0xFE10 / 0xFE18), so a game whose executables are such files never
- * starts. ps5-dump-forge 0.5.4 (quer3q, GPL-3.0, crates/ps5-dump-forge-core/src/fself.rs, read on 07.11.2026) writes them as
+ * starts. ps5-dump-forge 0.5.4 (quer3q, GPL-3.0-or-later, crates/ps5-dump-forge-core/src/fself.rs, read on 07.11.2026) writes them as
  * fake-signed SELFs in every conversion and pack job; this is the same, built afresh in C, and the original folder is only read.
  *
  * The file is byte for byte what `make_fself.py --ptype fake` of ampr-emu-ng writes (its defaults: program authority id
